@@ -269,7 +269,7 @@ describe('Push and conflicts against the local Docker Nextcloud with an in-memor
 		const first = await sync();
 		expect(first.result.pushed).toBe(0);
 		expect(notePutsSince(requestsBeforeFirst)).toBe(0);
-		expect(davGetsSince(requestsBeforeFirst).length).toBeLessThanOrEqual(1);
+		expect(davGetsSince(requestsBeforeFirst)).toHaveLength(1);
 		expect(vault.writes).toBe(writesBeforeFirst);
 
 		const writesBeforeSecond = vault.writes;
@@ -319,7 +319,7 @@ describe('Push and conflicts against the local Docker Nextcloud with an in-memor
 		expect((await clients.webdav.get(notePath)).content).toBe(CONFLICT_REMOTE);
 	});
 
-	it('412 when the server changed after the listing: the remote text is kept and the local text becomes a conflict copy', async () => {
+	it('412 when the server changed after the listing: the local text stays in the file and the remote text becomes the conflict copy', async () => {
 		const f = required(fixture, 'fixture');
 		const notePath = remotePagePath(f.note);
 		const localNotePath = `${f.name}/Notiz.md`;

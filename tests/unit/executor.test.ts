@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DavFile, DavWriteResult, PutPrecondition, WebdavClient } from '../../src/api/webdavClient';
 import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { Collective, PageInfo } from '../../src/api/types';
-import { canonicalRemote, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 import { pathKey, remotePagePath } from '../../src/mapping/paths';
 import { executeSync } from '../../src/sync/executor';
@@ -143,6 +143,14 @@ class FakeDav {
 		this.set(p, content, `"ext-${this.counter}"`, CONFIRMED);
 	}
 
+	/**
+	 * Same-second write as Nextcloud does it: the content changes but the ETag stays (one-second resolution), and the
+	 * headers are given as the caller needs them (UNCONFIRMED while the write and the response share a second).
+	 */
+	rewriteKeepingEtag(p: PageInfo, content: string, headers: { lastModified: string; date: string }): void {
+		this.set(p, content, this.require(p).etag, headers);
+	}
+
 	fail(p: PageInfo, error: Error): void {
 		this.errors.set(remotePagePath(p), error);
 	}
@@ -240,6 +248,22 @@ function stateOf(h: Harness, p: PageInfo): PageState {
 	const entry = h.state.pages[String(p.id)];
 	if (entry === undefined) throw new Error(`no state for page ${p.id}`);
 	return entry;
+}
+
+/** Plans the next run for `remotePage` from the state and the files in the vault as they are now. */
+async function planNextRun(h: Harness, remotePage: PageInfo, meta: NcMeta): Promise<SyncPlan> {
+	h.state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Coll', localFolder: 'Coll' };
+	const files = await Promise.all(
+		h.vault.listFiles().map(async (file) => ({ path: file.path, mtime: file.mtime, pageId: readPageId(await h.vault.read(file.path)) })),
+	);
+	return planSync({
+		state: h.state,
+		remote: { collectives: [{ collective: collective(), pages: [remotePage], tags: [] }], failed: [] },
+		local: { files, occupied: new Set<string>(), paths: new Map<string, string>(), nonEmpty: true },
+		remoteMeta: new Map([[remotePage.id, { meta, hash: META_HASH }]]),
+		paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },
+		dirty: new Set<string>(),
+	});
 }
 
 const ZERO_RESULT = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
@@ -347,7 +371,7 @@ describe('executeSync: createConflict and conflict naming', () => {
 		expect(stateOf(h, NOTE)).toMatchObject({
 			status: 'collision',
 			localPath: NOTE_PATH,
-			baseHash: '',
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),
 			conflictPath: NOTE_CONFLICT,
 		});
 	});
@@ -413,7 +437,11 @@ describe('executeSync: adopt', () => {
 		expect(await h.vault.read(NOTE_PATH)).toBe(userText);
 		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V1));
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: '', localPath: NOTE_PATH });
+		expect(stateOf(h, NOTE)).toMatchObject({
+			status: 'conflict',
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),
+			localPath: NOTE_PATH,
+		});
 	});
 });
 
@@ -471,7 +499,6 @@ describe('executeSync: update', () => {
 		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
 		const newer = page(10, { timestamp: 2000, size: 30 });
 		h.dav.serve(newer, REMOTE_V2, '"e2"');
-		const baseBefore = stateOf(h, NOTE).baseHash;
 
 		const result = await executeSync(
 			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
@@ -484,7 +511,7 @@ describe('executeSync: update', () => {
 		expect(stateOf(h, NOTE)).toMatchObject({
 			status: 'conflict',
 			conflictPath: NOTE_CONFLICT,
-			baseHash: baseBefore,
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V2)),
 			remoteMtime: 2000,
 			remoteEtag: '"e2"',
 		});
@@ -516,6 +543,7 @@ describe('executeSync: update', () => {
 			local,
 			remoteMeta: new Map([[asPageId(10), { meta, hash: META_HASH }]]),
 			paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },
+			dirty: new Set<string>(),
 		});
 
 		expect(next.ops.filter((op) => 'page' in op)).toEqual([]);
@@ -564,6 +592,58 @@ describe('executeSync: update', () => {
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
 		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT });
 	});
+
+	it('keeps a conflict recorded from an unconfirmed GET as the only copy: the next run plans no second copy and sends no PUT', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = `${toLocal(REMOTE_V1, meta)}Mein Zusatz\n`;
+		h.vault.seed(NOTE_PATH, localText);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		const newer = page(10, { timestamp: 2000, size: 30 });
+		h.dav.serveUnconfirmed(newer, REMOTE_V2, '"e2"');
+
+		await executeSync(plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]), h.deps);
+
+		expect(stateOf(h, NOTE)).toMatchObject({
+			status: 'conflict',
+			conflictPath: NOTE_CONFLICT,
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V2)),
+			remoteMtime: UNCONFIRMED_REMOTE_MTIME,
+		});
+
+		const next = await planNextRun(h, newer, meta);
+		expect(next.ops.filter((op) => 'page' in op)).toEqual([expect.objectContaining({ kind: 'update', path: NOTE_PATH })]);
+		const result = await executeSync(next, h.deps);
+
+		expect(result).toEqual({ ...ZERO_RESULT, unchanged: 1 });
+		expect(h.dav.puts()).toEqual([]);
+		expect(h.vault.listFiles().map((file) => file.path).sort()).toEqual([NOTE_PATH, NOTE_CONFLICT].sort());
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT });
+	});
+
+	it('keeps the text typed while the metadata is written and does not advance metaHash when the file changed meanwhile', async () => {
+		const h = harness();
+		const originalText = toLocal(REMOTE_V1, metaOf(10));
+		const userText = `${originalText}Eingetippt waehrend des Syncs\n`;
+		h.vault.seed(NOTE_PATH, originalText);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
+		const mtimeBeforeRead = h.vault.mtime(NOTE_PATH);
+		h.vault.beforeProcess = (path) => {
+			h.vault.beforeProcess = null;
+			h.vault.userEdit(path, userText);
+		};
+
+		const result = await executeSync(
+			plan([{ kind: 'update', page: NOTE, path: NOTE_PATH, meta: metaOf(10, { tags: ['neu'] }), metaHash: META_HASH_2, metaChanged: true }]),
+			h.deps,
+		);
+
+		expect(await h.vault.read(NOTE_PATH)).toBe(userText);
+		expect(result).toEqual({ ...ZERO_RESULT, unchanged: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'synced', metaHash: META_HASH, localMtime: mtimeBeforeRead });
+	});
 });
 
 describe('executeSync: updateMeta', () => {
@@ -598,6 +678,28 @@ describe('executeSync: updateMeta', () => {
 
 		expect(h.vault.writes).toBe(writesBefore);
 		expect(stateOf(h, NOTE).metaHash).toBe(META_HASH_2);
+	});
+
+	it('keeps the text the user typed while the nc fields are written and leaves metaHash for the next run', async () => {
+		const h = harness();
+		const before = toLocal(REMOTE_V1, metaOf(10, { tags: ['alt'] }));
+		const userText = `${before}Eingetippt waehrend des Syncs\n`;
+		h.vault.seed(NOTE_PATH, before);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		const mtimeBeforeRead = h.vault.mtime(NOTE_PATH);
+		h.vault.beforeProcess = (path) => {
+			h.vault.beforeProcess = null;
+			h.vault.userEdit(path, userText);
+		};
+
+		const result = await executeSync(
+			plan([{ kind: 'updateMeta', page: NOTE, path: NOTE_PATH, meta: metaOf(10, { tags: ['neu'] }), metaHash: META_HASH_2 }]),
+			h.deps,
+		);
+
+		expect(await h.vault.read(NOTE_PATH)).toBe(userText);
+		expect(result).toEqual({ ...ZERO_RESULT, unchanged: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ metaHash: META_HASH, localMtime: mtimeBeforeRead });
 	});
 });
 
@@ -694,7 +796,11 @@ describe('executeSync: collision page (status collision, baseHash empty)', () =>
 
 		expect(await h.vault.read(NOTE_PATH)).toBe(USER_TEXT);
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', baseHash: '', remoteMtime: 2000 });
+		expect(stateOf(h, NOTE)).toMatchObject({
+			status: 'collision',
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V2)),
+			remoteMtime: 2000,
+		});
 	});
 
 	it('links the user file and records a synced state when the remote text now equals it', async () => {
@@ -740,7 +846,11 @@ describe('executeSync: collision names, links and nc_title', () => {
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
 		expect(await h.vault.read(NOTE_PATH)).toBe(linked);
 		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(USER_TEXT));
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', baseHash: '', conflictPath: NOTE_CONFLICT });
+		expect(stateOf(h, NOTE)).toMatchObject({
+			status: 'collision',
+			baseHash: await sha256Hex(canonicalRemote(USER_TEXT)),
+			conflictPath: NOTE_CONFLICT,
+		});
 	});
 
 	it('keeps an adopt conflict findable by nc_page_id after the user renamed its file, so no page is skipped as localDeleted', async () => {
@@ -749,7 +859,7 @@ describe('executeSync: collision names, links and nc_title', () => {
 		h.vault.seed(NOTE_PATH, `${toLocal(REMOTE_V1, meta)}Eigener Zusatz\n`);
 		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
 		await executeSync(plan([{ kind: 'adopt', page: NOTE, path: NOTE_PATH, meta, metaHash: META_HASH }]), h.deps);
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: '' });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)) });
 		h.state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Coll', localFolder: 'Coll' };
 
 		const planned = planSync({
@@ -763,6 +873,7 @@ describe('executeSync: collision names, links and nc_title', () => {
 			},
 			remoteMeta: new Map([[asPageId(10), { meta, hash: META_HASH }]]),
 			paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },
+			dirty: new Set<string>(),
 		});
 
 		expect(planned.skips).toEqual([]);
@@ -868,7 +979,7 @@ describe('executeSync: push (local change, remote known unchanged)', () => {
 		expect(stateOf(h, NOTE)).toMatchObject({
 			status: 'conflict',
 			conflictPath: NOTE_CONFLICT,
-			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V2)),
 		});
 	});
 
@@ -1026,6 +1137,27 @@ describe('executeSync: push after an unconfirmed remote ETag', () => {
 	}
 
 	const UPDATE = (): SyncOp => ({ kind: 'update', page: NOTE, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH, metaChanged: false });
+
+	it('decides again after the wait: a remote text that changed under the same ETag becomes a conflict copy and nothing is uploaded', async () => {
+		const h = harness();
+		const userText = await unconfirmedBase(h);
+		const sleepFor = h.deps.sleep;
+		h.deps.sleep = async (ms) => {
+			await sleepFor(ms);
+			// Same-second write on the server: the ETag stays "e1", the text changes, and the second GET is confirmed.
+			h.dav.rewriteKeepingEtag(NOTE, REMOTE_V2, CONFIRMED);
+		};
+
+		const result = await executeSync(plan([UPDATE()]), h.deps);
+
+		expect(h.sleeps).toEqual([1100]);
+		expect(h.dav.puts()).toEqual([]);
+		expect(h.dav.content(NOTE)).toBe(REMOTE_V2);
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V2));
+		expect(await h.vault.read(NOTE_PATH)).toBe(userText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT });
+	});
 
 	it('waits, fetches again, and pushes when the second GET is confirmed', async () => {
 		const h = harness();

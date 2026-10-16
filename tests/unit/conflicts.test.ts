@@ -201,7 +201,7 @@ describe('applyResolution with a renamed local file', () => {
 	it('takeRemote reads the renamed file, hashes its text and trashes the conflict copy', async () => {
 		const { vault, ctx } = renamedSetup();
 
-		expect(await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', NEW_PATH)).toBe(true);
+		expect(await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', { localPath: NEW_PATH })).toBe(true);
 
 		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: await sha256Hex(toRemote(NEW_TEXT)) });
 		expect(vault.trashed).toEqual([NEW_CONFLICT]);
@@ -210,16 +210,16 @@ describe('applyResolution with a renamed local file', () => {
 	it('keepLocal succeeds for the renamed file and trashes the conflict copy', async () => {
 		const { vault, ctx } = renamedSetup();
 
-		expect(await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', NEW_PATH)).toBe(true);
+		expect(await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', { localPath: NEW_PATH })).toBe(true);
 
-		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: '' });
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: 'base-10' });
 		expect(vault.trashed).toEqual([NEW_CONFLICT]);
 	});
 
 	it('keeps the old localPath in the state', async () => {
 		const { ctx } = renamedSetup();
 
-		await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', NEW_PATH);
+		await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', { localPath: NEW_PATH });
 
 		expect(ctx.state.pages['10']?.localPath).toBe(OLD_PATH);
 	});
@@ -248,16 +248,22 @@ describe('countConflicts', () => {
 });
 
 describe('resolveConflict', () => {
-	it('keepLocal sets status synced, clears the conflict copy, forgets the base and marks the local mtime unchecked', () => {
+	it('keepLocal sets status synced, clears the conflict copy, keeps the base of the conflict and marks the local mtime unchecked', () => {
 		const prev = pageState(10, { status: 'conflict', conflictPath: NOTE_CONFLICT, baseHash: 'old-base', localMtime: 1700 });
 
 		expect(resolveConflict(prev, 'keepLocal', 'local-hash')).toEqual({
 			...prev,
 			status: 'synced',
 			conflictPath: null,
-			baseHash: '',
+			baseHash: 'old-base',
 			localMtime: -1,
 		});
+	});
+
+	it('keepLocal keeps the base hash of the remote text the conflict was recorded against, so the next run sees the remote as unchanged', () => {
+		const prev = pageState(10, { status: 'conflict', conflictPath: NOTE_CONFLICT, baseHash: 'hash-of-remote-text' });
+
+		expect(resolveConflict(prev, 'keepLocal', 'local-hash').baseHash).toBe('hash-of-remote-text');
 	});
 
 	it('keepLocal leaves the remote fields untouched', () => {
@@ -321,7 +327,7 @@ describe('applyResolution', () => {
 
 		expect(await ctx.resolve(PAGE_ID, 'keepLocal')).toBe(true);
 
-		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: '', localMtime: -1 });
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: 'base-10', localMtime: -1 });
 	});
 
 	it('takeRemote keeps the local text, sets the base to its hash and trashes the conflict copy', async () => {
@@ -445,7 +451,59 @@ describe('applyResolution', () => {
 
 		expect(await ctx.resolve(PAGE_ID, 'keepLocal')).toBe(true);
 
-		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: '' });
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: 'base-10' });
 		expect(ctx.log.entries().some((entry) => entry.level === 'warn' || entry.level === 'error')).toBe(true);
+	});
+});
+
+describe('applyResolution with the conflict copy the dialog shows', () => {
+	const OLDER_COPY = 'Coll/Notiz (Konflikt 2026-10-16 1200).md';
+
+	/** The page's current conflict is NOTE_CONFLICT; the dialog may still show an older copy. */
+	function currentConflict() {
+		const vault = new RecordingVault();
+		vault.seedFolder('Coll');
+		vault.seed(NOTE_PATH, LOCAL_TEXT);
+		vault.seed(NOTE_CONFLICT, REMOTE_TEXT);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: NOTE_PATH, conflictPath: NOTE_CONFLICT, baseHash: 'base-hash' })), vault);
+		return { vault, ctx };
+	}
+
+	it('refuses a choice made on a conflict copy that is no longer the page conflict, and changes neither state nor files', async () => {
+		const { vault, ctx } = currentConflict();
+		const before = structuredClone(ctx.state);
+
+		const applied = await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', { localPath: NOTE_PATH, expectedConflictPath: OLDER_COPY });
+
+		expect(applied).toBe(false);
+		expect(ctx.state).toEqual(before);
+		expect(await vault.read(NOTE_PATH)).toBe(LOCAL_TEXT);
+		expect(await vault.read(NOTE_CONFLICT)).toBe(REMOTE_TEXT);
+		expect(vault.trashed).toEqual([]);
+	});
+
+	it('resolves when the copy the dialog shows is the current conflict copy of the page', async () => {
+		const { vault, ctx } = currentConflict();
+
+		const applied = await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', { localPath: NOTE_PATH, expectedConflictPath: NOTE_CONFLICT });
+
+		expect(applied).toBe(true);
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null });
+		expect(vault.trashed).toEqual([NOTE_CONFLICT]);
+	});
+});
+
+describe('applyResolution keepLocal on a state written before M4', () => {
+	it('sets the base to the hash of the conflict copy text, so the next run compares against the remote text the user saw', async () => {
+		const vault = new RecordingVault();
+		vault.seedFolder('Coll');
+		vault.seed(NOTE_PATH, LOCAL_TEXT);
+		vault.seed(NOTE_CONFLICT, REMOTE_TEXT);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: NOTE_PATH, conflictPath: NOTE_CONFLICT, baseHash: '' })), vault);
+
+		await ctx.resolve(PAGE_ID, 'keepLocal');
+
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: await sha256Hex(toRemote(REMOTE_TEXT)) });
+		expect(vault.trashed).toEqual([NOTE_CONFLICT]);
 	});
 });

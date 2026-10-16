@@ -230,10 +230,10 @@ Gespeichert in der Datei `sync-state.json` im Plugin-Ordner via `app.vault.adapt
 | Feld | Bedeutung |
 |---|---|
 | `pageId`, `collectiveId` | Identität |
-| `localPath` | Vault-Pfad beim letzten Sync |
+| `localPath` | Vault-Pfad, an dem das Plugin die Datei zuletzt angelegt bzw. verknüpft hat. Nach einer lokalen Umbenennung bleibt er stehen (Basis der Umbenennungs-Erkennung, M5); die aktuelle Datei wird über `nc_page_id` gefunden (M4, ADR 0017) |
 | `remoteFilePath`, `remoteFileName`, `parentId` | Remote-Ort beim letzten Sync |
 | `remoteEtag`, `remoteMtime`, `remoteSize` | Remote-Stand. `remoteMtime = -1`: Stand unbestätigt (ETag aus derselben Sekunde oder eigener `PUT`), der nächste Lauf liest per `GET` und vergleicht Hashes (M4, ADR 0017) |
-| `baseHash` | SHA-256 des **Remote-Formats** des Inhalts beim letzten Sync (nach Link-Konvertierung, ohne `nc_*`-Frontmatter) |
+| `baseHash` | SHA-256 des **Remote-Formats** des Inhalts beim letzten Sync (nach Link-Konvertierung, ohne `nc_*`-Frontmatter). Bei `conflict`/`collision`: Hash der Remote-Fassung der letzten Konfliktkopie (M4, ADR 0017) |
 | `metaHash` | Hash von Titel, Emoji, Tags |
 | `attachments` | Liste `{ id, name, etag, localPath }` |
 | `lastSyncedAt` | Zeitstempel |
@@ -476,6 +476,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M5 – Struktur: Anlegen, Umbenennen, Verschieben, Löschen
 - Alle Fälle aus 7.4 inklusive Blatt→Elternseite und Collective-übergreifendem Verschieben.
 - Hinweise aus M3: Der Pull meldet Strukturfälle bereits als Skips (`remoteMoved`, `remoteDeleted`, `localDeleted`, `collectiveRenamed`, `collectiveRemoved`, `orphan`, `duplicateId`, `src/sync/types.ts`); M5 setzt sie um. Kollisionsdateien (`status: collision`) dürfen nicht als neue Seite hochgeladen werden. Text `initialSync.point.localFiles` an den Upload anpassen.
+- Hinweise aus dem M4-Review (vor/zu Beginn von M5):
+  - Eine Kollisionsdatei (`status: collision`, nie verknüpft), die der Nutzer umbenennt oder löscht, darf nicht zu `DELETE pages/{id}` führen: Ihr Remote-Inhalt liegt lokal nur in der Konfliktkopie. `collision` vom Lösch-Pfad ausnehmen (entkoppeln), mit Planner-Test.
+  - Seiten-Lokalisierung gibt es doppelt (Planner `findKnownFile`, `withCurrentPaths` in `conflicts.ts`): eine reine Funktion `locatePage(known, files)` für beide. Alle Strukturoperationen ziehen `localPath` nach.
+  - `executor.ts` vor den Strukturoperationen aufteilen (Schleife/Dispatch, Inhaltsoperationen, reine State-Builder, Strukturoperationen); die gegenseitige Rekursion `updatePage` ↔ Push durch eine explizite Schleife ersetzen. Nach jedem eigenen Schreibzugriff (auch OCS-Rename/Move) den Remote-Stand nur über einen Konstruktor `unconfirmedRemote(etag)` speichern.
+  - Konfliktlabel sind Teil des Dateiformats: als eingefrorene Konstante in `mapping` führen oder per Test festschreiben, sonst gelten alte Kopien nach einer Übersetzungsänderung als neue Seiten.
+  - Möglichst zu Beginn von M5 einen `SyncController` aus `main.ts` lösen (Lock, Dirty-Queue, Laufstatus, `lastState`, Auflösung, `ConflictModalSource`).
 - Hinweis aus dem M3-Review: `Skip` in eine diskriminierte Union umbauen (je Grund garantierte Felder), bevor M5 die Gründe in Operationen und Dialoge umsetzt.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
 - Hinweise aus M4: Der Push lädt nur Inhalte bereits verknüpfter Seiten hoch; neue lokale Dateien ohne `nc_page_id` bleiben M5. „Lokal behalten“ bei einer Kollision verknüpft die Nutzerdatei bereits mit der Seite (minimale `nc_*`-Felder, ADR 0017). Nach einer lokalen Umbenennung bleibt `localPath` im State bewusst auf dem alten Pfad (Basis der Umbenennungs-Erkennung); Pull, Push und Konflikt-Dialog finden die Datei über `nc_page_id` (`withCurrentPaths` in `src/sync/conflicts.ts`). M5 muss `localPath` nach dem Umbenennen nachziehen.
@@ -500,12 +506,14 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
 - Hinweis aus M3: Der manuelle Lauf zeigt immer eine Ergebnis-Notice; automatische Läufe nur bei Level `warning`/`error` (`src/ui/syncNotices.ts`). Der einfache In-Flight-Schutz in `main.ts` wird durch den Mutex mit Re-Run-Flag ersetzt.
 - Hinweis aus dem M3-Review: Der Executor speichert nach jeder Operation den gesamten State (Erstsync mit N Seiten: O(N²) Serialisierung/Schreiben). Vor M9 mit ~1000 Seiten messen und `persist` drosseln (alle k Ops/t ms, am Laufende und vor jedem Abbruch; Konfliktkopien sofort).
+- Hinweise aus dem M4-Review: Dirty-Keys eines abgebrochenen oder fehlgeschlagenen Laufs wieder einreihen (heute leert der Lauf die Queue vor dem Planen). Ändert sich remote erneut, solange eine Seite `conflict` ist, die bestehende Konfliktkopie aktualisieren statt eine weitere anzulegen. Notices pro Auslöser parametrisieren (`runSyncOnce` zeigt heute immer eine).
 - Hinweis aus M4: Die Dirty-Queue (`src/sync/dirtyQueue.ts`) sammelt bereits `modify`/`rename`/`delete` ab `onLayoutReady` und unterdrückt eigene Schreibzugriffe; der Debounce nach Speichern kann sie als Auslöser nutzen. `main.ts` serialisiert Läufe und Konfliktauflösungen schon über eine Queue; M9 ergänzt das Re-Run-Flag.
 - Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
 - Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 
 ### M10 – Härtung und Release
 - Versions-Check, Log-Modal, README (Installation, Risiken, Backup-Hinweis), `manifest.json`, `versions.json`, Release-Build; Installation per BRAT.
+- Hinweis aus dem M4-Review: Verschobene Pushes (Remote-Stand unbestätigt, z. B. Proxy ohne `Last-Modified`/`Date` oder Server-Uhr in der Zukunft) zählen heute als unverändert; eigener Zähler `deferred` mit Warn-Notice.
 - Akzeptanz: Release-Artefakte (`main.js`, `manifest.json`, `styles.css`) gebaut; README vollständig.
 
 ## 15. Offene Entscheidungen

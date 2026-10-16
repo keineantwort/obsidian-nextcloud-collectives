@@ -375,7 +375,7 @@ describe('put', () => {
 		expect(err).toBeInstanceOf(ConflictError);
 	});
 
-	it('rejects with ApiChangedError when a successful PUT response carries no ETag', async () => {
+	it('rejects with ApiChangedError when the PUT response carries no ETag and the PROPFIND fallback is not answered with 207', async () => {
 		const fake = fakeDav({ status: 204, headers: {}, text: '' });
 
 		const err = await captureError(davClient(fake).put(PAGE_PATH, 'Neu', { ifMatch: '9f5f' }));

@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { asAttachmentId, asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { HttpRequest, HttpResponse, RequestFn } from '../../src/api/http';
-import { toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { canonicalRemote, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 import { readPageId } from '../../src/mapping/frontmatter';
+import { pathKey } from '../../src/mapping/paths';
+import { applyResolution } from '../../src/sync/conflicts';
+import type { ConflictChoice } from '../../src/sync/conflicts';
 import { StateStore } from '../../src/sync/stateStore';
 import type { StateFile } from '../../src/sync/stateStore';
 import { emptyState, serializeSyncState } from '../../src/sync/state';
@@ -186,6 +189,63 @@ function rawPage(id: number, title: string, fileName: string, parentId: number):
 	const base = PAGES_FIXTURE.find((p) => p['id'] === 102);
 	if (base === undefined) throw new Error('fixture has no page 102');
 	return { ...base, id, slug: `seite-${id}`, title, fileName, parentId, filePath: '', timestamp: 1792138978, size: 20 };
+}
+
+const PAGE_102_LOCAL = 'Handbuch/Per WebDAV.md';
+const PAGE_102_REMOTE = '.Collectives/Handbuch/Per WebDAV.md';
+
+/** Response headers of a GET whose ETag cannot be trusted: the write and the response share one second. */
+const UNCONFIRMED_HEADERS = { lastModified: 'Fri, 16 Oct 2026 12:30:00 GMT', date: 'Fri, 16 Oct 2026 12:30:00 GMT' };
+
+/** Local edit of page 102: appends a line, so the local mtime moves and the text differs. Returns the new text. */
+async function editLocally(vault: MemoryVault): Promise<string> {
+	const localText = `${await vault.read(PAGE_102_LOCAL)}Mein Zusatz\n`;
+	vault.userEdit(PAGE_102_LOCAL, localText);
+	return localText;
+}
+
+/**
+ * Server-side change of page 102: newer timestamp, new text and ETag. The headers default to confirmed; pass
+ * UNCONFIRMED_HEADERS for a write in the same second as the GET.
+ */
+function serverWritesPage102(server: FakeNextcloud, text: string, etag: string, headers: { lastModified?: string; date?: string } = {}): void {
+	serverPage(server, 102)['timestamp'] = 1792139000;
+	server.davFiles.set(PAGE_102_REMOTE, { content: text, etag, ...headers });
+}
+
+/** Time passes on the server: the page's last write is now in an earlier second, so its next GET is confirmed. */
+function remoteSettles(server: FakeNextcloud): void {
+	const file = server.davFiles.get(PAGE_102_REMOTE);
+	if (file === undefined) throw new Error('fake server has no page 102 file');
+	server.davFiles.set(PAGE_102_REMOTE, { content: file.content, etag: file.etag });
+}
+
+/** Applies the user's choice on page 102 to the stored state and the vault, as the conflict dialog does, and saves the state. */
+async function chooseOnPage102(deps: SyncRunDeps, vault: MemoryVault, choice: ConflictChoice): Promise<void> {
+	const state = await deps.stateStore.load();
+	if (state === null) throw new Error('no stored state to resolve');
+	const applied = await applyResolution(
+		{
+			vault: {
+				read: (path) => vault.read(path),
+				process: (path, fn) => vault.process(path, fn),
+				exists: (path) => vault.exists(path),
+				trash: (path) => vault.remove(path),
+			},
+			state,
+			log: new Logger(),
+		},
+		asPageId(102),
+		choice,
+		{ localPath: PAGE_102_LOCAL },
+	);
+	if (!applied) throw new Error(`choice ${choice} was not applied to page 102`);
+	await deps.stateStore.save(state);
+}
+
+/** Paths of the conflict copies in the vault. */
+function conflictFiles(vault: MemoryVault): string[] {
+	return vault.listFiles().map((file) => file.path).filter((path) => path.includes('Konflikt'));
 }
 
 /** The raw entry of a page the test has added or changed on the fake server. */
@@ -494,20 +554,9 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 });
 
 describe('runSync: pushing local edits', () => {
-	const PAGE_102_LOCAL = 'Handbuch/Per WebDAV.md';
-	const PAGE_102_REMOTE = '.Collectives/Handbuch/Per WebDAV.md';
-
-	/** Local edit of page 102 after a first sync: appends a line, so the local mtime moves and the text differs. */
-	async function editLocally(vault: MemoryVault): Promise<string> {
-		const localText = `${await vault.read(PAGE_102_LOCAL)}Mein Zusatz\n`;
-		vault.userEdit(PAGE_102_LOCAL, localText);
-		return localText;
-	}
-
-	/** Server-side change of page 102: newer timestamp, new text and a new ETag. */
+	/** Server-side change of page 102 with a confirmed GET, as the tests of this block use it. */
 	function serverChangesPage102(server: FakeNextcloud, text: string): void {
-		serverPage(server, 102)['timestamp'] = 1792139000;
-		server.davFiles.set(PAGE_102_REMOTE, { content: text, etag: '"etag-102-server"' });
+		serverWritesPage102(server, text, '"etag-102-server"');
 	}
 
 	it('uploads a locally edited synced page, returns no open conflicts and leaves the server with the local text', async () => {
@@ -571,5 +620,124 @@ describe('runSync: pushing local edits', () => {
 		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
 		expect(await vault.read(PAGE_102_LOCAL)).toBe(localText);
 		expect(vault.listFiles().some((file) => file.path.includes('Konflikt'))).toBe(false);
+	});
+});
+
+/** Remote texts of page 102 after the first server-side change and after a second one. */
+const SERVER_TEXT_2 = '# Per WebDAV\n\nServer-Fassung\n';
+const SERVER_TEXT_3 = '# Per WebDAV\n\nNochmal geaendert\n';
+
+describe('runSync: keeping the local text after a conflict recorded from an unconfirmed GET', () => {
+	/** First sync, local edit of page 102, and a server change in the same second as the next GET: the run records a conflict. */
+	async function conflictOnPage102(deps: SyncRunDeps, server: FakeNextcloud, vault: MemoryVault): Promise<string> {
+		await runSync(deps);
+		const localText = await editLocally(vault);
+		serverWritesPage102(server, SERVER_TEXT_2, '"etag-102-server"', UNCONFIRMED_HEADERS);
+		const outcome = await runSync(deps);
+		expect(outcome).toMatchObject({ kind: 'done', result: { conflicts: 1, failed: 0 }, openConflicts: 1 });
+		return localText;
+	}
+
+	it.each(['conflictFile', 'preferRemote'] as const)(
+		'uploads the kept local text on the next run with %s and creates no further copy',
+		async (strategy) => {
+			const server = new FakeNextcloud();
+			const vault = new MemoryVault();
+			const deps = makeDeps(server, vault, new FakeStateFile());
+			const localText = await conflictOnPage102(deps, server, vault);
+
+			await chooseOnPage102(deps, vault, 'keepLocal');
+			remoteSettles(server);
+			const next = await runSync({ ...deps, settings: { ...deps.settings, conflictStrategy: strategy } });
+
+			expect(next).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0, pages: 6 });
+			expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
+			expect(await vault.read(PAGE_102_LOCAL)).toBe(localText);
+			expect(conflictFiles(vault)).toEqual([]);
+		},
+	);
+
+	it('keeps the remote text that changed again after the conflict and writes it as a new conflict copy with conflictFile', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		const localText = await conflictOnPage102(deps, server, vault);
+		await chooseOnPage102(deps, vault, 'keepLocal');
+		serverWritesPage102(server, SERVER_TEXT_3, '"etag-102-server-2"');
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { conflicts: 1, pushed: 0, failed: 0 }, openConflicts: 1 });
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(SERVER_TEXT_3);
+		expect(await vault.read(PAGE_102_LOCAL)).toBe(localText);
+		const copies = conflictFiles(vault);
+		expect(copies).toHaveLength(1);
+		expect(await vault.read(copies[0] ?? '')).toBe(canonicalRemote(SERVER_TEXT_3));
+	});
+
+	it('replaces the local text with the remote text that changed again with preferRemote, as the strategy says', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await conflictOnPage102(deps, server, vault);
+		await chooseOnPage102(deps, vault, 'keepLocal');
+		serverWritesPage102(server, SERVER_TEXT_3, '"etag-102-server-2"');
+
+		const outcome = await runSync({ ...deps, settings: { ...deps.settings, conflictStrategy: 'preferRemote' } });
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { updated: 1, conflicts: 0, failed: 0 }, openConflicts: 0 });
+		expect(toRemote(await vault.read(PAGE_102_LOCAL))).toBe(canonicalRemote(SERVER_TEXT_3));
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(SERVER_TEXT_3);
+		expect(conflictFiles(vault)).toEqual([]);
+	});
+
+	it('takes the remote text on the next run after takeRemote, keeps the nc_page_id and leaves no conflict copy', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await conflictOnPage102(deps, server, vault);
+		await chooseOnPage102(deps, vault, 'takeRemote');
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { updated: 1, conflicts: 0, failed: 0 }, openConflicts: 0 });
+		const local = await vault.read(PAGE_102_LOCAL);
+		expect(toRemote(local)).toBe(canonicalRemote(SERVER_TEXT_2));
+		expect(readPageId(local)).toBe(102);
+		expect(conflictFiles(vault)).toEqual([]);
+	});
+});
+
+describe('runSync: local edits that keep the mtime', () => {
+	it('pushes an edit whose mtime did not change when the dirty set names its path', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		const edited = `${await vault.read(PAGE_102_LOCAL)}Gleicher mtime\n`;
+		vault.userEditSameMtime(PAGE_102_LOCAL, edited);
+
+		const outcome = await runSync({ ...deps, dirty: () => new Set([pathKey(PAGE_102_LOCAL)]) });
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { pushed: 1, failed: 0 } });
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(edited));
+	});
+
+	it('leaves an edit whose mtime did not change alone when the dirty set does not name its path', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		const edited = `${await vault.read(PAGE_102_LOCAL)}Gleicher mtime\n`;
+		vault.userEditSameMtime(PAGE_102_LOCAL, edited);
+		const remoteBefore = server.davFiles.get(PAGE_102_REMOTE)?.content;
+		const callsBefore = server.calls.length;
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0, pages: 6 });
+		expect(server.davRequests(callsBefore)).toEqual([]);
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(remoteBefore);
+		expect(await vault.read(PAGE_102_LOCAL)).toBe(edited);
 	});
 });

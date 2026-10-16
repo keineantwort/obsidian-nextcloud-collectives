@@ -137,6 +137,14 @@ export class MemoryVault implements VaultReader, VaultWriter {
 		entry.mtime = this.tick();
 	}
 
+	/**
+	 * Simulates an edit that keeps the file's mtime (same millisecond as the last write, or a tool that restores it):
+	 * the text changes, the mtime does not. Not counted as a sync write.
+	 */
+	userEditSameMtime(path: string, content: string): void {
+		this.require(path).content = content;
+	}
+
 	private keyOf(path: string): string {
 		return this.caseInsensitive ? pathKey(path) : path;
 	}
