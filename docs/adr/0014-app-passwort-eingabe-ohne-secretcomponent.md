@@ -10,7 +10,7 @@ ADR 0011 sah für die Eingabe des App-Passworts Obsidians `SecretComponent` vor.
 
 ## Entscheidung
 
-Der Settings-Tab zeigt ein normales Passwortfeld. Beim Bestätigen (Verlassen des Felds bzw. Enter) speichert das Plugin den Wert per `app.secretStorage.setSecret(id, …)`. Die ID erzeugt das Plugin beim ersten Speichern zufällig (`nextcloud-collectives-` + 16 Hex-Zeichen) und legt sie in `data.json` ab. Eine bereits vorhandene gültige ID wird weiterverwendet. Das Feld zeigt das gespeicherte Passwort nie an, nur einen Platzhalter „Gespeichert – zum Ersetzen neu eingeben“. Ein leeres Feld ändert nichts.
+Der Settings-Tab zeigt ein normales Passwortfeld. Beim Bestätigen (Verlassen des Felds bzw. Enter) speichert das Plugin den Wert per `app.secretStorage.setSecret(id, …)`. Die ID erzeugt das Plugin beim ersten Speichern zufällig (`nextcloud-collectives-` + 16 Hex-Zeichen) und legt sie in `data.json` ab. Das Plugin liest und schreibt nur IDs, die es selbst erzeugt hat (Präfix `nextcloud-collectives-` + Hex). Jede andere ID in `data.json` wird ignoriert bzw. beim nächsten Speichern ersetzt – sonst könnte ein manipuliertes `data.json` das Secret eines anderen Plugins an einen fremden Server senden lassen (Security-Review M1). Das Feld zeigt das gespeicherte Passwort nie an, nur einen Platzhalter „Gespeichert – zum Ersetzen neu eingeben“. Ein leeres Feld ändert nichts.
 
 Weiterhin gilt aus ADR 0011: Obsidian ≥ 1.11.4, Passwort nur im Secret Storage, nie im Klartext in `data.json`.
 
@@ -23,4 +23,6 @@ Weiterhin gilt aus ADR 0011: Obsidian ≥ 1.11.4, Passwort nur im Secret Storage
 
 - Einfachere Einrichtung; die Secret-ID ist für Nutzer unsichtbar.
 - Ein gespeichertes Passwort lässt sich im Feld nicht ansehen, nur ersetzen.
+- Ein vorher über `SecretComponent` gewähltes Secret wird nicht übernommen; das App-Passwort muss einmal neu eingegeben werden.
+- Bei `http://` zu einem Server außerhalb des Geräts warnt der Settings-Tab, dass das App-Passwort unverschlüsselt übertragen wird.
 - Löschen des Passworts ist in M1 nicht vorgesehen; ggf. mit dem Login Flow (M9) nachziehen.
