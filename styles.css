@@ -1,0 +1,4 @@
+.nc-connection-result { margin: 0 0 var(--size-4-3); }
+.nc-connection-result:empty { display: none; }
+.nc-connection-result.is-success { color: var(--text-success); }
+.nc-connection-result.is-error { color: var(--text-error); }

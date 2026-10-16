@@ -22,10 +22,28 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
-	// Tests run in Node (vitest), not inside Obsidian: Node modules are allowed there.
+	// The plugin must run on mobile: Node modules and fetch are errors in src/ (warnings by default in the preset).
+	{
+		files: ['src/**/*.ts'],
+		rules: { 'obsidianmd/no-nodejs-modules': 'error', 'no-restricted-globals': 'error' },
+	},
+	// German UI texts (AGENTS.md): sentence-case expects English casing and would flag capitalized German nouns.
+	// The declarative settings API needs Obsidian 1.13+, but minAppVersion is 1.11.4, so the imperative tab stays.
+	{
+		files: ['src/settings/**/*.ts'],
+		rules: {
+			'obsidianmd/ui/sentence-case': 'off',
+			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
+		},
+	},
+	// Tests run in Node (vitest), not inside Obsidian: Node modules, fetch and globalThis are allowed there.
 	{
 		files: ['tests/**/*.ts'],
 		languageOptions: { globals: { ...globals.node } },
-		rules: { 'obsidianmd/no-nodejs-modules': 'off' },
+		rules: {
+			'obsidianmd/no-nodejs-modules': 'off',
+			'no-restricted-globals': 'off',
+			'obsidianmd/no-global-this': 'off',
+		},
 	},
 );
