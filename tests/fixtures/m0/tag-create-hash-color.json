@@ -1,0 +1,21 @@
+{
+	"request": {
+		"method": "POST",
+		"path": "/collectives/1/tags",
+		"body": {
+			"name": "Rot",
+			"color": "#ff0000"
+		}
+	},
+	"status": 400,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "failure",
+				"statuscode": 400,
+				"message": "Collective color is not valid: #ff0000"
+			},
+			"data": []
+		}
+	}
+}

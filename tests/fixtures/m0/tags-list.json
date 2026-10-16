@@ -1,0 +1,27 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/collectives/1/tags",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"tags": [
+					{
+						"id": 1,
+						"collectiveId": 1,
+						"name": "Projekt",
+						"color": "0082c9"
+					}
+				]
+			}
+		}
+	}
+}

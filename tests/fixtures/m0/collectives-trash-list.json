@@ -1,0 +1,45 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/collectives/trash",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"collectives": [
+					{
+						"id": 2,
+						"slug": "Projekte-Neu",
+						"circleId": "CIRCLE_ID_2",
+						"emoji": null,
+						"trashTimestamp": 1792138979,
+						"pageMode": 0,
+						"name": "Projekte Neu",
+						"level": 9,
+						"editPermissionLevel": 1,
+						"sharePermissionLevel": 1,
+						"canEdit": true,
+						"canShare": true,
+						"shareToken": null,
+						"isPageShare": false,
+						"sharePageId": 0,
+						"shareEditable": false,
+						"userPageOrder": 0,
+						"userShowMembers": true,
+						"userShowRecentPages": true,
+						"userFavoritePages": [],
+						"userNotify": 1,
+						"canLeave": false
+					}
+				]
+			}
+		}
+	}
+}

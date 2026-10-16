@@ -1,0 +1,43 @@
+{
+	"request": {
+		"method": "POST",
+		"path": "/collectives/1/pages/92",
+		"body": {
+			"title": "A/B: Fragen? #1 [x]"
+		}
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"page": {
+					"id": 101,
+					"slug": "A-B-Fragen-1-x",
+					"lastUserId": "alice",
+					"lastUserDisplayName": "Alice Test",
+					"emoji": null,
+					"subpageOrder": [],
+					"isFullWidth": false,
+					"tags": [],
+					"trashTimestamp": null,
+					"title": "A-B Fragen #1 [x]",
+					"timestamp": 1792138977,
+					"size": 0,
+					"fileName": "A-B Fragen #1 [x].md",
+					"filePath": "",
+					"filePathString": "",
+					"collectivePath": ".Collectives/Handbuch",
+					"collectiveNameWithEmoji": null,
+					"parentId": 92,
+					"shareToken": null,
+					"linkedPageIds": []
+				}
+			}
+		}
+	}
+}

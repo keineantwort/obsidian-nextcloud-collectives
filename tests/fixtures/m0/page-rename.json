@@ -1,0 +1,43 @@
+{
+	"request": {
+		"method": "PUT",
+		"path": "/collectives/1/pages/101",
+		"body": {
+			"title": "Umbenannt"
+		}
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"page": {
+					"id": 101,
+					"slug": "Umbenannt",
+					"lastUserId": "alice",
+					"lastUserDisplayName": "Alice Test",
+					"emoji": null,
+					"subpageOrder": [],
+					"isFullWidth": false,
+					"tags": [],
+					"trashTimestamp": null,
+					"title": "Umbenannt",
+					"timestamp": 1792138977,
+					"size": 0,
+					"fileName": "Umbenannt.md",
+					"filePath": "",
+					"filePathString": "",
+					"collectivePath": ".Collectives/Handbuch",
+					"collectiveNameWithEmoji": null,
+					"parentId": 92,
+					"shareToken": null,
+					"linkedPageIds": []
+				}
+			}
+		}
+	}
+}

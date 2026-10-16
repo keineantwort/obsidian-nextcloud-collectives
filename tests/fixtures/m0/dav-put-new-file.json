@@ -1,0 +1,16 @@
+{
+	"request": {
+		"method": "PUT",
+		"path": "/.Collectives/Handbuch/Per WebDAV.md",
+		"headers": {
+			"If-None-Match": "*"
+		}
+	},
+	"status": 201,
+	"headers": {
+		"content-type": "text/html; charset=UTF-8",
+		"etag": "\"5ff4d2a6a07119ac0fd9c5f861fc0da5\"",
+		"oc-etag": "\"5ff4d2a6a07119ac0fd9c5f861fc0da5\"",
+		"oc-fileid": "00000102ocmptl0gs6qx"
+	}
+}

@@ -1,0 +1,18 @@
+{
+	"request": {
+		"method": "DELETE",
+		"path": "/collectives/3",
+		"body": null
+	},
+	"status": 403,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "failure",
+				"statuscode": 403,
+				"message": "Member alice not allowed to delete collective: 3"
+			},
+			"data": []
+		}
+	}
+}
