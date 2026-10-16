@@ -1,7 +1,19 @@
 // Response types of the Collectives API and WebDAV. Only the fields the plugin uses; other server fields are ignored.
 
+declare const brand: unique symbol;
+/** Nominal type: a number that cannot be mixed up with another ID kind at compile time. Runtime value is still a number. */
+export type Brand<T, B extends string> = T & { readonly [brand]: B };
+export type CollectiveId = Brand<number, 'CollectiveId'>;
+export type PageId = Brand<number, 'PageId'>;
+export type TagId = Brand<number, 'TagId'>;
+export type AttachmentId = Brand<number, 'AttachmentId'>;
+export const asCollectiveId = (n: number): CollectiveId => n as CollectiveId;
+export const asPageId = (n: number): PageId => n as PageId;
+export const asTagId = (n: number): TagId => n as TagId;
+export const asAttachmentId = (n: number): AttachmentId => n as AttachmentId;
+
 export interface Collective {
-	id: number;
+	id: CollectiveId;
 	circleId: string;
 	name: string;
 	slug: string;
@@ -13,12 +25,12 @@ export interface Collective {
 }
 
 export interface PageInfo {
-	id: number;
+	id: PageId;
 	slug: string;
 	title: string;
 	emoji: string | null;
 	/** Tag IDs (not names). */
-	tags: number[];
+	tags: TagId[];
 	/** mtime, Unix seconds. */
 	timestamp: number;
 	size: number;
@@ -27,10 +39,11 @@ export interface PageInfo {
 	filePath: string;
 	/** User-relative folder of the collective, e.g. '.Collectives/Handbuch'. */
 	collectivePath: string;
-	parentId: number;
-	subpageOrder: number[];
+	/** 0 for the landing page (no parent). */
+	parentId: PageId;
+	subpageOrder: PageId[];
 	lastUserId: string | null;
-	linkedPageIds: number[];
+	linkedPageIds: PageId[];
 	trashTimestamp: number | null;
 }
 
@@ -43,14 +56,14 @@ export interface TrashedPage extends Omit<PageInfo, 'collectivePath'> {
 }
 
 export interface Tag {
-	id: number;
-	collectiveId: number;
+	id: TagId;
+	collectiveId: CollectiveId;
 	name: string;
 	color: string;
 }
 
 export interface Attachment {
-	id: number;
+	id: AttachmentId;
 	name: string;
 	filesize: number;
 	mimetype: string;

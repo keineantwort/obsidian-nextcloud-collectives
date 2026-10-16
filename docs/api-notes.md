@@ -139,6 +139,13 @@ Durchgeführt in der Collectives-Oberfläche des Testservers (Pretty-URLs aktiv)
 - **Weiterleitungen und `Authorization`-Header: nicht verifiziert.** Die Obsidian-Typen dokumentieren das Redirect-Verhalten von `requestUrl` nicht, und der Integrationstest läuft mit Node-`fetch` statt `requestUrl`. Ob ein Redirect auf einen fremden Host den Basic-Auth-Header mitnimmt (Desktop: Electron/Chromium, Mobile: native HTTP-Stacks), ist nur in Obsidian selbst prüfbar. Offen für die manuelle Prüfung (spätestens M9, `docs/manual-test.md`). Bis dahin gilt: Die Server-URL wird normalisiert, und der Client sendet nur an `baseUrl + Pfad`, Pfade mit `://` lehnt er ab.
 - Unerwartete Statuscodes: `MKCOL` auf einen existierenden Ordner → 405 (`ServerError`), Mitglied löscht Collective → 403 (`ForbiddenError`, ADR 0015).
 
+## 10b. Befunde aus M3 (Pull, ONC-4)
+
+- **User-ID für WebDAV**: `GET /ocs/v2.php/cloud/user` liefert unter `ocs.data.id` die Nextcloud-User-ID. Sie wird vor jedem Lauf geholt, im State als `user` gespeichert und an `WebdavClient` übergeben (Login-Name und User-ID können bei E-Mail- oder LDAP-Anmeldung verschieden sein). Ein State mit Seiten, aber anderer User-ID oder Server-URL führt zum Abbruch ohne Schreibzugriff.
+- **Leerlauf ohne Schreibzugriffe**: Remote gilt als geändert, wenn `timestamp` oder `size` aus der Seitenliste vom State abweichen. Nur dann folgt ein WebDAV-`GET`. Metadaten (Emoji, Tags, `nc_title`) laufen über `metaHash`. Der State wird nur geschrieben, wenn sich seine serialisierte Fassung ändert.
+- **Elternseiten** erkennt der Pull an `fileName === 'Readme.md'` (mit `parentId ≠ 0`), nicht an vorhandenen Kindern. Bei Elternseiten enthält `filePath` den eigenen Ordner, bei Blattseiten den Elternordner (Fixture `pages-list-final.json`).
+- **Offen für die manuelle Prüfung in Obsidian**: ob `file.stat.mtime` direkt nach `vault.create`/`vault.process` den neuen Wert trägt (Basis für `localMtime`), ob Obsidian-Modals selbst `role="dialog"` setzen, ob der Startfokus ohne `requestAnimationFrame` auf „Abbrechen“ bleibt und ob Notices von VoiceOver angesagt werden.
+
 ## 11. Referenzprojekte (PLAN §18)
 
 Gesichtet nur lesend, ohne Build oder Ausführung.

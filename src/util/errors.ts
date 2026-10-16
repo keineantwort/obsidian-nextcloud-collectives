@@ -29,3 +29,8 @@ export type ConfigProblem = 'missing' | 'invalid';
 export class ConfigError extends NcError {
 	constructor(readonly field: ConfigField, readonly problem: ConfigProblem) { super(`Config ${field} is ${problem}`); }
 }
+
+/** Errors that end the whole run: the connection or the server contract is broken, so no partial result is trusted. */
+export function isRunFatal(err: unknown): boolean {
+	return err instanceof AuthError || err instanceof ApiChangedError || err instanceof NetworkError;
+}

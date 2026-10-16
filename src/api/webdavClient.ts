@@ -139,9 +139,13 @@ export class WebdavClient {
 	private readonly http: HttpClient;
 	private readonly filesRoot: string;
 
-	constructor(http: HttpClient) {
+	/**
+	 * `davUserId` is the Nextcloud user ID (from getCurrentUserId), not the login name: WebDAV paths use the user ID.
+	 * Defaults to the login name, which is only correct if both are equal.
+	 */
+	constructor(http: HttpClient, davUserId: string = http.username) {
 		this.http = http;
-		this.filesRoot = '/remote.php/dav/files/' + encodeURIComponent(http.username);
+		this.filesRoot = '/remote.php/dav/files/' + encodeURIComponent(davUserId);
 	}
 
 	/** GET. Resolves with body text and ETag header (case-insensitive lookup). Missing ETag → ApiChangedError. */

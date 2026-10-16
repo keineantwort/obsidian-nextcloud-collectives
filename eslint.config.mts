@@ -27,6 +27,16 @@ export default defineConfig(
 		files: ['src/**/*.ts'],
 		rules: { 'obsidianmd/no-nodejs-modules': 'error', 'no-restricted-globals': 'error' },
 	},
+	// planner and mapping are pure (AGENTS rule 3): no Obsidian, no network modules; the vitest stub would hide a violation.
+	{
+		files: ['src/sync/planner.ts', 'src/mapping/**/*.ts'],
+		rules: {
+			'no-restricted-imports': ['error', {
+				paths: [{ name: 'obsidian', message: 'planner and mapping must stay free of Obsidian imports.' }],
+				patterns: [{ group: ['**/api/http', '**/api/ocsClient', '**/api/webdavClient', '**/api/collectivesApi', '**/api/clients', '**/api/obsidianRequest', '**/api/connection'], message: 'planner and mapping must stay free of network modules; only ../api/types is allowed.' }],
+			}],
+		},
+	},
 	// The declarative settings API needs Obsidian 1.13+, but minAppVersion is 1.11.4, so the imperative tab stays.
 	{
 		files: ['src/settings/**/*.ts'],

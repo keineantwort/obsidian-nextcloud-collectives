@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApiClients, type ApiClients } from '../../src/api/clients';
 import type { HttpClientOptions } from '../../src/api/http';
 import type { Collective, PageInfo } from '../../src/api/types';
+import { remotePagePath } from '../../src/mapping/paths';
 import { AuthError, ConflictError } from '../../src/util/errors';
 import { fetchRequest, loadTestServerEnv, type TestServerEnv } from './helpers';
 
@@ -33,11 +34,6 @@ function clientOptions(appPassword: string): HttpClientOptions {
 		request: fetchRequest,
 		sleep: () => Promise.resolve(),
 	};
-}
-
-/** Server-side path of a page's Markdown file, relative to the user's files root. */
-function pagePath(p: PageInfo): string {
-	return p.collectivePath + '/' + (p.filePath ? p.filePath + '/' : '') + p.fileName;
 }
 
 /**
@@ -124,7 +120,7 @@ describe('API clients against the local Docker Nextcloud', () => {
 	});
 
 	it('reads the new page with empty content and a non-empty ETag', async () => {
-		const file = await clients.webdav.get(pagePath(defined(page, 'page')));
+		const file = await clients.webdav.get(remotePagePath(defined(page, 'page')));
 
 		expect(file.content).toBe('');
 		expect(file.etag).not.toBe('');
@@ -133,13 +129,13 @@ describe('API clients against the local Docker Nextcloud', () => {
 
 	it('writes the content with the current ETag, returns a new ETag and reads back exactly that content', async () => {
 		await waitPastSecondBoundary();
-		const written = await clients.webdav.put(pagePath(defined(page, 'page')), CONTENT, {
+		const written = await clients.webdav.put(remotePagePath(defined(page, 'page')), CONTENT, {
 			ifMatch: defined(etagBefore, 'ETag before write'),
 		});
 		etagAfter = written.etag;
 
 		expect(written.etag).not.toBe(defined(etagBefore, 'ETag before write'));
-		const back = await clients.webdav.get(pagePath(defined(page, 'page')));
+		const back = await clients.webdav.get(remotePagePath(defined(page, 'page')));
 		expect(back.content).toBe(CONTENT);
 		expect(back.etag).toBe(written.etag);
 	});
@@ -149,11 +145,11 @@ describe('API clients against the local Docker Nextcloud', () => {
 		expect(stale).not.toBe(defined(etagAfter, 'ETag after write'));
 
 		const err = await captureError(
-			clients.webdav.put(pagePath(defined(page, 'page')), REJECTED_CONTENT, { ifMatch: stale }),
+			clients.webdav.put(remotePagePath(defined(page, 'page')), REJECTED_CONTENT, { ifMatch: stale }),
 		);
 
 		expect(err).toBeInstanceOf(ConflictError);
-		const back = await clients.webdav.get(pagePath(defined(page, 'page')));
+		const back = await clients.webdav.get(remotePagePath(defined(page, 'page')));
 		expect(back.content).toBe(CONTENT);
 	});
 
@@ -163,7 +159,7 @@ describe('API clients against the local Docker Nextcloud', () => {
 
 		const entry = entries.find((e) => e.fileId === current.id);
 		expect(entry).toMatchObject({
-			path: pagePath(current),
+			path: remotePagePath(current),
 			isCollection: false,
 			etag: defined(etagAfter, 'ETag after write'),
 		});

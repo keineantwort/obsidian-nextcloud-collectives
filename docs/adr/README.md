@@ -19,3 +19,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0013](0013-lokalisierung-de-en.md) | Benutzer-Texte auf Deutsch und Englisch nach Obsidian-Sprache | akzeptiert |
 | [0014](0014-app-passwort-eingabe-ohne-secretcomponent.md) | App-Passwort über ein Passwortfeld, Secret-ID vergibt das Plugin | akzeptiert |
 | [0015](0015-http-fehlerabbildung-und-retry.md) | HTTP-Fehlerabbildung zentral, 403 ≠ `AuthError`, Retry nur für lesende Requests | akzeptiert |
+| [0016](0016-pull-frontmatter-textbasiert-und-sync-state.md) | Pull: Frontmatter textbasiert, Sync-State als eigene Datei, Konfliktkopie statt Überschreiben | akzeptiert |
