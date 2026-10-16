@@ -7,7 +7,7 @@ import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } fr
 const en = createTranslator('en');
 const de = createTranslator('de');
 
-const EMPTY: SyncResult = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const EMPTY: SyncResult = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
 
 function result(partial: Partial<SyncResult>): SyncResult {
 	return { ...EMPTY, ...partial };
@@ -202,5 +202,32 @@ describe('describeSyncError', () => {
 describe('alreadyRunningNotice', () => {
 	it('is an info notice', () => {
 		expect(alreadyRunningNotice(de)).toEqual({ lines: ['Es läuft bereits eine Synchronisierung.'], level: 'info' });
+	});
+});
+
+describe('formatSyncResult: uploads', () => {
+	it('reports pushed pages as their own detail in English', () => {
+		const spec = formatSyncResult(result({ pushed: 2 }), en);
+
+		expect(spec).toEqual({ lines: ['Sync complete. Uploaded: 2'], level: 'info' });
+	});
+
+	it('reports pushed pages as their own detail in German', () => {
+		const spec = formatSyncResult(result({ pushed: 2 }), de);
+
+		expect(spec.lines[0]).toBe('Synchronisierung abgeschlossen. Hochgeladen: 2');
+	});
+
+	it('counts a pushed page as a change, so the run is not reported as up to date', () => {
+		const spec = formatSyncResult(result({ pushed: 1, unchanged: 12 }), en);
+
+		expect(spec.lines[0]).toContain('Uploaded: 1');
+		expect(spec.lines[0]).not.toContain('up to date');
+	});
+
+	it('shows the upload of a finished run through describeSyncOutcome', () => {
+		const spec = describeSyncOutcome({ kind: 'done', result: result({ pushed: 1 }), skips: [], openConflicts: 0 }, en);
+
+		expect(spec).toEqual({ lines: ['Sync complete. Uploaded: 1'], level: 'info' });
 	});
 });

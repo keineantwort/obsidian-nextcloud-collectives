@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
 import type { CollectiveId, PageInfo, PageId } from '../../src/api/types';
 import { parsePageInfo } from '../../src/api/parse';
+import { de } from '../../src/i18n/de';
+import { en } from '../../src/i18n/en';
 import {
 	canonicalPath,
 	conflictPath,
@@ -447,5 +449,34 @@ describe('ncTitleFor', () => {
 		{ name: 'uses only the last path segment as file base name', title: 'Umbenannt', path: 'Handbuch/Prozesse/Umbenannt.md', isLanding: false, expected: null },
 	])('$name', ({ title, path, isLanding, expected }) => {
 		expect(ncTitleFor(title, path, isLanding)).toBe(expected);
+	});
+});
+
+describe('isConflictFileName', () => {
+	it.each([
+		['Konflikt, without suffix', 'Notiz (Konflikt 2026-10-16 1430).md'],
+		['Conflict, without suffix', 'Notiz (Conflict 2026-10-16 1430).md'],
+		['Konflikt, with (2)', 'Notiz (Konflikt 2026-10-16 1430) (2).md'],
+		['Conflict, with (2)', 'Notiz (Conflict 2026-10-16 1430) (2).md'],
+	])('accepts a %s name', (_label, path) => {
+		expect(isConflictFileName(path)).toBe(true);
+	});
+
+	it.each([
+		['a plain page name', 'Notiz.md'],
+		['an unknown label', 'Notiz (Other 2026-10-16 1430).md'],
+	])('rejects %s', (_label, path) => {
+		expect(isConflictFileName(path)).toBe(false);
+	});
+
+	// Passes already with the hard-coded labels; the test pins that the pattern covers every locale table.
+	it.each([
+		['en', en],
+		['de', de],
+	])('accepts a conflict file name built from the %s sync.conflictFileLabel', (_locale, table) => {
+		const label = table['sync.conflictFileLabel'];
+
+		expect(isConflictFileName(`Notiz (${label} 2026-10-16 1430).md`)).toBe(true);
+		expect(isConflictFileName(`Notiz (${label} 2026-10-16 1430) (3).md`)).toBe(true);
 	});
 });

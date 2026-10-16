@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { asAttachmentId, asCollectiveId, asPageId, asTagId } from '../../src/api/types';
-import { emptyState, isCollision, parseSyncState, serializeSyncState } from '../../src/sync/state';
+import {
+	UNCHECKED_LOCAL_MTIME,
+	UNCONFIRMED_REMOTE_MTIME,
+	emptyState,
+	isCollision,
+	parseSyncState,
+	serializeSyncState,
+} from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 
 const SERVER = 'https://cloud.example.com';
@@ -120,5 +127,25 @@ describe('serializeSyncState', () => {
 	it('round-trips through parseSyncState', () => {
 		const state = validState();
 		expect(parseSyncState(JSON.parse(serializeSyncState(state)))).toEqual(state);
+	});
+});
+
+describe('sync sentinels', () => {
+	it('UNCONFIRMED_REMOTE_MTIME is -1', () => {
+		expect(UNCONFIRMED_REMOTE_MTIME).toBe(-1);
+	});
+
+	it('UNCHECKED_LOCAL_MTIME is -1', () => {
+		expect(UNCHECKED_LOCAL_MTIME).toBe(-1);
+	});
+
+	it('a state with both sentinels round-trips through serializeSyncState and parseSyncState', () => {
+		const state = validState();
+		state.pages['10'] = pageState(10, { localMtime: UNCHECKED_LOCAL_MTIME, remoteMtime: UNCONFIRMED_REMOTE_MTIME });
+
+		const parsed = parseSyncState(JSON.parse(serializeSyncState(state)));
+
+		expect(parsed).toEqual(state);
+		expect(parsed?.pages['10']).toMatchObject({ localMtime: -1, remoteMtime: -1 });
 	});
 });

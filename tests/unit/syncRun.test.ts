@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { asAttachmentId, asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { HttpRequest, HttpResponse, RequestFn } from '../../src/api/http';
-import { toLocal } from '../../src/mapping/frontmatter';
+import { toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 import { readPageId } from '../../src/mapping/frontmatter';
 import { StateStore } from '../../src/sync/stateStore';
@@ -70,6 +70,10 @@ function remoteText(title: string): string {
 // Fakes
 // ---------------------------------------------------------------------------
 
+/** Response headers of a GET whose ETag can be trusted (the file was written in an earlier second than the response). */
+const CONFIRMED_HEADERS = { 'Last-Modified': 'Thu, 15 Oct 2026 10:00:00 GMT', Date: 'Fri, 16 Oct 2026 12:30:00 GMT' };
+const PRECONDITION_FAILED: HttpResponse = { status: 412, headers: {}, text: '' };
+
 function ocs(data: unknown): HttpResponse {
 	return { status: 200, headers: {}, text: JSON.stringify({ ocs: { meta: {}, data } }) };
 }
@@ -81,10 +85,14 @@ const NOT_FOUND: HttpResponse = { status: 404, headers: {}, text: '' };
  * user ID 'alice-id' (login name 'alice'), and WebDAV GET under /remote.php/dav/files/alice-id/.
  * Tests may change `pages` and `davFiles` between runs.
  */
+/** A WebDAV file of the fake server. Headers default to CONFIRMED_HEADERS, so the ETag of a GET is trusted. */
+interface DavFileEntry { content: string; etag: string; lastModified?: string; date?: string; }
+
 class FakeNextcloud {
 	readonly calls: HttpRequest[] = [];
 	readonly pages: Record<string, unknown>[] = structuredClone(PAGES_FIXTURE);
-	readonly davFiles = new Map<string, { content: string; etag: string }>();
+	readonly davFiles = new Map<string, DavFileEntry>();
+	private putCount = 0;
 
 	readonly request: RequestFn = async (req) => {
 		this.calls.push(req);
@@ -109,11 +117,28 @@ class FakeNextcloud {
 	}
 
 	private dav(req: HttpRequest): HttpResponse {
-		if (req.method !== 'GET') return { status: 405, headers: {}, text: '' };
 		const key = req.url.slice(DAV_ROOT.length).split('/').map((segment) => decodeURIComponent(segment)).join('/');
+		if (req.method === 'PUT') return this.put(req, key);
+		if (req.method !== 'GET') return { status: 405, headers: {}, text: '' };
 		const file = this.davFiles.get(key);
 		if (file === undefined) return NOT_FOUND;
-		return { status: 200, headers: { ETag: file.etag }, text: file.content };
+		const headers = {
+			ETag: file.etag,
+			'Last-Modified': file.lastModified ?? CONFIRMED_HEADERS['Last-Modified'],
+			Date: file.date ?? CONFIRMED_HEADERS.Date,
+		};
+		return { status: 200, headers, text: file.content };
+	}
+
+	/** PUT with If-Match: 412 unless the header equals the stored ETag. Stores the body under a new ETag. */
+	private put(req: HttpRequest, key: string): HttpResponse {
+		const file = this.davFiles.get(key);
+		if (file === undefined) return NOT_FOUND;
+		if (req.headers['If-Match'] !== file.etag) return PRECONDITION_FAILED;
+		this.putCount++;
+		const etag = `"etag-put-${this.putCount}"`;
+		this.davFiles.set(key, { content: req.body ?? '', etag });
+		return { status: 204, headers: { ETag: etag }, text: '' };
 	}
 }
 
@@ -134,7 +159,7 @@ class FakeStateFile implements StateFile {
 
 function makeDeps(server: FakeNextcloud, vault: MemoryVault, stateFile: FakeStateFile, over: Partial<SyncRunDeps> = {}): SyncRunDeps {
 	return {
-		settings: { serverUrl: BASE, username: 'alice' },
+		settings: { serverUrl: BASE, username: 'alice', conflictStrategy: 'conflictFile' },
 		readPassword: async () => PASSWORD,
 		request: server.request,
 		vault,
@@ -143,6 +168,8 @@ function makeDeps(server: FakeNextcloud, vault: MemoryVault, stateFile: FakeStat
 		t: createTranslator('de'),
 		log: new Logger(),
 		now: () => NOW,
+		dirty: () => new Set<string>(),
+		sleep: async () => undefined,
 		...over,
 	};
 }
@@ -151,7 +178,7 @@ function metaOf(id: number): NcMeta {
 	return { pageId: asPageId(id), collectiveId: asCollectiveId(1), title: null, emoji: null, tags: [] };
 }
 
-const ZERO_RESULT = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const ZERO_RESULT = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
 
 /** Raw page entry as the Collectives API returns it, based on the fixture entry of page 102 (child of the landing page 92). */
 function rawPage(id: number, title: string, fileName: string, parentId: number): Record<string, unknown> {
@@ -238,7 +265,7 @@ describe('runSync: second run', () => {
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
+		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0 });
 		expect(vault.writes).toBe(vaultWrites);
 		expect(stateFile.writes).toBe(stateWrites);
 		expect(server.davRequests(callsBefore)).toEqual([]);
@@ -389,6 +416,7 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 			kind: 'done',
 			result: ZERO_RESULT,
 			skips: [{ reason: 'remoteDeleted', pageId: 200, collectiveId: 1 }],
+			openConflicts: 0,
 		});
 		expect(vault.writes).toBe(writesBefore);
 		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
@@ -437,7 +465,7 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 		const stateWritesBefore = stateFile.writes;
 		const second = await runSync(deps);
 
-		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
+		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 1 });
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.writes).toBe(stateWritesBefore);
 
@@ -448,5 +476,86 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 		expect(third).toMatchObject({ kind: 'done', result: { conflicts: 0, failed: 0 } });
 		expect(readPageId(await vault.read('Handbuch/Per WebDAV.md'))).toBe(102);
 		expect(storedState(stateFile).pages['102']?.status).toBe('synced');
+	});
+});
+
+describe('runSync: pushing local edits', () => {
+	const PAGE_102_LOCAL = 'Handbuch/Per WebDAV.md';
+	const PAGE_102_REMOTE = '.Collectives/Handbuch/Per WebDAV.md';
+
+	/** Local edit of page 102 after a first sync: appends a line, so the local mtime moves and the text differs. */
+	async function editLocally(vault: MemoryVault): Promise<string> {
+		const localText = `${await vault.read(PAGE_102_LOCAL)}Mein Zusatz\n`;
+		vault.userEdit(PAGE_102_LOCAL, localText);
+		return localText;
+	}
+
+	/** Server-side change of page 102: newer timestamp, new text and a new ETag. */
+	function serverChangesPage102(server: FakeNextcloud, text: string): void {
+		serverPage(server, 102)['timestamp'] = 1792139000;
+		server.davFiles.set(PAGE_102_REMOTE, { content: text, etag: '"etag-102-server"' });
+	}
+
+	it('uploads a locally edited synced page, returns no open conflicts and leaves the server with the local text', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		const localText = await editLocally(vault);
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0 });
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
+	});
+
+	it('asks the dirty-path source once per run', async () => {
+		const dirty = vi.fn(() => new Set<string>());
+		const deps = makeDeps(new FakeNextcloud(), new MemoryVault(), new FakeStateFile(), { dirty });
+
+		await runSync(deps);
+
+		expect(dirty).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not upload the same text again on the next run, fetches the page once, and leaves it alone on the run after', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		await editLocally(vault);
+		await runSync(deps);
+
+		const callsBeforeSecond = server.calls.length;
+		const second = await runSync(deps);
+		const secondDav = server.davRequests(callsBeforeSecond);
+
+		expect(secondDav.filter((req) => req.method === 'PUT')).toEqual([]);
+		expect(secondDav.filter((req) => req.method === 'GET')).toHaveLength(1);
+		expect(second).toMatchObject({ kind: 'done', openConflicts: 0, result: { pushed: 0, conflicts: 0, failed: 0 } });
+
+		const callsBeforeThird = server.calls.length;
+		const third = await runSync(deps);
+
+		expect(server.davRequests(callsBeforeThird)).toEqual([]);
+		expect(third).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0 });
+	});
+
+	it('pushes the local text when both sides changed and conflictStrategy is preferLocal', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile(), {
+			settings: { serverUrl: BASE, username: 'alice', conflictStrategy: 'preferLocal' },
+		});
+		await runSync(deps);
+		const localText = await editLocally(vault);
+		serverChangesPage102(server, '# Per WebDAV\n\nServer-Fassung\n');
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0 });
+		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
+		expect(await vault.read(PAGE_102_LOCAL)).toBe(localText);
+		expect(vault.listFiles().some((file) => file.path.includes('Konflikt'))).toBe(false);
 	});
 });

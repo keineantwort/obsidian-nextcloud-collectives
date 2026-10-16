@@ -5,6 +5,11 @@ import { isRecord } from '../util/isRecord';
 
 export const STATE_SCHEMA_VERSION = 1;
 
+/** remoteMtime value meaning "remote version not confirmed": the next run must GET the page and compare hashes. */
+export const UNCONFIRMED_REMOTE_MTIME = -1;
+/** localMtime value meaning "local file not checked": the next run must hash the local file. */
+export const UNCHECKED_LOCAL_MTIME = -1;
+
 /**
  * synced: linked page, its file carries its nc_page_id. conflict: linked page with a conflict copy (baseHash may be '' after an
  * adopt conflict). collision: the target path was held by a user file without nc_page_id; that file is not linked.

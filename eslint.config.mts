@@ -29,7 +29,7 @@ export default defineConfig(
 	},
 	// planner and mapping are pure (AGENTS rule 3): no Obsidian, no network modules; the vitest stub would hide a violation.
 	{
-		files: ['src/sync/planner.ts', 'src/mapping/**/*.ts'],
+		files: ['src/sync/planner.ts', 'src/sync/decide.ts', 'src/mapping/**/*.ts'],
 		rules: {
 			'no-restricted-imports': ['error', {
 				paths: [{ name: 'obsidian', message: 'planner and mapping must stay free of Obsidian imports.' }],

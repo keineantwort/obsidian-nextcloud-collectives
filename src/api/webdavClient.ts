@@ -1,7 +1,14 @@
 import { ApiChangedError } from '../util/errors';
 import { getHeader, type HttpClient, type HttpResponse } from './http';
 
-export interface DavFile { content: string; etag: string; }
+export interface DavFile {
+	content: string;
+	etag: string;
+	/** Raw `Last-Modified` response header, null if absent. */
+	lastModified: string | null;
+	/** Raw `Date` response header, null if absent. */
+	date: string | null;
+}
 export interface DavWriteResult { etag: string; }
 /** Exactly one precondition is mandatory: never overwrite blindly (AGENTS rule 4). */
 export type PutPrecondition = { ifMatch: string } | { ifNoneMatch: '*' };
@@ -127,11 +134,30 @@ function isDotSegment(segment: string): boolean {
 	return segment === '.' || segment === '..';
 }
 
+/** Returns the ETag header of a response, or undefined if the server did not send one. */
+function etagHeader(res: HttpResponse): string | undefined {
+	const etag = getHeader(res.headers, 'ETag');
+	return etag === undefined || etag === '' ? undefined : etag;
+}
+
 /** Returns the ETag header of a response, or ApiChangedError if the server did not send one. */
 function requireEtag(res: HttpResponse, what: string): string {
-	const etag = getHeader(res.headers, 'ETag');
-	if (etag === undefined || etag === '') throw new ApiChangedError(`${what} response has no ETag`);
+	const etag = etagHeader(res);
+	if (etag === undefined) throw new ApiChangedError(`${what} response has no ETag`);
 	return etag;
+}
+
+/**
+ * True if the ETag of a GET can be trusted for If-Match (PLAN §4.5, api-notes §10a: ETags have one-second resolution).
+ * Confirmed iff both headers parse (Date.parse not NaN) and floor(lastModified/1000) < floor(date/1000), i.e. the file
+ * was last written in an earlier server second than the one the response was produced in. Missing/unparsable → false.
+ */
+export function isEtagConfirmed(file: Pick<DavFile, 'lastModified' | 'date'>): boolean {
+	if (file.lastModified === null || file.date === null) return false;
+	const modified = Date.parse(file.lastModified);
+	const responded = Date.parse(file.date);
+	if (Number.isNaN(modified) || Number.isNaN(responded)) return false;
+	return Math.floor(modified / 1000) < Math.floor(responded / 1000);
 }
 
 /** WebDAV access to files below /remote.php/dav/files/{user}. Paths are user-relative, e.g. '.Collectives/Handbuch/Readme.md'. */
@@ -148,22 +174,38 @@ export class WebdavClient {
 		this.filesRoot = '/remote.php/dav/files/' + encodeURIComponent(davUserId);
 	}
 
-	/** GET. Resolves with body text and ETag header (case-insensitive lookup). Missing ETag → ApiChangedError. */
+	/** GET. Resolves with body text, ETag and the Last-Modified/Date headers (case-insensitive lookup). Missing ETag → ApiChangedError. */
 	async get(path: string): Promise<DavFile> {
 		const res = await this.http.send({ method: 'GET', path: this.filePath(path) });
-		return { content: res.text, etag: requireEtag(res, 'GET') };
+		return {
+			content: res.text,
+			etag: requireEtag(res, 'GET'),
+			lastModified: getHeader(res.headers, 'Last-Modified') ?? null,
+			date: getHeader(res.headers, 'Date') ?? null,
+		};
 	}
 
 	/**
 	 * PUT with 'Content-Type': 'text/markdown; charset=utf-8' and either 'If-Match': quoteEtag(etag) or 'If-None-Match': '*'.
-	 * 412 → ConflictError (via HttpClient). Resolves with the new ETag from the response; missing → ApiChangedError.
+	 * 412 → ConflictError (via HttpClient). Resolves with the new ETag from the response. If the response has no ETag,
+	 * the ETag is read with propfind(path, 0); if that has none either → ApiChangedError. Never retried.
 	 */
 	async put(path: string, content: string, precondition: PutPrecondition): Promise<DavWriteResult> {
 		const headers: Record<string, string> = { 'Content-Type': 'text/markdown; charset=utf-8' };
 		if ('ifMatch' in precondition) headers['If-Match'] = quoteEtag(precondition.ifMatch);
 		else headers['If-None-Match'] = precondition.ifNoneMatch;
 		const res = await this.http.send({ method: 'PUT', path: this.filePath(path), headers, body: content });
-		return { etag: requireEtag(res, 'PUT') };
+		const etag = etagHeader(res);
+		if (etag !== undefined) return { etag };
+		return { etag: await this.etagAfterWrite(path) };
+	}
+
+	/** ETag of a file from PROPFIND Depth 0, for PUT responses without an ETag header. Missing → ApiChangedError. */
+	private async etagAfterWrite(path: string): Promise<string> {
+		const [entry] = await this.propfind(path, 0);
+		const etag = entry?.etag;
+		if (etag === null || etag === undefined) throw new ApiChangedError('PUT response has no ETag and PROPFIND reports none');
+		return etag;
 	}
 
 	/**
