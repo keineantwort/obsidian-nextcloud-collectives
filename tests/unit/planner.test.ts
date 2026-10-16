@@ -1,201 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
-import type { Collective, CollectiveId, PageId, PageInfo, Tag } from '../../src/api/types';
-import type { NcMeta } from '../../src/mapping/frontmatter';
-import { pathKey, planLocalPaths } from '../../src/mapping/paths';
-import type { CollectiveTree, PathPlan } from '../../src/mapping/paths';
-import type { LocalFile, LocalSnapshot } from '../../src/sync/localScanner';
+import {
+	UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME, asCollectiveId, asPageId, asTagId, baseFiles, baseRemote, baseState, collective,
+	findSkip, inputFor, localFile, localSnapshot, opsOf, page, pageState, planFor, remote, remoteCollective, seitePage, skipReasons,
+	startPage, syncState, tag,
+} from '../fakes/plannerFixtures';
+import { pathKey } from '../../src/mapping/paths';
 import { planSync } from '../../src/sync/planner';
-import type { PlannerInput, SyncOp, SyncPlan } from '../../src/sync/planner';
-import type { RemoteCollective, RemoteSnapshot } from '../../src/sync/remoteScanner';
-import type { CollectiveState, PageState, SyncState } from '../../src/sync/state';
-import { UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME } from '../../src/sync/state';
-
-const SERVER = 'https://cloud.example.com';
-
-// ---------------------------------------------------------------------------
-// Builders. Remote hashes are 'm<id>'; state metaHash defaults to the same, so
-// an unchanged page produces no operation.
-// ---------------------------------------------------------------------------
-
-function collective(id: number, name: string): Collective {
-	return {
-		id: asCollectiveId(id),
-		circleId: `circle-${id}`,
-		name,
-		slug: name.toLowerCase(),
-		emoji: null,
-		level: 8,
-		canEdit: true,
-		trashTimestamp: null,
-	};
-}
-
-/** Remote page with all required fields; defaults match pageState() so unchanged pages stay unchanged. */
-function page(id: number, over: Partial<PageInfo> = {}): PageInfo {
-	return {
-		id: asPageId(id),
-		slug: `seite-${id}`,
-		title: `Seite ${id}`,
-		emoji: null,
-		tags: [],
-		timestamp: 1,
-		size: 0,
-		fileName: `Seite ${id}.md`,
-		filePath: '',
-		collectivePath: '.Collectives/Coll',
-		parentId: asPageId(0),
-		subpageOrder: [],
-		lastUserId: null,
-		linkedPageIds: [],
-		trashTimestamp: null,
-		...over,
-	};
-}
-
-/** Start page of collective 1 ("Coll"). */
-function startPage(over: Partial<PageInfo> = {}): PageInfo {
-	return page(1, { title: 'Coll', fileName: 'Readme.md', ...over });
-}
-
-/** Leaf page 10 "Seite" below the start page. */
-function seitePage(over: Partial<PageInfo> = {}): PageInfo {
-	return page(10, { title: 'Seite', fileName: 'Seite.md', parentId: asPageId(1), ...over });
-}
-
-function remoteCollective(id: number, name: string, pages: PageInfo[], tags: Tag[] = []): RemoteCollective {
-	return { collective: collective(id, name), pages, tags };
-}
-
-function remote(collectives: RemoteCollective[], failed: RemoteSnapshot['failed'] = []): RemoteSnapshot {
-	return { collectives, failed };
-}
-
-function tag(id: number, name: string, collectiveId: number, color = '#000000'): Tag {
-	return { id: asTagId(id), collectiveId: asCollectiveId(collectiveId), name, color };
-}
-
-function pageState(p: PageInfo, collectiveId: number, localPath: string, over: Partial<PageState> = {}): PageState {
-	return {
-		pageId: p.id,
-		collectiveId: asCollectiveId(collectiveId),
-		localPath,
-		localMtime: 500,
-		remoteFilePath: p.filePath,
-		remoteFileName: p.fileName,
-		parentId: p.parentId,
-		remoteEtag: `etag-${p.id}`,
-		remoteMtime: p.timestamp,
-		remoteSize: p.size,
-		baseHash: `base-${p.id}`,
-		metaHash: `m${p.id}`,
-		status: 'synced',
-		conflictPath: null,
-		attachments: [],
-		lastSyncedAt: 1,
-		...over,
-	};
-}
-
-function localFile(path: string, pageId: number | null, mtime = 500): LocalFile {
-	return { path, mtime, pageId: pageId === null ? null : asPageId(pageId) };
-}
-
-/** Occupied set and path spellings as the scanner builds them: keys of all files and all ancestor folders. */
-function localSnapshot(files: LocalFile[]): LocalSnapshot {
-	const occupied = new Set<string>();
-	const paths = new Map<string, string>();
-	for (const file of files) {
-		const parts = file.path.split('/');
-		for (let i = 1; i <= parts.length; i++) {
-			const path = parts.slice(0, i).join('/');
-			occupied.add(pathKey(path));
-			paths.set(pathKey(path), path);
-		}
-	}
-	return { files, occupied, paths, nonEmpty: files.length > 0 };
-}
-
-function syncState(parts: { collectives?: CollectiveState[]; pages?: PageState[]; tags?: SyncState['tags'] }): SyncState {
-	const collectives: Record<string, CollectiveState> = {};
-	for (const c of parts.collectives ?? []) collectives[String(c.collectiveId)] = c;
-	const pages: Record<string, PageState> = {};
-	for (const p of parts.pages ?? []) pages[String(p.pageId)] = p;
-	return { schemaVersion: 1, serverUrl: SERVER, user: 'alice', collectives, pages, tags: parts.tags ?? {} };
-}
-
-/** Remote: collective 1 "Coll" with start page 1 and leaf 10. */
-function baseRemote(): RemoteSnapshot {
-	return remote([remoteCollective(1, 'Coll', [startPage(), seitePage()])]);
-}
-
-/** State: everything from baseRemote() is synced at Coll/Coll.md and Coll/Seite.md. */
-function baseState(): SyncState {
-	return syncState({
-		collectives: [{ collectiveId: asCollectiveId(1), name: 'Coll', localFolder: 'Coll' }],
-		pages: [pageState(startPage(), 1, 'Coll/Coll.md'), pageState(seitePage(), 1, 'Coll/Seite.md')],
-		tags: { '1': [] },
-	});
-}
-
-/** Local files matching baseState(). */
-function baseFiles(): LocalFile[] {
-	return [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10)];
-}
-
-interface Parts {
-	remote?: RemoteSnapshot;
-	state?: SyncState;
-	files?: LocalFile[];
-	/** pathKeys of the paths the vault reported as changed since the last run. */
-	dirty?: ReadonlySet<string>;
-}
-
-/** Builds the planner input the way the runner does: planLocalPaths over the remote trees, state folders as known folders. */
-function inputFor(parts: Parts = {}): PlannerInput {
-	const remoteSnap = parts.remote ?? baseRemote();
-	const state = parts.state ?? baseState();
-	const files = parts.files ?? baseFiles();
-	const trees: CollectiveTree[] = remoteSnap.collectives.map((rc) => ({
-		collectiveId: rc.collective.id,
-		name: rc.collective.name,
-		pages: rc.pages,
-	}));
-	const knownFolders = new Map<CollectiveId, string>();
-	for (const c of Object.values(state.collectives)) knownFolders.set(c.collectiveId, c.localFolder);
-	const paths: PathPlan = planLocalPaths(trees, knownFolders);
-	const remoteMeta = new Map<PageId, { meta: NcMeta; hash: string }>();
-	for (const rc of remoteSnap.collectives) {
-		for (const p of rc.pages) {
-			const meta: NcMeta = {
-				pageId: p.id,
-				collectiveId: rc.collective.id,
-				// Remote title as the runner passes it; the executor derives nc_title from the file name it writes to.
-				title: p.title,
-				emoji: p.emoji,
-				tags: [],
-			};
-			remoteMeta.set(p.id, { meta, hash: `m${p.id}` });
-		}
-	}
-	return { state, remote: remoteSnap, local: localSnapshot(files), remoteMeta, paths, dirty: parts.dirty ?? new Set<string>() };
-}
-
-function planFor(parts: Parts = {}): SyncPlan {
-	return planSync(inputFor(parts));
-}
-
-function opsOf<K extends SyncOp['kind']>(plan: SyncPlan, kind: K): Extract<SyncOp, { kind: K }>[] {
-	return plan.ops.filter((op): op is Extract<SyncOp, { kind: K }> => op.kind === kind);
-}
-
-function skipReasons(plan: SyncPlan): string[] {
-	return plan.skips.map((s) => s.reason);
-}
-
-function findSkip(plan: SyncPlan, reason: string): SyncPlan['skips'][number] | undefined {
-	return plan.skips.find((s) => s.reason === reason);
-}
 
 // ---------------------------------------------------------------------------
 
@@ -326,33 +136,38 @@ describe('planSync: new and known pages', () => {
 });
 
 describe('planSync: skips for moved, deleted and inconsistent pages', () => {
-	it('skips remoteMoved and still updates the page at its current local path', () => {
+	it('renames the local file when the page was renamed on the server, and updates it at the new path', () => {
 		const plan = planFor({
-			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ fileName: 'Anders.md', timestamp: 2 })])]),
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ fileName: 'Anders.md', title: 'Anders', timestamp: 2 })])]),
+		});
+		expect(opsOf(plan, 'renameLocal')).toEqual([expect.objectContaining({ from: 'Coll/Seite.md', path: 'Coll/Anders.md' })]);
+		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Anders.md' })]);
+	});
+
+	it('lets the server win when both sides moved the page, and says so', () => {
+		const plan = planFor({
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ fileName: 'Anders.md', title: 'Anders' })])]),
 			files: [localFile('Coll/Coll.md', 1), localFile('Coll/Umzug/Seite.md', 10)],
 		});
-		expect(findSkip(plan, 'remoteMoved')).toMatchObject({ pageId: 10 });
-		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Umzug/Seite.md' })]);
+		expect(findSkip(plan, 'remoteMoveWins')).toMatchObject({ pageId: 10 });
+		expect(opsOf(plan, 'renameLocal')).toEqual([expect.objectContaining({ from: 'Coll/Umzug/Seite.md', path: 'Coll/Anders.md' })]);
+		expect(opsOf(plan, 'moveRemote')).toEqual([]);
 	});
 
-	it('skips localDeleted and does not recreate a page whose local file is gone', () => {
+	it('asks before it deletes a page whose local file is gone, and creates nothing', () => {
 		const plan = planFor({ files: [localFile('Coll/Coll.md', 1)] });
-		expect(findSkip(plan, 'localDeleted')).toMatchObject({ pageId: 10 });
+		expect(plan.proposals).toEqual([expect.objectContaining({ kind: 'deletePage', pageId: 10 })]);
 		expect(opsOf(plan, 'create')).toEqual([]);
+		expect(opsOf(plan, 'trashRemote')).toEqual([]);
 	});
 
-	it('skips remoteDeleted for a state page that is missing in a successfully scanned collective', () => {
+	it('follows a page deleted on the server with its local file', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage()])]),
 		});
-		expect(findSkip(plan, 'remoteDeleted')).toMatchObject({ pageId: 10 });
-	});
-
-	it('does not emit operations for a page missing remotely', () => {
-		const plan = planFor({
-			remote: remote([remoteCollective(1, 'Coll', [startPage()])]),
-		});
-		expect(plan.ops).toEqual([]);
+		expect(opsOf(plan, 'removeLocal')).toEqual([
+			expect.objectContaining({ pageId: 10, path: 'Coll/Seite.md', mode: 'obsidianTrash' }),
+		]);
 	});
 
 	it('does not touch any page of a collective that failed to scan', () => {
@@ -391,11 +206,22 @@ describe('planSync: skips for moved, deleted and inconsistent pages', () => {
 		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md' })]);
 	});
 
-	it('skips localDeleted for a collision page whose file at localPath is missing', () => {
+	it('pulls a collision page again instead of deleting it when the user removed the file', () => {
 		const state = baseState();
 		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
 		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1)] });
-		expect(findSkip(plan, 'localDeleted')).toMatchObject({ pageId: 10 });
+		expect(plan.proposals).toEqual([]);
+		expect(opsOf(plan, 'trashRemote')).toEqual([]);
+		expect(opsOf(plan, 'create')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md' })]);
+	});
+
+	it('does not take a file with another nc_page_id at the collision path for the collision file', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
+		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 99)] });
+		expect(plan.proposals).toEqual([]);
+		expect(opsOf(plan, 'trashRemote')).toEqual([]);
+		expect(opsOf(plan, 'create')).toEqual([expect.objectContaining({ path: 'Coll/Seite (2).md' })]);
 	});
 });
 
@@ -412,7 +238,7 @@ describe('planSync: collisions, case and foreign files', () => {
 		expect(skipReasons(plan)).not.toContain('localDeleted');
 	});
 
-	it('ignores a file with an nc_page_id at the collision path and skips the page as localDeleted', () => {
+	it('adopts a file that carries the id of a collision page, since the id links it', () => {
 		const state = baseState();
 		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
 		const plan = planFor({
@@ -420,8 +246,9 @@ describe('planSync: collisions, case and foreign files', () => {
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
 			files: [localFile('Coll/Coll.md', 1), localFile('coll/seite.md', 10)],
 		});
-		expect(findSkip(plan, 'localDeleted')).toMatchObject({ pageId: 10 });
-		expect(opsOf(plan, 'update')).toEqual([]);
+		expect(opsOf(plan, 'adopt')).toEqual([expect.objectContaining({ path: 'coll/seite.md' })]);
+		expect(plan.proposals).toEqual([]);
+		expect(opsOf(plan, 'trashRemote')).toEqual([]);
 	});
 
 	it('finds a conflict page after its file was renamed by the user, via its nc_page_id', () => {
@@ -515,22 +342,24 @@ describe('planSync: collectives', () => {
 		]);
 	});
 
-	it('skips collectiveRenamed and keeps the state folder when the remote name differs', () => {
+	it('renames the local folder when the collective was renamed on the server', () => {
 		const state = baseState();
 		state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Alt', localFolder: 'Coll' };
 		const plan = planFor({ state });
-		expect(findSkip(plan, 'collectiveRenamed')).toMatchObject({ collectiveId: 1 });
+		expect(opsOf(plan, 'renameCollectiveFolder')).toEqual([
+			{ kind: 'renameCollectiveFolder', collectiveId: 1, from: 'Coll', to: 'Coll', name: 'Coll' },
+		]);
 		expect(opsOf(plan, 'saveCollective')).toEqual([]);
 	});
 
-	it('skips collectiveRemoved for a state collective that is neither listed nor failed', () => {
+	it('asks before it removes the folder of a collective that is gone on the server', () => {
 		const state = baseState();
 		const alt = page(50, { title: 'Alt', parentId: asPageId(0), fileName: 'Readme.md' });
 		state.collectives['2'] = { collectiveId: asCollectiveId(2), name: 'Alt', localFolder: 'Alt' };
 		state.pages['50'] = pageState(alt, 2, 'Alt/Alt.md');
-		const plan = planFor({ state });
-		expect(skipReasons(plan)).toEqual(['collectiveRemoved']);
-		expect(findSkip(plan, 'collectiveRemoved')).toMatchObject({ collectiveId: 2 });
+		const plan = planFor({ state, files: [...baseFiles(), localFile('Alt/Alt.md', 50)] });
+		expect(plan.proposals).toEqual([{ id: 'removeCollectiveLocal:2', kind: 'removeCollectiveLocal', collectiveId: 2, name: 'Alt', pages: 1 }]);
+		expect(opsOf(plan, 'removeLocal')).toEqual([]);
 	});
 
 	it('saves tags when the remote tag list differs from the cache', () => {

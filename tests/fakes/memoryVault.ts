@@ -122,6 +122,50 @@ export class MemoryVault implements VaultReader, VaultWriter {
 		if (!this.folders.has(key)) this.folders.set(key, path);
 	}
 
+	/**
+	 * Like app.fileManager.renameFile: a file or a folder with everything below it moves; the parent folder of the target
+	 * must exist and the target must not. Counted as a write.
+	 */
+	async rename(from: string, to: string): Promise<void> {
+		const fromKey = this.keyOf(from);
+		const isFile = this.files.has(fromKey);
+		if (!isFile && !this.folders.has(fromKey)) throw new Error(`Nothing to rename at ${from}`);
+		if (this.exists(to) && this.keyOf(to) !== fromKey) throw new Error(`Target exists: ${to}`);
+		this.requireParent(to);
+		if (isFile) {
+			const entry = this.require(from);
+			this.files.delete(fromKey);
+			entry.path = to;
+			this.files.set(this.keyOf(to), entry);
+		} else {
+			const prefix = fromKey + '/';
+			for (const [key, entry] of [...this.files]) {
+				if (!key.startsWith(prefix)) continue;
+				this.files.delete(key);
+				entry.path = to + entry.path.slice(from.length);
+				this.files.set(this.keyOf(entry.path), entry);
+			}
+			for (const [key, path] of [...this.folders]) {
+				if (key !== fromKey && !key.startsWith(prefix)) continue;
+				this.folders.delete(key);
+				const moved = to + path.slice(from.length);
+				this.folders.set(this.keyOf(moved), moved);
+			}
+		}
+		this.writes++;
+	}
+
+	/** Like app.fileManager.trashFile: a file, or a folder with everything below it, disappears. Counted as a write. */
+	async trash(path: string): Promise<void> {
+		const key = this.keyOf(path);
+		const prefix = key + '/';
+		let found = this.files.delete(key) || this.folders.delete(key);
+		for (const fileKey of [...this.files.keys()]) if (fileKey.startsWith(prefix)) found = this.files.delete(fileKey) || found;
+		for (const folderKey of [...this.folders.keys()]) if (folderKey.startsWith(prefix)) found = this.folders.delete(folderKey) || found;
+		if (!found) throw new Error(`Nothing to trash at ${path}`);
+		this.writes++;
+	}
+
 	/** Simulates moving a file to the trash: it disappears. Counted as a write, like the plugin's own trash call. */
 	async remove(path: string): Promise<void> {
 		const key = this.keyOf(path);

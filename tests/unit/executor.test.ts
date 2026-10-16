@@ -15,6 +15,7 @@ import { UNCONFIRMED_REMOTE_MTIME, emptyState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 import { sha256Hex } from '../../src/util/hash';
 import { ApiChangedError, AuthError, ConflictError, NetworkError, NotFoundError } from '../../src/util/errors';
+import { emptyResult } from '../../src/sync/types';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
 
@@ -259,14 +260,14 @@ async function planNextRun(h: Harness, remotePage: PageInfo, meta: NcMeta): Prom
 	return planSync({
 		state: h.state,
 		remote: { collectives: [{ collective: collective(), pages: [remotePage], tags: [] }], failed: [] },
-		local: { files, occupied: new Set<string>(), paths: new Map<string, string>(), nonEmpty: true },
+		local: { files, occupied: new Set<string>(), paths: new Map<string, string>(), nonEmpty: true, folders: ['Coll'], rootFiles: [] },
 		remoteMeta: new Map([[remotePage.id, { meta, hash: META_HASH }]]),
 		paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },
 		dirty: new Set<string>(),
 	});
 }
 
-const ZERO_RESULT = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const ZERO_RESULT = emptyResult();
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -536,6 +537,8 @@ describe('executeSync: update', () => {
 			occupied: new Set<string>(),
 			paths: new Map<string, string>(),
 			nonEmpty: true,
+			folders: ['Coll'],
+			rootFiles: [],
 		};
 		const next = planSync({
 			state: h.state,
@@ -870,6 +873,10 @@ describe('executeSync: collision names, links and nc_title', () => {
 				occupied: new Set<string>(),
 				paths: new Map<string, string>(),
 				nonEmpty: true,
+				folders: [],
+				rootFiles: [],
+			folders: ['Coll'],
+			rootFiles: [],
 			},
 			remoteMeta: new Map([[asPageId(10), { meta, hash: META_HASH }]]),
 			paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },

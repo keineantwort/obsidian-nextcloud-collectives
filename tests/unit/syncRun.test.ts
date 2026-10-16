@@ -18,6 +18,8 @@ import type { SyncRunDeps } from '../../src/sync/syncRun';
 import { createTranslator } from '../../src/i18n';
 import { ConfigError } from '../../src/util/errors';
 import { metaHash } from '../../src/util/hash';
+import { emptyResult } from '../../src/sync/types';
+import type { Decision } from '../../src/sync/types';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
 
@@ -163,12 +165,20 @@ class FakeStateFile implements StateFile {
 
 function makeDeps(server: FakeNextcloud, vault: MemoryVault, stateFile: FakeStateFile, over: Partial<SyncRunDeps> = {}): SyncRunDeps {
 	return {
-		settings: { serverUrl: BASE, username: 'alice', conflictStrategy: 'conflictFile' },
+		settings: {
+			serverUrl: BASE,
+			username: 'alice',
+			conflictStrategy: 'conflictFile',
+			newFolderBehaviour: 'createCollective',
+			localDeleteBehaviour: 'ask',
+			remoteDeleteBehaviour: 'obsidianTrash',
+		},
 		readPassword: async () => PASSWORD,
 		request: server.request,
 		vault,
 		stateStore: new StateStore(stateFile),
 		confirmInitialSync: vi.fn(async () => true),
+		confirm: vi.fn(async () => new Map<string, Decision>()),
 		t: createTranslator('de'),
 		log: new Logger(),
 		now: () => NOW,
@@ -182,7 +192,7 @@ function metaOf(id: number): NcMeta {
 	return { pageId: asPageId(id), collectiveId: asCollectiveId(1), title: null, emoji: null, tags: [] };
 }
 
-const ZERO_RESULT = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const ZERO_RESULT = emptyResult();
 
 /** Raw page entry as the Collectives API returns it, based on the fixture entry of page 102 (child of the landing page 92). */
 function rawPage(id: number, title: string, fileName: string, parentId: number): Record<string, unknown> {
@@ -390,7 +400,9 @@ describe('runSync: initial sync into a non-empty vault', () => {
 		vault.seed('Notizen/a.md', 'Meine Notiz\n');
 		const confirmInitialSync = vi.fn(async () => true);
 
-		const outcome = await runSync(makeDeps(new FakeNextcloud(), vault, new FakeStateFile(), { confirmInitialSync }));
+		// The folder 'Notizen' would become a collective; this test is about merging the remote pages.
+		const base = makeDeps(new FakeNextcloud(), vault, new FakeStateFile(), { confirmInitialSync });
+		const outcome = await runSync({ ...base, settings: { ...base.settings, newFolderBehaviour: 'ignore' } });
 
 		expect(confirmInitialSync).toHaveBeenCalledTimes(1);
 		expect(outcome).toMatchObject({ kind: 'done', result: { created: 6, failed: 0 } });
@@ -469,7 +481,7 @@ describe('runSync: refusals and errors', () => {
 });
 
 describe('runSync: several runs over colliding, renamed and sibling pages', () => {
-	it('keeps the nc_title of a remaining sibling whose sibling disappeared remotely, and writes nothing', async () => {
+	it('moves the file of a page deleted on the server to the trash and keeps the nc_title of the remaining sibling', async () => {
 		const server = new FakeNextcloud();
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
@@ -481,22 +493,16 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 		expect(await vault.read('Handbuch/Notes (2).md')).toContain('nc_title: "Notes"');
 
 		server.pages.splice(server.pages.findIndex((p) => p['id'] === 200), 1);
-		const writesBefore = vault.writes;
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toEqual({
-			kind: 'done',
-			result: ZERO_RESULT,
-			skips: [{ reason: 'remoteDeleted', pageId: 200, collectiveId: 1 }],
-			openConflicts: 0,
-			pages: 8,
-		});
-		expect(vault.writes).toBe(writesBefore);
+		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, removed: 1 }, skips: [], openConflicts: 0, pages: 7 });
+		expect(vault.exists('Handbuch/Notes.md')).toBe(false);
+		expect(await vault.read('Handbuch/Notes (2).md')).toContain('nc_title: "Notes"');
 		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
 	});
 
-	it('keeps the nc_page_id of a renamed page and gives a new page with its old title a suffixed name', async () => {
+	it('renames the file of a page renamed on the server and gives a new page with its old title the freed name', async () => {
 		const server = new FakeNextcloud();
 		const vault = new MemoryVault();
 		const deps = makeDeps(server, vault, new FakeStateFile());
@@ -514,9 +520,9 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toMatchObject({ kind: 'done', result: { created: 1, conflicts: 0, failed: 0 } });
-		expect(readPageId(await vault.read('Handbuch/Notes.md'))).toBe(200);
-		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
+		expect(outcome).toMatchObject({ kind: 'done', result: { created: 1, moved: 1, conflicts: 0, failed: 0 } });
+		expect(readPageId(await vault.read('Handbuch/Neu.md'))).toBe(200);
+		expect(readPageId(await vault.read('Handbuch/Notes.md'))).toBe(201);
 		expect(vault.listFiles().some((file) => file.path.includes('Konflikt'))).toBe(false);
 	});
 

@@ -3,8 +3,12 @@
 import { pathKey } from '../mapping/paths';
 import { isRunFatal } from '../util/errors';
 import { applyContentOp } from './executorContent';
+import type { ContentOpKind } from './executorContent';
 import type { ExecutorDeps } from './executorDeps';
+import { applyStructureOp } from './executorStructure';
+import type { StructureOpKind } from './executorStructure';
 import type { SyncOp, SyncPlan } from './planner';
+import { emptyResult } from './types';
 import type { SyncResult } from './types';
 
 export type { SyncResult } from './types';
@@ -15,7 +19,7 @@ export type { ExecutorDeps, VaultWriter } from './executorDeps';
  * only), then the run continues. Errors for which isRunFatal is true abort the run and are rethrown.
  */
 export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<SyncResult> {
-	const result: SyncResult = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+	const result = emptyResult();
 	for (const op of plan.ops) {
 		let changedState: boolean;
 		try {
@@ -25,7 +29,7 @@ export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<S
 			result.failed++;
 			deps.log.warn('Sync operation failed', {
 				kind: op.kind,
-				...('page' in op ? { pageId: op.page.id } : {}),
+				...pageFields(op),
 				error: err instanceof Error ? err.name : 'unknown',
 			});
 			continue;
@@ -48,7 +52,21 @@ async function applyOp(op: SyncOp, deps: ExecutorDeps, result: SyncResult): Prom
 		case 'saveTags':
 			deps.state.tags[String(op.collectiveId)] = op.tags;
 			return true;
-		default:
+		case 'create':
+		case 'createConflict':
+		case 'adopt':
+		case 'update':
+		case 'push':
+		case 'updateMeta':
 			return applyContentOp(op, deps, result);
+		default:
+			return applyStructureOp(op, deps, result);
 	}
+}
+
+/** The page an operation works on, for the log. */
+function pageFields(op: SyncOp): { pageId?: number } {
+	if ('page' in op) return { pageId: op.page.id };
+	if ('pageId' in op) return { pageId: op.pageId };
+	return {};
 }

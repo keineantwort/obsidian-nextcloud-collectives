@@ -3,6 +3,8 @@ import type { CollectiveId, PageId } from '../api/types';
 import { replaceNcMeta, toRemote } from '../mapping/frontmatter';
 import { sha256Hex } from '../util/hash';
 import type { Logger } from '../util/logger';
+import { indexFiles, locatePage } from './locate';
+import type { Locatable } from './locate';
 import { UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME } from './state';
 import type { PageState, SyncState } from './state';
 
@@ -59,11 +61,11 @@ export function listConflicts(state: SyncState): ConflictEntry[] {
  * nc_page_id (the state keeps the path of the last sync, which is stale after a local rename); otherwise, and if
  * no or several files carry the id, localPath stays as is.
  */
-export function withCurrentPaths(entries: ConflictEntry[], files: readonly { path: string; pageId: PageId | null }[]): ConflictEntry[] {
+export function withCurrentPaths(entries: ConflictEntry[], files: readonly Locatable[]): ConflictEntry[] {
+	const index = indexFiles(files);
 	const moved = entries.map((entry): ConflictEntry => {
 		if (entry.status !== 'conflict') return entry;
-		const matches = files.filter((file) => file.pageId === entry.pageId);
-		const match = matches.length === 1 ? matches[0] : undefined;
+		const match = locatePage({ pageId: entry.pageId, status: entry.status, localPath: entry.localPath }, index);
 		return match === undefined ? entry : { ...entry, localPath: match.path };
 	});
 	return moved.sort((a, b) => compareText(a.localPath, b.localPath));

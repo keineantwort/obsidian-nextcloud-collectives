@@ -9,6 +9,7 @@ import { ConflictError } from '../util/errors';
 import { decideContent } from './decide';
 import type { ConflictStrategy, ContentAction } from './decide';
 import type { ExecutorDeps, VaultWriter } from './executorDeps';
+import { livePage } from './executorScratch';
 import { markConflict, markSynced, metaFor, newPageState, remoteFields, unconfirmedRemote } from './pageState';
 import type { RemoteVersion } from './pageState';
 import type { SyncOp } from './planner';
@@ -22,7 +23,7 @@ const CONFIRM_WAIT_MS = 1100;
 const MAX_ATTEMPTS = 2;
 
 /** A GET of a remote page with the values derived from it. */
-interface Fetched extends RemoteVersion {
+export interface Fetched extends RemoteVersion {
 	content: string;
 	/** sha256Hex(canonicalRemote(content)). */
 	hash: string;
@@ -31,7 +32,7 @@ interface Fetched extends RemoteVersion {
 }
 
 /** The local text of a page read for a content decision, with the mtime captured before the read. */
-interface LocalText {
+export interface LocalText {
 	text: string;
 	/** sha256Hex(toRemote(text)). */
 	hash: string;
@@ -39,10 +40,10 @@ interface LocalText {
 }
 
 /** Operations that bring the content of a linked page in line with the remote: an update, or a push that may fall back to one. */
-type ContentOp = Extract<SyncOp, { kind: 'update' }> | Extract<SyncOp, { kind: 'push' }>;
+export type ContentOp = Extract<SyncOp, { kind: 'update' }> | Extract<SyncOp, { kind: 'push' }>;
 
 /** Writes `next` only if the file still holds `expected`. Returns null (nothing written) if the user changed it since the read. */
-async function writeIfUnchanged(vault: VaultWriter, path: string, expected: string, next: string): Promise<number | null> {
+export async function writeIfUnchanged(vault: VaultWriter, path: string, expected: string, next: string): Promise<number | null> {
 	let userChanged = false;
 	const mtime = await vault.process(path, (cur) => {
 		if (cur !== expected) {
@@ -62,21 +63,21 @@ async function writeConflictCopy(deps: ExecutorDeps, path: string, remoteContent
 	return copyPath;
 }
 
-function requireState(deps: ExecutorDeps, pageId: number): PageState {
+export function requireState(deps: ExecutorDeps, pageId: number): PageState {
 	const entry = deps.state.pages[String(pageId)];
 	if (entry === undefined) throw new Error(`no sync state for page ${pageId}`);
 	return entry;
 }
 
-function requireMtime(vault: VaultWriter, path: string): number {
+export function requireMtime(vault: VaultWriter, path: string): number {
 	const mtime = vault.mtime(path);
 	if (mtime === null) throw new Error(`no file at ${path}`);
 	return mtime;
 }
 
 /** GET of a remote page. The state may store the page timestamp as remoteMtime only if the ETag is confirmed. */
-async function fetchPage(deps: ExecutorDeps, page: PageInfo): Promise<Fetched> {
-	const file = await deps.webdav.get(remotePagePath(page));
+export async function fetchPage(deps: ExecutorDeps, page: PageInfo): Promise<Fetched> {
+	const file = await deps.webdav.get(remotePagePath(livePage(deps, page)));
 	const confirmed = isEtagConfirmed(file);
 	return {
 		content: file.content,
@@ -88,7 +89,7 @@ async function fetchPage(deps: ExecutorDeps, page: PageInfo): Promise<Fetched> {
 }
 
 /** Reads the local text of a page for a content decision. The mtime is taken before the read (a later edit stays detectable). */
-async function readLocal(vault: VaultWriter, path: string): Promise<LocalText> {
+export async function readLocal(vault: VaultWriter, path: string): Promise<LocalText> {
 	const mtimeBefore = requireMtime(vault, path);
 	const text = await vault.read(path);
 	return { text, hash: await sha256Hex(toRemote(text)), mtimeBefore };
@@ -383,8 +384,8 @@ async function pushPage(op: Extract<SyncOp, { kind: 'push' }>, deps: ExecutorDep
 }
 
 /** Uploads the local text under If-Match and records the push (base = text hash, remote mtime unconfirmed). */
-async function uploadLocal(op: ContentOp, s: PageState, local: LocalText, ifMatch: string, deps: ExecutorDeps, now: number): Promise<PageState> {
-	const put = await deps.webdav.put(remotePagePath(op.page), toRemote(local.text), { ifMatch });
+export async function uploadLocal(op: ContentOp, s: PageState, local: LocalText, ifMatch: string, deps: ExecutorDeps, now: number): Promise<PageState> {
+	const put = await deps.webdav.put(remotePagePath(livePage(deps, op.page)), toRemote(local.text), { ifMatch });
 	const pushed = markSynced(s, {
 		page: op.page,
 		remote: unconfirmedRemote(put.etag),

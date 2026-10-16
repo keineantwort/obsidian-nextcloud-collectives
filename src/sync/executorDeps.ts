@@ -1,4 +1,5 @@
 // Dependencies of the sync executor (PLAN §7.2). Types only.
+import type { CollectivesApi } from '../api/collectivesApi';
 import type { WebdavClient } from '../api/webdavClient';
 import type { Logger } from '../util/logger';
 import type { ConflictStrategy } from './decide';
@@ -14,11 +15,24 @@ export interface VaultWriter {
 	process(path: string, fn: (current: string) => string): Promise<number>;
 	createFolder(path: string): Promise<void>;
 	mtime(path: string): number | null;
+	/** Renames or moves a file or folder (app.fileManager.renameFile: links to it are updated). The parent folder must exist. */
+	rename(from: string, to: string): Promise<void>;
+	/** Moves a file or folder to the trash the user chose in Obsidian (app.fileManager.trashFile). */
+	trash(path: string): Promise<void>;
 }
+
+/** The Collectives calls the structure operations make. */
+export type StructureApi = Pick<
+	CollectivesApi,
+	| 'createPage' | 'getPage' | 'updatePage' | 'movePageToCollective' | 'trashPage' | 'restorePage' | 'listPages'
+	| 'createCollective' | 'renameCollective' | 'trashCollective'
+>;
 
 export interface ExecutorDeps {
 	vault: VaultWriter;
 	webdav: Pick<WebdavClient, 'get' | 'put'>;
+	/** Needed by the structure operations only. */
+	api?: StructureApi;
 	state: SyncState;
 	/** Persist state after each op (StateStore.save). */
 	persist: (state: SyncState) => Promise<void>;
