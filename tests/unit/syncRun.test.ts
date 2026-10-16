@@ -471,6 +471,17 @@ describe('runSync: questions for the user', () => {
 		expect(vault.exists(PAGE_102_LOCAL)).toBe(false);
 	});
 
+	it('scans the server once in an idle run: no follow-up pass without structure changes', async () => {
+		const { server, vault } = await synced();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		const before = server.calls.length;
+
+		await runSync(deps);
+
+		expect(server.calls.slice(before).filter((req) => req.url === `${OCS}/collectives`)).toHaveLength(1);
+	});
+
 	it('asks nothing in an idle run', async () => {
 		const { server, vault } = await synced();
 		const confirm = vi.fn(async () => new Map<string, Decision>());

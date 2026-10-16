@@ -236,6 +236,23 @@ describe('createRemote (local file without nc_page_id)', () => {
 		expect(stateOf(h, id as number)).toMatchObject({ localMtime: UNCHECKED_LOCAL_MTIME, status: 'synced' });
 	});
 
+	it('has the page in the state, with the id in the file, even when reading the new page fails', async () => {
+		const h = harness();
+		h.vault.seed('Coll/Neu.md', 'Mein Text\n');
+		const realGet = h.dav.webdav.get;
+		h.dav.webdav.get = async () => {
+			throw new NotFoundError('network');
+		};
+
+		const result = await executeSync(plan([create('Coll/Neu.md')]), h.deps);
+		h.dav.webdav.get = realGet;
+
+		expect(result.failed).toBe(1);
+		const id = readPageId(await h.vault.read('Coll/Neu.md'));
+		expect(id).not.toBeNull();
+		expect(stateOf(h, id as number)).toMatchObject({ localPath: 'Coll/Neu.md', localMtime: UNCHECKED_LOCAL_MTIME, remoteMtime: UNCONFIRMED_REMOTE_MTIME });
+	});
+
 	it('leaves the file alone when the page could not be created', async () => {
 		const h = harness();
 		h.vault.seed('Coll/Neu.md', 'Mein Text\n');
@@ -474,6 +491,18 @@ describe('restoreRemote and dropState', () => {
 		const result = await executeSync(plan([{ kind: 'restoreRemote', pageId: asPageId(555), collectiveId: COLL, path: 'Coll/Seite.md' }]), h.deps);
 
 		expect(result).toEqual(emptyResult());
+	});
+
+	it('strips the nc fields of the files it is told to unlink, and forgets their pages', async () => {
+		const h = harness();
+		const page = h.api.addPage(1, { title: 'Seite', parentId: LANDING });
+		await known(h, page, 'Coll/Seite.md', 'Text');
+
+		await executeSync(plan([{ kind: 'dropState', pageIds: [page.id], collectiveIds: [], unlinkPaths: ['Coll/Seite.md'] }]), h.deps);
+
+		expect(readPageId(await h.vault.read('Coll/Seite.md'))).toBeNull();
+		expect(toRemote(await h.vault.read('Coll/Seite.md'))).toBe('Text');
+		expect(h.state.pages).toEqual({});
 	});
 
 	it('forgets pages and collectives', async () => {

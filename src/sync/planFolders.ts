@@ -2,6 +2,7 @@
 import type { CollectiveId } from '../api/types';
 import { pathKey, sanitizeName, withSuffix } from '../mapping/paths';
 import type { LocalFile } from './localScanner';
+import { locatePage } from './locate';
 import type { Context } from './plannerContext';
 import { lastSegment } from './plannerContext';
 import type { CollectiveState } from './state';
@@ -121,7 +122,9 @@ function planVanishedCollective(ctx: Context, collective: CollectiveState): void
 		ctx.finalOps.push({ kind: 'removeCollectiveLocal', collectiveId: id, folder: collective.localFolder });
 	} else if (decision === 'reject') {
 		// The folder stays; the plugin forgets the collective, so the next pass treats the folder as a new one.
-		ctx.finalOps.push({ kind: 'dropState', pageIds: Object.values(ctx.state.pages).filter((p) => p.collectiveId === id).map((p) => p.pageId), collectiveIds: [id] });
+		const pages = Object.values(ctx.state.pages).filter((p) => p.collectiveId === id);
+		const unlinkPaths = pages.flatMap((p) => locatePage(p, ctx.files)?.path ?? []);
+		ctx.finalOps.push({ kind: 'dropState', pageIds: pages.map((p) => p.pageId), collectiveIds: [id], unlinkPaths });
 		ctx.followUp = true;
 	} else if (decision === 'defer') {
 		ctx.skips.push({ reason: 'deferred', proposalId });
@@ -137,15 +140,19 @@ function planVanishedCollective(ctx: Context, collective: CollectiveState): void
 function findRenamedFolder(ctx: Context, collective: CollectiveState, unknownFolders: string[], claimedFolders: Set<string>): string | null {
 	const pageIds = new Set<number>(Object.values(ctx.state.pages).filter((p) => p.collectiveId === collective.collectiveId).map((p) => p.pageId));
 	const counts = new Map<string, number>();
+	const totals = new Map<string, number>();
 	for (const file of ctx.input.local.files) {
-		if (file.pageId === null || !pageIds.has(file.pageId)) continue;
-		counts.set(pathKey(topOf(file.path)), (counts.get(pathKey(topOf(file.path))) ?? 0) + 1);
+		const key = pathKey(topOf(file.path));
+		totals.set(key, (totals.get(key) ?? 0) + 1);
+		if (file.pageId !== null && pageIds.has(file.pageId)) counts.set(key, (counts.get(key) ?? 0) + 1);
 	}
 	let best: string | null = null;
 	let bestCount = 0;
 	for (const folder of unknownFolders) {
 		if (claimedFolders.has(pathKey(folder))) continue;
 		const count = counts.get(pathKey(folder)) ?? 0;
+		// A folder that mostly holds other notes is no renamed collective folder: its notes would be uploaded into the collective.
+		if (count * 2 < (totals.get(pathKey(folder)) ?? 0)) continue;
 		if (count > bestCount) {
 			best = folder;
 			bestCount = count;

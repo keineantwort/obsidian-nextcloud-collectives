@@ -30,7 +30,7 @@ export function applyStructureOp(op: Extract<SyncOp, { kind: StructureOpKind }>,
 		case 'moveRemote': return moveRemote(op, deps, result);
 		case 'trashRemote': return trashRemote(op, deps, result);
 		case 'removeLocal': return removeLocal(op, deps, result);
-		case 'dropState': return Promise.resolve(dropState(op, deps));
+		case 'dropState': return dropState(op, deps);
 		case 'restoreRemote': return restoreRemote(op, deps, result);
 		case 'createCollective': return createCollective(op, deps, result);
 		case 'renameCollective': return renameCollective(op, deps, result);
@@ -91,9 +91,21 @@ async function refreshPage(deps: ExecutorDeps, collectiveId: CollectiveId, pageI
  */
 async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId, path: string): Promise<void> {
 	const { meta, hash } = await metaForPage(deps, page, collectiveId);
-	const remote = await fetchPage(deps, page);
 	const now = deps.now().getTime();
 	await deps.vault.process(path, (current) => replaceNcMeta(current, metaFor(page, meta, path)));
+	// The page exists on the server and the file carries its id: remember that before anything else can fail. A new page is
+	// empty, so that is its base until the first read; if it is not, the next run reports a conflict instead of a duplicate.
+	deps.state.pages[String(page.id)] = newPageState(page, collectiveId, unconfirmedRemote(''), {
+		localPath: path,
+		localMtime: UNCHECKED_LOCAL_MTIME,
+		baseHash: await sha256Hex(''),
+		metaHash: hash,
+		status: 'synced',
+		conflictPath: null,
+		lastSyncedAt: now,
+	});
+	await deps.persist(deps.state);
+	const remote = await fetchPage(deps, page);
 	deps.state.pages[String(page.id)] = newPageState(page, collectiveId, remote, {
 		localPath: path,
 		// Unchecked: if the upload fails, the next run hashes the file and pushes it.
@@ -362,7 +374,11 @@ async function reviveChangedPage(op: Op<'removeLocal'>, s: PageState, deps: Exec
 	return true;
 }
 
-function dropState(op: Op<'dropState'>, deps: ExecutorDeps): boolean {
+/** Forgets pages and collectives. Files in `unlinkPaths` lose their nc fields, so that they are ordinary notes afterwards. */
+async function dropState(op: Op<'dropState'>, deps: ExecutorDeps): Promise<boolean> {
+	for (const path of op.unlinkPaths ?? []) {
+		if (deps.vault.exists(path)) await deps.vault.process(path, stripNcMeta);
+	}
 	forgetPages(deps, op.pageIds);
 	for (const collectiveId of op.collectiveIds) forgetCollective(deps, collectiveId);
 	return true;

@@ -157,6 +157,13 @@ describe('planSync: lokal umbenannt oder verschoben', () => {
 		expect(opsOf(plan, 'moveRemote')).toEqual([expect.objectContaining({ pageId: 21, title: null, parent: { kind: 'page', pageId: 1 } })]);
 	});
 
+	it('does not take a note that left its folder for the renamed folder: the page keeps its title', () => {
+		const files = treeFiles().map((f) => (f.path === 'Coll/Ordner/Ordner.md' ? { ...f, path: 'Coll/Anders/Ordner.md' } : f));
+		const plan = tree({ files });
+
+		expect(opsOf(plan, 'moveRemote').find((op) => op.pageId === 20)).toMatchObject({ title: null, tidyTo: null });
+	});
+
 	it('moves the page into another collective when the file moved into that collective’s folder', () => {
 		const state = treeState();
 		state.collectives['2'] = { collectiveId: asCollectiveId(2), name: 'Zwei', localFolder: 'Zwei' };
@@ -296,6 +303,15 @@ describe('planSync: Remote gelöscht', () => {
 		expect(opsOf(plan, 'removeLocal')).toEqual([]);
 	});
 
+	it('plans no deletion at all while a collective could not be scanned: the page may have moved there', () => {
+		const plan = planFor({
+			remote: remote([remoteCollective(1, 'Coll', [startPage()])], [{ collective: collective(2, 'Zwei'), error: new Error('timeout') }]),
+		});
+
+		expect(opsOf(plan, 'removeLocal')).toEqual([]);
+		expect(opsOf(plan, 'dropState')).toEqual([]);
+	});
+
 	it('leaves the pages of a collective that could not be scanned alone', () => {
 		const plan = planFor({ remote: remote([], [{ collective: collective(1, 'Coll'), error: new Error('timeout') }]) });
 
@@ -358,6 +374,23 @@ describe('planSync: Lokal gelöscht', () => {
 		expect(plan.proposals.map((p) => p.kind === 'deletePage' ? p.mass : null)).toEqual(
 			[10, 11, 12].map(() => ({ collectiveName: 'Coll', deleted: 3, total: 7 })),
 		);
+	});
+
+	it.each([
+		{ deleted: 3, expectMass: false }, // 3 of 16 pages = 18.75 %
+		{ deleted: 4, expectMass: true }, // 4 of 16 pages = 25 %
+	])('treats $deleted deleted pages of 16 as mass deletion: $expectMass', ({ deleted, expectMass }) => {
+		const pages = [startPage(), ...Array.from({ length: 15 }, (_v, i) => page(10 + i, { title: `P${10 + i}`, fileName: `P${10 + i}.md`, parentId: asPageId(1) }))];
+		const state = syncState({
+			collectives: [{ collectiveId: asCollectiveId(1), name: 'Coll', localFolder: 'Coll' }],
+			pages: pages.map((p) => pageState(p, 1, p.id === 1 ? 'Coll/Coll.md' : `Coll/${p.title}.md`)),
+			tags: { '1': [] },
+		});
+		const files = pages.filter((p) => p.id === 1 || p.id >= 10 + deleted).map((p) => localFile(p.id === 1 ? 'Coll/Coll.md' : `Coll/${p.title}.md`, p.id));
+		const plan = planFor({ remote: remote([remoteCollective(1, 'Coll', pages)]), state, files, behaviour: { localDelete: 'trashRemote' } });
+
+		expect(plan.proposals.length > 0).toBe(expectMass);
+		expect(opsOf(plan, 'trashRemote').length).toBe(expectMass ? 0 : deleted);
 	});
 
 	it('does not call two deleted pages of a four-page collective a mass deletion, so trashRemote does not ask', () => {
@@ -499,6 +532,10 @@ describe('planSync: Collective remote gelöscht', () => {
 		return planFor({ state, files: [...baseFiles(), localFile('Alt/Alt.md', 50)], ...over });
 	}
 
+	it('asks even when page deletions are set to trashRemote', () => {
+		expect(vanished({ behaviour: { localDelete: 'trashRemote' } }).proposals).toHaveLength(1);
+	});
+
 	it('asks before the folder goes to the trash', () => {
 		const plan = vanished();
 
@@ -516,7 +553,7 @@ describe('planSync: Collective remote gelöscht', () => {
 	it('forgets the collective and keeps the folder after the user refused', () => {
 		const plan = vanished({ decisions: decided([['removeCollectiveLocal:2', 'reject']]) });
 
-		expect(opsOf(plan, 'dropState')).toEqual([{ kind: 'dropState', pageIds: [50], collectiveIds: [2] }]);
+		expect(opsOf(plan, 'dropState')).toEqual([{ kind: 'dropState', pageIds: [50], collectiveIds: [2], unlinkPaths: ['Alt/Alt.md'] }]);
 		expect(opsOf(plan, 'removeCollectiveLocal')).toEqual([]);
 		expect(plan.followUp).toBe(true);
 	});
@@ -537,6 +574,13 @@ describe('planSync: lokaler Collective-Ordner gelöscht', () => {
 
 		expect(opsOf(plan, 'trashCollective')).toEqual([{ kind: 'trashCollective', collectiveId: 1, folder: 'Coll' }]);
 		expect(opsOf(plan, 'create')).toEqual([]);
+	});
+
+	it('asks about the collective even when page deletions are set to trashRemote', () => {
+		const plan = planFor({ files: noFolder(), behaviour: { localDelete: 'trashRemote' } });
+
+		expect(plan.proposals).toEqual([expect.objectContaining({ kind: 'deleteCollective' })]);
+		expect(opsOf(plan, 'trashCollective')).toEqual([]);
 	});
 
 	it('restores the folder and its pages after the user refused', () => {
@@ -577,6 +621,18 @@ describe('planSync: Collective-Ordner umbenannt', () => {
 		expect(plan.ops.map((op) => op.kind)).toEqual(['renameCollective']);
 	});
 
+	it('does not take a folder that mostly holds other notes for the renamed folder of a collective', () => {
+		const plan = planFor({
+			files: [localFile('Privat/Coll.md', 1), localFile('Privat/A.md', null), localFile('Privat/B.md', null), localFile('Privat/C.md', null)],
+			behaviour: { newFolder: 'ignore' },
+		});
+
+		expect(opsOf(plan, 'renameCollective')).toEqual([]);
+		expect(opsOf(plan, 'renameCollectiveFolder')).toEqual([]);
+		expect(opsOf(plan, 'createRemote')).toEqual([]);
+		expect(plan.proposals).toEqual([expect.objectContaining({ kind: 'deleteCollective', collectiveId: 1 })]);
+	});
+
 	it('renames the folder back, with a hint, when the user may not rename the collective', () => {
 		const plan = planFor({
 			remote: remote([{ ...remoteCollective(1, 'Coll', [startPage(), seitePage()]), collective: { ...collective(1, 'Coll'), level: 4 } }]),
@@ -590,10 +646,11 @@ describe('planSync: Collective-Ordner umbenannt', () => {
 
 	it('renames the local folder when the collective was renamed on the server', () => {
 		const state = baseState();
-		state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Alt', localFolder: 'Coll' };
-		const plan = planFor({ state });
+		state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Alt', localFolder: 'Alt' };
+		for (const key of ['1', '10']) state.pages[key] = { ...state.pages[key]!, localPath: state.pages[key]!.localPath.replace('Coll/', 'Alt/') };
+		const plan = planFor({ state, files: [localFile('Alt/Coll.md', 1), localFile('Alt/Seite.md', 10)] });
 
-		expect(opsOf(plan, 'renameCollectiveFolder')).toEqual([{ kind: 'renameCollectiveFolder', collectiveId: 1, from: 'Coll', to: 'Coll', name: 'Coll' }]);
+		expect(opsOf(plan, 'renameCollectiveFolder')).toEqual([{ kind: 'renameCollectiveFolder', collectiveId: 1, from: 'Alt', to: 'Coll', name: 'Coll' }]);
 		expect(plan.ops.map((op) => op.kind)).toEqual(['renameCollectiveFolder']);
 	});
 

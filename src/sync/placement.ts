@@ -88,7 +88,8 @@ export class Placer {
 		if (pathKey(path) === pathKey(selfPath)) return null;
 		const file = this.filesByKey.get(pathKey(path));
 		if (file === undefined) return null;
-		if (file.pageId !== null) return { kind: 'page', pageId: file.pageId };
+		// Only pages the server lists can be parents (not a foreign or unknown id, not an id that two files carry).
+		if (file.pageId !== null) return this.ctx.tree.pages.has(file.pageId) && !this.ctx.files.duplicates.has(file.pageId) ? { kind: 'page', pageId: file.pageId } : null;
 		const collision = Object.values(this.ctx.state.pages).find((p) => isCollision(p) && pathKey(p.localPath) === pathKey(file.path));
 		return collision === undefined ? { kind: 'new', path: file.path } : { kind: 'page', pageId: collision.pageId };
 	}

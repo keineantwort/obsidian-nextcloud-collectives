@@ -100,7 +100,7 @@ export type SyncOp =
 	/** Page deleted on the server: the local file follows (or is revived if the user changed it). */
 	| { kind: 'removeLocal'; pageId: PageId; collectiveId: CollectiveId; path: string; mode: PlannerBehaviour['remoteDelete'] }
 	/** State entries of pages that are gone on both sides. */
-	| { kind: 'dropState'; pageIds: PageId[]; collectiveIds: CollectiveId[] }
+	| { kind: 'dropState'; pageIds: PageId[]; collectiveIds: CollectiveId[]; unlinkPaths?: string[] }
 	/** Local file with an nc_page_id reappeared, its page is in the Collectives trash: restore the page. */
 	| { kind: 'restoreRemote'; pageId: PageId; collectiveId: CollectiveId; path: string }
 	/** New top-level folder: a collective on the server. `landingFile` is the file named like the folder, or null. */

@@ -118,6 +118,8 @@ function hasLocalFile(ctx: Context, pageId: PageId): boolean {
 
 /** Pages the server no longer lists: the local file follows (executor decides between trash and revival). */
 export function planRemoteDeletions(ctx: Context): void {
+	// A page may have moved into a collective that could not be scanned: nothing counts as deleted then.
+	if (ctx.failed.size > 0) return;
 	const dropped: PageId[] = [];
 	for (const known of Object.values(ctx.state.pages)) {
 		if (ctx.tree.pages.has(known.pageId) || !ctx.scanned.has(known.collectiveId) || ctx.blocked.has(known.collectiveId)) continue;
@@ -160,7 +162,13 @@ export function planLocalMove(page: PageInfo, known: PageState, file: LocalFile,
 	let tidyTo: string | null = null;
 	if (newStem !== oldStem) {
 		title = newStem;
-	} else if (folderPage && lastSegment(dir) !== lastSegment(dirnameOf(known.localPath)) && dirnameOf(dir) === dirnameOf(dirnameOf(known.localPath))) {
+	} else if (
+		folderPage &&
+		lastSegment(dir) !== lastSegment(dirnameOf(known.localPath)) &&
+		dirnameOf(dir) === dirnameOf(dirnameOf(known.localPath)) &&
+		// The old folder is gone: it was renamed. If it is still there, only the note moved out of it.
+		!ctx.input.local.occupied.has(pathKey(dirnameOf(known.localPath)))
+	) {
 		// The folder of a folder page was renamed in the vault: the page takes the folder's name, the note follows the folder.
 		title = lastSegment(dir);
 		tidyTo = `${dir}/${sanitizeName(title)}.md`;
@@ -168,6 +176,10 @@ export function planLocalMove(page: PageInfo, known: PageState, file: LocalFile,
 	if (title !== null && (title === page.title || title === sanitizeName(page.title))) title = null;
 	const parentChanged = !(parent.kind === 'page' && parent.pageId === page.parentId);
 	const tidy = tidyTo !== null && pathKey(tidyTo) !== pathKey(file.path) && !ctx.input.local.occupied.has(pathKey(tidyTo)) ? tidyTo : null;
+	if (tidy !== null) {
+		ctx.claimed.add(pathKey(tidy));
+		ctx.vacated.add(pathKey(file.path));
+	}
 	ctx.structureOps.push({
 		kind: 'moveRemote',
 		pageId: page.id,
