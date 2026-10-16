@@ -3,10 +3,8 @@
 import { pathKey } from '../mapping/paths';
 import { isRunFatal } from '../util/errors';
 import { applyContentOp } from './executorContent';
-import type { ContentOpKind } from './executorContent';
 import type { ExecutorDeps } from './executorDeps';
 import { applyStructureOp } from './executorStructure';
-import type { StructureOpKind } from './executorStructure';
 import type { SyncOp, SyncPlan } from './planner';
 import { emptyResult } from './types';
 import type { SyncResult } from './types';

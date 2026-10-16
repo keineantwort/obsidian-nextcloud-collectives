@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '../../src/i18n';
+import { emptyResult } from '../../src/sync/types';
 import type { SyncResult } from '../../src/sync/types';
 import { alreadyRunningNotice, describeSyncOutcome, describeSyncError, formatSyncResult } from '../../src/ui/syncNotices';
 import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } from '../../src/util/errors';
@@ -7,7 +8,7 @@ import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } fr
 const en = createTranslator('en');
 const de = createTranslator('de');
 
-const EMPTY: SyncResult = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const EMPTY: SyncResult = emptyResult();
 
 function result(partial: Partial<SyncResult>): SyncResult {
 	return { ...EMPTY, ...partial };

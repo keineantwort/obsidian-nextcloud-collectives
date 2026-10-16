@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-	UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME, asCollectiveId, asPageId, asTagId, baseFiles, baseRemote, baseState, collective,
-	findSkip, inputFor, localFile, localSnapshot, opsOf, page, pageState, planFor, remote, remoteCollective, seitePage, skipReasons,
+	UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME, asCollectiveId, asPageId, asTagId, baseFiles, baseState, collective,
+	findSkip, localFile, opsOf, page, pageState, planFor, remote, remoteCollective, seitePage, skipReasons,
 	startPage, syncState, tag,
 } from '../fakes/plannerFixtures';
 import { pathKey } from '../../src/mapping/paths';
-import { planSync } from '../../src/sync/planner';
+import type { RemoteSnapshot } from '../../src/sync/remoteScanner';
 
 // ---------------------------------------------------------------------------
 

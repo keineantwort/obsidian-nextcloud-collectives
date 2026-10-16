@@ -3,7 +3,7 @@ import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
-import { isConflictStrategy } from './types';
+import { isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
@@ -133,6 +133,58 @@ export class NcSettingTab extends PluginSettingTab {
 			dd.selectEl.setAttribute('aria-describedby', 'nc-conflict-strategy-desc nc-conflict-strategy-warning');
 		});
 		strategyWarningEl.setText(strategyWarning(settings.conflictStrategy, t));
+
+		new Setting(containerEl)
+			.setName(t('settings.newFolder.name'))
+			.setDesc(t('settings.newFolder.desc'))
+			.addDropdown((dd) => {
+				dd.addOptions({
+					createCollective: t('settings.newFolder.option.createCollective'),
+					ask: t('settings.newFolder.option.ask'),
+					ignore: t('settings.newFolder.option.ignore'),
+				})
+					.setValue(settings.newFolderBehaviour)
+					.onChange(async (value) => {
+						if (!isNewFolderBehaviour(value)) return;
+						settings.newFolderBehaviour = value;
+						await plugin.saveSettings();
+					});
+				dd.selectEl.setAttribute('aria-label', t('settings.newFolder.name'));
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.localDelete.name'))
+			.setDesc(t('settings.localDelete.desc'))
+			.addDropdown((dd) => {
+				dd.addOptions({
+					ask: t('settings.localDelete.option.ask'),
+					trashRemote: t('settings.localDelete.option.trashRemote'),
+				})
+					.setValue(settings.localDeleteBehaviour)
+					.onChange(async (value) => {
+						if (!isLocalDeleteBehaviour(value)) return;
+						settings.localDeleteBehaviour = value;
+						await plugin.saveSettings();
+					});
+				dd.selectEl.setAttribute('aria-label', t('settings.localDelete.name'));
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.remoteDelete.name'))
+			.setDesc(t('settings.remoteDelete.desc'))
+			.addDropdown((dd) => {
+				dd.addOptions({
+					obsidianTrash: t('settings.remoteDelete.option.obsidianTrash'),
+					keepUnlinked: t('settings.remoteDelete.option.keepUnlinked'),
+				})
+					.setValue(settings.remoteDeleteBehaviour)
+					.onChange(async (value) => {
+						if (!isRemoteDeleteBehaviour(value)) return;
+						settings.remoteDeleteBehaviour = value;
+						await plugin.saveSettings();
+					});
+				dd.selectEl.setAttribute('aria-label', t('settings.remoteDelete.name'));
+			});
 	}
 }
 
