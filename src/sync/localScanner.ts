@@ -1,5 +1,7 @@
-// Types of the local scan (PLAN §5). The scan function itself follows in a later step.
+// Local scan (PLAN §5): synced Markdown files with their nc_page_id, plus all vault paths for collision checks.
 import type { PageId } from '../api/types';
+import { readPageId } from '../mapping/frontmatter';
+import { isSyncedPath, pathKey } from '../mapping/paths';
 
 export interface LocalFile {
 	path: string;
@@ -27,4 +29,32 @@ export interface VaultReader {
 	/** nc_page_id from the metadata cache, or undefined if the cache has no frontmatter info for the file. */
 	cachedPageId(path: string): PageId | null | undefined;
 	read(path: string): Promise<string>;
+}
+
+/** True for paths inside the config folder (or the folder itself). */
+function isInConfigDir(path: string, configDir: string): boolean {
+	return path === configDir || path.startsWith(configDir + '/');
+}
+
+/** If cachedPageId is undefined, reads the file and uses readPageId. */
+export async function scanLocal(vault: VaultReader): Promise<LocalSnapshot> {
+	const files: LocalFile[] = [];
+	const occupied = new Set<string>();
+	let nonEmpty = false;
+
+	for (const file of vault.listFiles()) {
+		occupied.add(pathKey(file.path));
+		if (!isInConfigDir(file.path, vault.configDir)) nonEmpty = true;
+		if (!isSyncedPath(file.path, vault.configDir)) continue;
+		const cached = vault.cachedPageId(file.path);
+		const pageId = cached !== undefined ? cached : readPageId(await vault.read(file.path));
+		files.push({ path: file.path, mtime: file.mtime, pageId });
+	}
+
+	for (const folder of vault.listFolders()) {
+		occupied.add(pathKey(folder));
+		if (!isInConfigDir(folder, vault.configDir)) nonEmpty = true;
+	}
+
+	return { files, occupied, nonEmpty };
 }

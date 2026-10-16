@@ -1,0 +1,386 @@
+// Pull executor (PLAN §6.3, spec §7): applies the planner's operations to the vault and the sync state.
+// Imports nothing from 'obsidian': all vault access goes through VaultWriter.
+import type { WebdavClient } from '../api/webdavClient';
+import { asCollectiveId } from '../api/types';
+import type { PageInfo } from '../api/types';
+import { canonicalRemote, replaceNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
+import type { NcMeta } from '../mapping/frontmatter';
+import { conflictPath, pathKey, remotePagePath } from '../mapping/paths';
+import { sha256Hex } from '../util/hash';
+import { ApiChangedError, AuthError, NetworkError } from '../util/errors';
+import type { Logger } from '../util/logger';
+import type { PullOp, PullPlan } from './planner';
+import type { PageState, SyncState } from './state';
+import type { PullResult } from './types';
+
+export type { PullResult } from './types';
+
+/** Vault writes used by the executor; implemented over app.vault in obsidianVault.ts. */
+export interface VaultWriter {
+	exists(path: string): boolean;
+	read(path: string): Promise<string>;
+	/** Creates a new file (fails if it exists). Returns mtime after write. */
+	create(path: string, content: string): Promise<number>;
+	/** Atomic read-modify-write (app.vault.process). Returns mtime after write. */
+	process(path: string, fn: (current: string) => string): Promise<number>;
+	createFolder(path: string): Promise<void>;
+	mtime(path: string): number | null;
+}
+
+export interface ExecutorDeps {
+	vault: VaultWriter;
+	webdav: Pick<WebdavClient, 'get'>;
+	state: SyncState;
+	/** Persist state after each op (StateStore.save). */
+	persist: (state: SyncState) => Promise<void>;
+	now: () => Date;
+	/** Translated label for conflict file names ('Konflikt' / 'Conflict'). */
+	conflictLabel: string;
+	log: Logger;
+	/** Set of pathKey of all vault paths; executor adds the paths it creates. */
+	occupied: Set<string>;
+}
+
+/** Errors that end the whole run instead of counting as a failed page. */
+function abortsRun(err: unknown): boolean {
+	return err instanceof AuthError || err instanceof ApiChangedError || err instanceof NetworkError;
+}
+
+/** Remote fields of PageState, taken from the listing and the GET response. */
+function remoteFields(page: PageInfo, etag: string): Pick<PageState, 'remoteFilePath' | 'remoteFileName' | 'parentId' | 'remoteEtag' | 'remoteMtime' | 'remoteSize'> {
+	return {
+		remoteFilePath: page.filePath,
+		remoteFileName: page.fileName,
+		parentId: page.parentId,
+		remoteEtag: etag,
+		remoteMtime: page.timestamp,
+		remoteSize: page.size,
+	};
+}
+
+/** Writes `next` only if the file still holds `expected`. Returns null (nothing written) if the user changed it since the read. */
+async function writeIfUnchanged(vault: VaultWriter, path: string, expected: string, next: string): Promise<number | null> {
+	let userChanged = false;
+	const mtime = await vault.process(path, (cur) => {
+		if (cur !== expected) {
+			userChanged = true;
+			return cur;
+		}
+		return next;
+	});
+	return userChanged ? null : mtime;
+}
+
+/** Creates the conflict copy of remote content next to `path`; returns its path. */
+async function writeConflictCopy(deps: ExecutorDeps, path: string, remoteContent: string): Promise<string> {
+	const copyPath = conflictPath(path, deps.conflictLabel, deps.now(), deps.occupied);
+	await deps.vault.create(copyPath, canonicalRemote(remoteContent));
+	deps.occupied.add(pathKey(copyPath));
+	return copyPath;
+}
+
+/**
+ * True for a path collision recorded by createConflict: the file at localPath belongs to the user and carries no
+ * nc_page_id. It must never receive nc fields unless its text equals the remote text.
+ */
+function isUnlinked(s: PageState): boolean {
+	return s.status === 'conflict' && s.baseHash === '';
+}
+
+function requireState(deps: ExecutorDeps, pageId: number): PageState {
+	const entry = deps.state.pages[String(pageId)];
+	if (entry === undefined) throw new Error(`no sync state for page ${pageId}`);
+	return entry;
+}
+
+/**
+ * Applies the plan. Operations run in order. A failing page operation is counted and logged (pageId and error class
+ * only), then the run continues. AuthError, ApiChangedError and NetworkError abort the run and are rethrown.
+ */
+export async function executePull(plan: PullPlan, deps: ExecutorDeps): Promise<PullResult> {
+	const result: PullResult = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+	for (const op of plan.ops) {
+		let changedState: boolean;
+		try {
+			changedState = await applyOp(op, deps, result);
+		} catch (err) {
+			if (abortsRun(err)) throw err;
+			result.failed++;
+			deps.log.warn('Sync operation failed', {
+				kind: op.kind,
+				...('page' in op ? { pageId: op.page.id } : {}),
+				error: err instanceof Error ? err.name : 'unknown',
+			});
+			continue;
+		}
+		if (changedState) await deps.persist(deps.state);
+	}
+	return result;
+}
+
+/** Runs one operation and updates the counters. Returns true if the sync state changed. */
+async function applyOp(op: PullOp, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	switch (op.kind) {
+		case 'ensureFolder':
+			if (!deps.vault.exists(op.path)) await deps.vault.createFolder(op.path);
+			deps.occupied.add(pathKey(op.path));
+			return false;
+		case 'saveCollective':
+			deps.state.collectives[String(op.collective.collectiveId)] = op.collective;
+			return true;
+		case 'saveTags':
+			deps.state.tags[String(op.collectiveId)] = op.tags;
+			return true;
+		case 'create':
+			return createPage(op, deps, result);
+		case 'createConflict':
+			return createConflict(op, deps, result);
+		case 'adopt':
+			return adoptPage(op, deps, result);
+		case 'update':
+			return updatePage(op, deps, result);
+		case 'updateMeta':
+			return updateMeta(op, deps, result);
+	}
+}
+
+async function createPage(op: Extract<PullOp, { kind: 'create' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
+	const mtime = await deps.vault.create(op.path, toLocal(content, op.meta));
+	deps.occupied.add(pathKey(op.path));
+	const now = deps.now().getTime();
+	deps.state.pages[String(op.page.id)] = {
+		...pageEntry(op.page, op.meta, now),
+		...remoteFields(op.page, etag),
+		localPath: op.path,
+		localMtime: mtime,
+		baseHash: await sha256Hex(canonicalRemote(content)),
+		metaHash: op.metaHash,
+	};
+	result.created++;
+	return true;
+}
+
+async function createConflict(op: Extract<PullOp, { kind: 'createConflict' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
+	const copyPath = await writeConflictCopy(deps, op.path, content);
+	deps.state.pages[String(op.page.id)] = {
+		...pageEntry(op.page, op.meta, deps.now().getTime()),
+		...remoteFields(op.page, etag),
+		localPath: op.path,
+		localMtime: deps.vault.mtime(op.path) ?? 0,
+		baseHash: '',
+		metaHash: op.metaHash,
+		status: 'conflict',
+		conflictPath: copyPath,
+	};
+	deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
+	result.conflicts++;
+	return true;
+}
+
+async function adoptPage(op: Extract<PullOp, { kind: 'adopt' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
+	const localText = await deps.vault.read(op.path);
+	const remoteCanonical = canonicalRemote(content);
+	const sameText = toRemote(localText) === remoteCanonical;
+	const base = {
+		...pageEntry(op.page, op.meta, deps.now().getTime()),
+		...remoteFields(op.page, etag),
+		localPath: op.path,
+		baseHash: await sha256Hex(remoteCanonical),
+		metaHash: op.metaHash,
+	};
+
+	if (!sameText) {
+		const copyPath = await writeConflictCopy(deps, op.path, content);
+		deps.state.pages[String(op.page.id)] = {
+			...base,
+			localMtime: deps.vault.mtime(op.path) ?? 0,
+			baseHash: '',
+			status: 'conflict',
+			conflictPath: copyPath,
+		};
+		deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
+		result.conflicts++;
+		return true;
+	}
+
+	const next = replaceNcMeta(localText, op.meta);
+	let mtime = deps.vault.mtime(op.path) ?? 0;
+	if (next !== localText) {
+		mtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, op.meta));
+		result.metaUpdated++;
+	} else {
+		result.unchanged++;
+	}
+	deps.state.pages[String(op.page.id)] = { ...base, localMtime: mtime, status: 'synced', conflictPath: null };
+	return true;
+}
+
+async function updatePage(op: Extract<PullOp, { kind: 'update' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	const s = requireState(deps, op.page.id);
+	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
+	const remoteCanonical = canonicalRemote(content);
+	const remoteHash = await sha256Hex(remoteCanonical);
+	const now = deps.now().getTime();
+
+	if (isUnlinked(s)) return updateUnlinked(op, s, etag, content, remoteHash, deps, result, now);
+
+	if (remoteHash === s.baseHash) {
+		// Remote text unchanged: only the remote fields (and metadata, if it changed) are refreshed.
+		let metaHash = s.metaHash;
+		let localMtime = s.localMtime;
+		if (op.metaChanged) {
+			localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, op.meta));
+			metaHash = op.metaHash;
+		}
+		deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, etag), metaHash, localMtime, lastSyncedAt: now };
+		result.unchanged++;
+		return true;
+	}
+
+	const localText = await deps.vault.read(op.path);
+	const localHash = await sha256Hex(toRemote(localText));
+
+	if (localHash === s.baseHash) {
+		// Local file still equals the last synced text: take the new remote text.
+		const mtime = await writeIfUnchanged(deps.vault, op.path, localText, toLocal(content, op.meta));
+		if (mtime !== null) {
+			deps.state.pages[String(op.page.id)] = {
+				...s,
+				...remoteFields(op.page, etag),
+				baseHash: remoteHash,
+				metaHash: op.metaHash,
+				localMtime: mtime,
+				status: 'synced',
+				conflictPath: null,
+				lastSyncedAt: now,
+			};
+			result.updated++;
+			return true;
+		}
+		// The user edited the file between read and write: keep it and fall through to the conflict copy.
+		return recordUpdateConflict(op, s, etag, content, deps, result, now);
+	}
+
+	if (localHash === remoteHash) {
+		// Both sides hold the same text already: only the base moves on.
+		let localMtime = s.localMtime;
+		let metaHash = s.metaHash;
+		if (op.metaChanged) {
+			localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, op.meta));
+			metaHash = op.metaHash;
+		}
+		deps.state.pages[String(op.page.id)] = {
+			...s,
+			...remoteFields(op.page, etag),
+			baseHash: remoteHash,
+			metaHash,
+			localMtime,
+			status: 'synced',
+			conflictPath: null,
+			lastSyncedAt: now,
+		};
+		result.unchanged++;
+		return true;
+	}
+
+	return recordUpdateConflict(op, s, etag, content, deps, result, now);
+}
+
+/** Remote changed for an unlinked collision: link the user file only if both texts are equal, else a new conflict copy. */
+async function updateUnlinked(
+	op: Extract<PullOp, { kind: 'update' }>,
+	s: PageState,
+	etag: string,
+	content: string,
+	remoteHash: string,
+	deps: ExecutorDeps,
+	result: PullResult,
+	now: number,
+): Promise<boolean> {
+	const localText = await deps.vault.read(op.path);
+	if (await sha256Hex(toRemote(localText)) !== remoteHash) return recordUpdateConflict(op, s, etag, content, deps, result, now);
+	const mtime = await writeIfUnchanged(deps.vault, op.path, localText, replaceNcMeta(localText, op.meta));
+	if (mtime === null) return recordUpdateConflict(op, s, etag, content, deps, result, now);
+	deps.state.pages[String(op.page.id)] = {
+		...s,
+		...remoteFields(op.page, etag),
+		baseHash: remoteHash,
+		metaHash: op.metaHash,
+		localMtime: mtime,
+		status: 'synced',
+		conflictPath: null,
+		lastSyncedAt: now,
+	};
+	deps.log.info('Conflict resolved: local file equals remote', { pageId: op.page.id, path: op.path });
+	result.unchanged++;
+	return true;
+}
+
+/** Both sides changed: keep the local file, save the remote text as conflict copy, move the remote fields on. */
+async function recordUpdateConflict(
+	op: Extract<PullOp, { kind: 'update' }>,
+	s: PageState,
+	etag: string,
+	content: string,
+	deps: ExecutorDeps,
+	result: PullResult,
+	now: number,
+): Promise<boolean> {
+	const copyPath = await writeConflictCopy(deps, op.path, content);
+	deps.state.pages[String(op.page.id)] = {
+		...s,
+		...remoteFields(op.page, etag),
+		status: 'conflict',
+		conflictPath: copyPath,
+		localMtime: deps.vault.mtime(op.path) ?? s.localMtime,
+		lastSyncedAt: now,
+	};
+	deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
+	result.conflicts++;
+	return true;
+}
+
+async function updateMeta(op: Extract<PullOp, { kind: 'updateMeta' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+	const s = requireState(deps, op.page.id);
+	if (isUnlinked(s)) {
+		// The file is the user's own; only the expected metadata moves on.
+		deps.state.pages[String(op.page.id)] = { ...s, metaHash: op.metaHash };
+		result.unchanged++;
+		return true;
+	}
+	let changed = false;
+	const mtime = await deps.vault.process(op.path, (cur) => {
+		const next = replaceNcMeta(cur, op.meta);
+		changed = next !== cur;
+		return next;
+	});
+	deps.state.pages[String(op.page.id)] = { ...s, metaHash: op.metaHash, localMtime: mtime };
+	if (changed) result.metaUpdated++;
+	else result.unchanged++;
+	return true;
+}
+
+/** Fields every page state carries that do not depend on the operation. */
+function pageEntry(page: PageInfo, meta: NcMeta, now: number): PageState {
+	return {
+		pageId: page.id,
+		collectiveId: asCollectiveId(meta.collectiveId),
+		localPath: '',
+		localMtime: 0,
+		remoteFilePath: '',
+		remoteFileName: '',
+		parentId: page.parentId,
+		remoteEtag: '',
+		remoteMtime: 0,
+		remoteSize: 0,
+		baseHash: '',
+		metaHash: '',
+		status: 'synced',
+		conflictPath: null,
+		attachments: [],
+		lastSyncedAt: now,
+	};
+}
