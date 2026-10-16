@@ -7,7 +7,7 @@ export default defineConfig(
 	globalIgnores([
 		'node_modules', 'dist', 'coverage', 'main.js',
 		'esbuild.config.mjs', 'versions.json', 'package.json', 'package-lock.json', 'tsconfig.json',
-		'scripts/**',
+		'scripts/**', 'dev-vault/**',
 	]),
 	{
 		languageOptions: {
