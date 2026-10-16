@@ -1,0 +1,21 @@
+# Dependencies / build output
+node_modules/
+main.js
+*.js.map
+coverage/
+
+# Local secrets / test server credentials
+.env
+.env.*
+!.env.example
+
+# Obsidian test vault data
+data.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code
+.claude/
