@@ -145,15 +145,16 @@ src/
     types.ts              gemeinsame Ergebnistypen: PullResult, Skip, PullRunOutcome (M3)
     state.ts              persistenter Sync-Zustand (siehe 6.3), rein
     stateStore.ts         State-Datei sync-state.json lesen/schreiben, nur bei Änderung (M3)
-    pullRun.ts            ein Pull-Lauf: Prüfungen, Scans, Planen, Ausführen (M3)
+    syncRun.ts            ein Sync-Lauf: Prüfungen, Scans, Planen, Ausführen (M3 als pullRun.ts, ab M4 syncRun.ts)
     obsidianVault.ts      VaultReader/VaultWriter über app.vault + metadataCache (M3)
     localScanner.ts       erfasst lokale Dateien + Hashes
     remoteScanner.ts      erfasst Remote-Seiten + Metadaten
-    planner.ts            REINE Funktion: (state, local, remote) → Operationen
+    planner.ts            REINE Funktion: (state, local, remote) → Operationen (`planSync`)
+    decide.ts             REINE Entscheidungstabelle 7.3 inkl. Konfliktstrategie (M4, ADR 0017)
     executor.ts           führt Operationen aus, aktualisiert State
-    conflicts.ts          Konfliktdateien, Auflösung
+    conflicts.ts          Konfliktliste, Auflösung als State-Übergang (M4)
     scheduler.ts          Intervall, Debounce nach Speichern, Mutex
-    dirtyQueue.ts         lokale Vault-Events sammeln
+    dirtyQueue.ts         lokale Vault-Events sammeln, eigene Schreibzugriffe unterdrücken (M4)
   mapping/
     paths.ts              Remote-Struktur ↔ Vault-Pfade, Dateinamen-Sanitizing
     frontmatter.ts        Frontmatter lesen/schreiben/entfernen
@@ -162,12 +163,13 @@ src/
   ui/
     initialSyncModal.ts   Erstsync-Dialog (M3)
     syncNotices.ts        Notice-Texte aus Laufergebnis/Fehler, rein (M3); showSyncNotice.ts zeigt sie an
-    statusBar.ts
+    statusBar.ts          Statusleiste (Desktop), reine Text-Funktion (M4)
+    conflictView.ts       reine Texte/Diff-Zeilen für den Konflikt-Dialog (M4)
     conflictModal.ts      Diff-Ansicht lokal vs. remote, Auswahl
     collectivePicker.ts
     confirmModal.ts
   util/
-    hash.ts, logger.ts, errors.ts, timeout.ts, isRecord.ts
+    hash.ts, logger.ts, errors.ts, timeout.ts, isRecord.ts, diff.ts (Zeilen-Diff, M4)
 tests/
   unit/                   planner, paths, links, frontmatter, http-Fehler
   stubs/obsidian.ts       Laufzeit-Stub für `obsidian` in Unit-Tests (das npm-Paket enthält nur Typen)
@@ -180,7 +182,7 @@ docs/
   api-notes.md            Ergebnisse M0
 ```
 
-Regel: `planner.ts`, `paths.ts`, `links.ts`, `frontmatter.ts` sind frei von Obsidian- und Netzwerkabhängigkeiten und vollständig unit-getestet.
+Regel: `planner.ts`, `decide.ts`, `paths.ts`, `links.ts`, `frontmatter.ts` sind frei von Obsidian- und Netzwerkabhängigkeiten und vollständig unit-getestet.
 
 ## 6. Lokale Abbildung
 
@@ -230,12 +232,12 @@ Gespeichert in der Datei `sync-state.json` im Plugin-Ordner via `app.vault.adapt
 | `pageId`, `collectiveId` | Identität |
 | `localPath` | Vault-Pfad beim letzten Sync |
 | `remoteFilePath`, `remoteFileName`, `parentId` | Remote-Ort beim letzten Sync |
-| `remoteEtag`, `remoteMtime`, `remoteSize` | Remote-Stand |
+| `remoteEtag`, `remoteMtime`, `remoteSize` | Remote-Stand. `remoteMtime = -1`: Stand unbestätigt (ETag aus derselben Sekunde oder eigener `PUT`), der nächste Lauf liest per `GET` und vergleicht Hashes (M4, ADR 0017) |
 | `baseHash` | SHA-256 des **Remote-Formats** des Inhalts beim letzten Sync (nach Link-Konvertierung, ohne `nc_*`-Frontmatter) |
 | `metaHash` | Hash von Titel, Emoji, Tags |
 | `attachments` | Liste `{ id, name, etag, localPath }` |
 | `lastSyncedAt` | Zeitstempel |
-| `localMtime` | mtime der lokalen Datei nach dem letzten eigenen Schreiben; Abweichung = Kandidat für lokale Änderung (M3) |
+| `localMtime` | mtime der lokalen Datei nach dem letzten eigenen Schreiben bzw. vor dem Lesen des hochgeladenen Textes; Abweichung = Kandidat für lokale Änderung (M3). `-1`: lokale Datei ungeprüft (nach „Lokal behalten“, M4) |
 | `status`, `conflictPath` | `synced` / `conflict` / `collision` und Pfad der letzten Konfliktkopie (M3). `conflict`: Datei trägt ihre `nc_page_id`, beide Seiten verschieden (`baseHash = ''`, wenn die Basis unbekannt ist). `collision`: Zielpfad war durch eine fremde Nutzerdatei ohne `nc_page_id` belegt; `localPath` ist deren Pfad (ADR 0016) |
 
 Zusätzlich: `schemaVersion`, `serverUrl`, `user`, Tag-Cache je Collective.
@@ -278,9 +280,11 @@ Ein Mutex verhindert parallele Läufe; Auslöser während eines Laufs setzen ein
 | L | R | Aktion |
 |---|---|---|
 | nein | nein | nichts |
-| ja | nein | PUSH: `PUT` mit `If-Match`; bei `412` → Konflikt |
+| ja | nein | PUSH: `PUT` mit `If-Match` (nur mit bestätigtem ETag, ADR 0017); bei `412` → neu lesen und erneut entscheiden |
 | nein | ja | PULL: lokal überschreiben (via `vault.process`) |
-| ja | ja | Inhalt identisch → nur State aktualisieren; sonst KONFLIKT |
+| ja | ja | Inhalt identisch → nur State aktualisieren; sonst je nach `conflictStrategy`: KONFLIKT (`conflictFile`), PUSH (`preferLocal`), PULL (`preferRemote`) |
+
+Umgesetzt als reine Funktion `decideContent` (`src/sync/decide.ts`). Seiten mit Status `conflict`/`collision` werden nie gepusht und bei beidseitiger Änderung immer als Konflikt behandelt.
 
 ### 7.4 Struktur- und Lebenszyklus-Fälle
 
@@ -313,12 +317,12 @@ Neue lokale Unterseite unter einer Blattseite: Remote-Elternseite wird dadurch z
 
 ### 7.6 Eigene Schreibzugriffe ignorieren
 
-Vault-Events, die das Plugin selbst auslöst, dürfen keinen neuen Sync triggern: Pfade während des Schreibens in einem `suppressedPaths`-Set führen und nach dem Event entfernen.
+Vault-Events, die das Plugin selbst auslöst, dürfen keinen neuen Sync triggern: Pfade vor dem Schreiben für 5 s unterdrücken; die Markierung wird beim ersten Event nicht verbraucht, weil ein Schreibzugriff mehrere Events auslösen kann (M4, `src/sync/dirtyQueue.ts`).
 
 ## 8. Konflikte
 
 - Default-Strategie `conflictFile`: lokale Datei bleibt; Remote-Version wird als `Titel (Konflikt YYYY-MM-DD HHmm).md` daneben abgelegt (ohne `nc_page_id`, wird nicht gesynct); Seite im State als `conflict` markiert und bis zur Auflösung nicht gepusht.
-- Konflikt-Dialog: Liste aller Konflikte; pro Seite Diff (zeilenbasiert, einfache LCS-Implementierung oder kleine Lib ohne Node-Abhängigkeit) und Buttons „Lokal behalten“ (→ Push mit aktuellem ETag), „Remote übernehmen“, „Später“.
+- Konflikt-Dialog: Liste aller Konflikte; pro Seite Diff (zeilenbasiert, eigene LCS-Implementierung `src/util/diff.ts`) und Buttons „Lokal behalten“ (→ Push mit dem ETag zum Zeitpunkt des Konflikts), „Remote übernehmen“, „Später“. Die Auswahl ändert nur den State, danach läuft ein normaler Sync; die Konfliktkopie wandert in den Obsidian-Papierkorb (M4, ADR 0017).
 - Weitere Strategien als Setting: `preferLocal`, `preferRemote`.
 - Statusleiste zeigt Anzahl offener Konflikte.
 
@@ -474,6 +478,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Hinweise aus M3: Der Pull meldet Strukturfälle bereits als Skips (`remoteMoved`, `remoteDeleted`, `localDeleted`, `collectiveRenamed`, `collectiveRemoved`, `orphan`, `duplicateId`, `src/sync/types.ts`); M5 setzt sie um. Kollisionsdateien (`status: collision`) dürfen nicht als neue Seite hochgeladen werden. Text `initialSync.point.localFiles` an den Upload anpassen.
 - Hinweis aus dem M3-Review: `Skip` in eine diskriminierte Union umbauen (je Grund garantierte Felder), bevor M5 die Gründe in Operationen und Dialoge umsetzt.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
+- Hinweise aus M4: Der Push lädt nur Inhalte bereits verknüpfter Seiten hoch; neue lokale Dateien ohne `nc_page_id` bleiben M5. „Lokal behalten“ bei einer Kollision verknüpft die Nutzerdatei bereits mit der Seite (minimale `nc_*`-Felder, ADR 0017).
 - Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
 ### M6 – Tags und Emojis
@@ -495,6 +500,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
 - Hinweis aus M3: Der manuelle Lauf zeigt immer eine Ergebnis-Notice; automatische Läufe nur bei Level `warning`/`error` (`src/ui/syncNotices.ts`). Der einfache In-Flight-Schutz in `main.ts` wird durch den Mutex mit Re-Run-Flag ersetzt.
 - Hinweis aus dem M3-Review: Der Executor speichert nach jeder Operation den gesamten State (Erstsync mit N Seiten: O(N²) Serialisierung/Schreiben). Vor M9 mit ~1000 Seiten messen und `persist` drosseln (alle k Ops/t ms, am Laufende und vor jedem Abbruch; Konfliktkopien sofort).
+- Hinweis aus M4: Die Dirty-Queue (`src/sync/dirtyQueue.ts`) sammelt bereits `modify`/`rename`/`delete` ab `onLayoutReady` und unterdrückt eigene Schreibzugriffe; der Debounce nach Speichern kann sie als Auslöser nutzen. `main.ts` serialisiert Läufe und Konfliktauflösungen schon über eine Queue; M9 ergänzt das Re-Run-Flag.
 - Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
 - Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 
@@ -534,8 +540,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M0 | umgesetzt inkl. manueller Browser-Prüfung, gemergt (PR #12) |
 | M1 | umgesetzt (ONC-2), gemergt (PR #13) |
 | M2 | umgesetzt (ONC-3), gemergt (PR #14) |
-| M3 | umgesetzt (ONC-4), PR offen |
-| M4 | offen |
+| M3 | umgesetzt (ONC-4), gemergt (PR #15) |
+| M4 | umgesetzt (ONC-5), PR offen |
 | M5 | offen |
 | M6 | offen |
 | M7 | offen |
