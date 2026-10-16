@@ -64,7 +64,7 @@ function planKnownCollective(ctx: Context, collective: CollectiveState, unknownF
 		const from = folderExists ? collective.localFolder : renamedFolder;
 		if (from !== null) {
 			if (renamedFolder !== null) claimedFolders.add(pathKey(renamedFolder));
-			const to = freeFolderName(ctx, remote.collective.name, from);
+			const to = freeFolderName(ctx, id, remote.collective.name, from);
 			ctx.collectiveOps.push({ kind: 'renameCollectiveFolder', collectiveId: id, from, to, name: remote.collective.name });
 			ctx.blocked.add(id);
 			ctx.followUp = true;
@@ -101,7 +101,6 @@ function planDeletedFolder(ctx: Context, collective: CollectiveState, level: num
 	ctx.blocked.add(id);
 	if (decision === 'accept') {
 		ctx.finalOps.push({ kind: 'trashCollective', collectiveId: id, folder: collective.localFolder });
-		ctx.followUp = true;
 	} else if (decision === 'reject') {
 		ctx.blocked.delete(id);
 		ctx.restore.add(id);
@@ -120,7 +119,6 @@ function planVanishedCollective(ctx: Context, collective: CollectiveState): void
 	ctx.blocked.add(id);
 	if (decision === 'accept') {
 		ctx.finalOps.push({ kind: 'removeCollectiveLocal', collectiveId: id, folder: collective.localFolder });
-		ctx.followUp = true;
 	} else if (decision === 'reject') {
 		// The folder stays; the plugin forgets the collective, so the next pass treats the folder as a new one.
 		ctx.finalOps.push({ kind: 'dropState', pageIds: Object.values(ctx.state.pages).filter((p) => p.collectiveId === id).map((p) => p.pageId), collectiveIds: [id] });
@@ -156,13 +154,15 @@ function findRenamedFolder(ctx: Context, collective: CollectiveState, unknownFol
 	return best;
 }
 
-/** A top-level folder name for a collective: the sanitized name, or the first free `name (n)`. `own` is the folder being renamed. */
-function freeFolderName(ctx: Context, name: string, own: string): string {
+/**
+ * A top-level folder name for a collective: the sanitized name, or the first free `name (n)`. The collective's own folders
+ * (`from`, its folder in the state and the one planned for it) do not count as taken.
+ */
+function freeFolderName(ctx: Context, collectiveId: CollectiveId, name: string, from: string): string {
 	const taken = new Set<string>(ctx.input.local.folders.filter((f) => !f.includes('/')).map(pathKey));
-	taken.delete(pathKey(own));
-	for (const folder of ctx.input.paths.collectiveFolders.values()) taken.add(pathKey(folder));
-	for (const c of Object.values(ctx.state.collectives)) taken.add(pathKey(c.localFolder));
-	taken.delete(pathKey(own));
+	for (const [id, folder] of ctx.input.paths.collectiveFolders) if (id !== collectiveId) taken.add(pathKey(folder));
+	for (const c of Object.values(ctx.state.collectives)) if (c.collectiveId !== collectiveId) taken.add(pathKey(c.localFolder));
+	taken.delete(pathKey(from));
 	return withSuffix(sanitizeName(name), taken);
 }
 

@@ -6,9 +6,10 @@ import { pathKey, planLocalPaths } from '../../src/mapping/paths';
 import type { CollectiveTree, PathPlan } from '../../src/mapping/paths';
 import type { LocalFile, LocalSnapshot } from '../../src/sync/localScanner';
 import { planSync } from '../../src/sync/planner';
-import type { PlannerInput, SyncOp, SyncPlan } from '../../src/sync/planner';
+import type { PlannerBehaviour, PlannerInput, SyncOp, SyncPlan } from '../../src/sync/planner';
 import type { RemoteCollective, RemoteSnapshot } from '../../src/sync/remoteScanner';
 import type { CollectiveState, PageState, SyncState } from '../../src/sync/state';
+import type { Decision } from '../../src/sync/types';
 import { UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME } from '../../src/sync/state';
 
 export { asCollectiveId, asPageId, asTagId, UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME };
@@ -104,9 +105,13 @@ export function localFile(path: string, pageId: number | null, mtime = 500): Loc
 }
 
 /** Occupied set and path spellings as the scanner builds them: keys of all files and all ancestor folders. */
-export function localSnapshot(files: LocalFile[]): LocalSnapshot {
+export function localSnapshot(files: LocalFile[], extraFolders: string[] = []): LocalSnapshot {
 	const occupied = new Set<string>();
 	const paths = new Map<string, string>();
+	for (const folder of extraFolders) {
+		occupied.add(pathKey(folder));
+		paths.set(pathKey(folder), folder);
+	}
 	for (const file of files) {
 		const parts = file.path.split('/');
 		for (let i = 1; i <= parts.length; i++) {
@@ -152,6 +157,12 @@ export interface Parts {
 	files?: LocalFile[];
 	/** pathKeys of the paths the vault reported as changed since the last run. */
 	dirty?: ReadonlySet<string>;
+	/** Folders without notes. */
+	extraFolders?: string[];
+	remoteTrash?: ReadonlyMap<PageId, CollectiveId>;
+	remoteChanged?: ReadonlySet<PageId>;
+	decisions?: ReadonlyMap<string, Decision>;
+	behaviour?: Partial<PlannerBehaviour>;
 }
 
 /** Builds the planner input the way the runner does: planLocalPaths over the remote trees, state folders as known folders. */
@@ -181,7 +192,18 @@ export function inputFor(parts: Parts = {}): PlannerInput {
 			remoteMeta.set(p.id, { meta, hash: `m${p.id}` });
 		}
 	}
-	return { state, remote: remoteSnap, local: localSnapshot(files), remoteMeta, paths, dirty: parts.dirty ?? new Set<string>() };
+	return {
+		state,
+		remote: remoteSnap,
+		local: localSnapshot(files, parts.extraFolders),
+		remoteMeta,
+		paths,
+		dirty: parts.dirty ?? new Set<string>(),
+		...(parts.remoteTrash === undefined ? {} : { remoteTrash: parts.remoteTrash }),
+		...(parts.remoteChanged === undefined ? {} : { remoteChanged: parts.remoteChanged }),
+		...(parts.decisions === undefined ? {} : { decisions: parts.decisions }),
+		...(parts.behaviour === undefined ? {} : { behaviour: parts.behaviour }),
+	};
 }
 
 export function planFor(parts: Parts = {}): SyncPlan {

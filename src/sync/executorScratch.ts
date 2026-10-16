@@ -8,6 +8,8 @@ export interface RunScratch {
 	refreshed: Map<PageId, PageInfo>;
 	/** pathKey of a local file → the page created from it in this run. */
 	created: Map<string, PageId>;
+	/** Parents that got a child in this run and were read again afterwards (the first child may turn a leaf into a folder page). */
+	parentsChecked: Set<PageId>;
 }
 
 const scratches = new WeakMap<ExecutorDeps, RunScratch>();
@@ -16,7 +18,7 @@ const scratches = new WeakMap<ExecutorDeps, RunScratch>();
 export function scratchOf(deps: ExecutorDeps): RunScratch {
 	let scratch = scratches.get(deps);
 	if (scratch === undefined) {
-		scratch = { refreshed: new Map<PageId, PageInfo>(), created: new Map<string, PageId>() };
+		scratch = { refreshed: new Map<PageId, PageInfo>(), created: new Map<string, PageId>(), parentsChecked: new Set<PageId>() };
 		scratches.set(deps, scratch);
 	}
 	return scratch;

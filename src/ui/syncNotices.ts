@@ -53,8 +53,10 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 function skipHints(skips: readonly Skip[], t: Translator): string[] {
 	const count = (reason: Skip['reason']): number => skips.filter((skip) => skip.reason === reason).length;
 	const lines: string[] = [];
-	if (count('unknownId') > 0) lines.push(t('sync.skip.unknownId', { count: count('unknownId') }));
-	if (count('remoteMoveWins') > 0) lines.push(t('sync.skip.remoteMoveWins', { count: count('remoteMoveWins') }));
+	const unknown = count('unknownId');
+	if (unknown > 0) lines.push(unknown === 1 ? t('sync.skip.unknownId.one') : t('sync.skip.unknownId.other', { count: unknown }));
+	const moved = count('remoteMoveWins');
+	if (moved > 0) lines.push(moved === 1 ? t('sync.skip.remoteMoveWins.one') : t('sync.skip.remoteMoveWins.other', { count: moved }));
 	if (count('renameForbidden') > 0) lines.push(t('sync.skip.renameForbidden'));
 	if (count('deleteForbidden') > 0) lines.push(t('sync.skip.deleteForbidden'));
 	return lines;

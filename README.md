@@ -2,9 +2,32 @@
 
 Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit einem Vault synchronisiert.
 
-**Status:** in Entwicklung – noch nicht einsatzbereit. Spezifikation und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
+**Status:** in Entwicklung (M5: Struktur) – noch nicht einsatzbereit. Spezifikation und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
 
 ## Hilfe
+
+### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
+
+Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective ist ein Ordner auf oberster Ebene des Vaults. Eine Seite mit Unterseiten ist ein Ordner mit einer gleichnamigen Notiz darin (`Handbuch/Prozesse/Prozesse.md`).
+
+| Du machst im Vault … | … das passiert auf dem Server |
+|---|---|
+| eine neue Notiz anlegen | Sie wird als neue Seite hochgeladen, ihre `nc_page_id` steht danach im Frontmatter. Die Seite hängt unter der Seite, der ihr Ordner gehört; liegt sie in einem Ordner ohne Notiz, legt das Plugin dafür eine Ordnerseite an. |
+| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben, Tags gehen dabei verloren). |
+| den Ordner einer Seite mit Unterseiten umbenennen | Die Seite heißt danach wie der Ordner, die Notiz im Ordner folgt. Benenne dafür den **Ordner** um, nicht nur die Notiz darin. |
+| einen neuen Ordner auf oberster Ebene mit Notizen anlegen | Ein neues Collective entsteht (einstellbar: „Neue Ordner auf oberster Ebene“). Die Notiz, die wie der Ordner heißt, wird die Startseite. |
+| den Ordner eines Collectives umbenennen | Das Collective wird umbenannt. Das dürfen nur Admins und Eigentümer; sonst wird der Ordner zurückbenannt. |
+| eine Notiz oder einen Ordner löschen | Das Plugin **fragt**, bevor eine Seite oder ein Collective auf dem Server in den Collectives-Papierkorb kommt (dort lässt sich beides wiederherstellen). Was du nicht anhakst, kommt in den Vault zurück. Schließt du den Dialog, wird beim nächsten Lauf erneut gefragt. |
+
+In der anderen Richtung gilt:
+
+- Eine auf dem Server umbenannte oder verschobene Seite wird im Vault umbenannt bzw. verschoben. Haben beide Seiten dieselbe Seite verschieden verschoben, gilt der Server.
+- Eine auf dem Server gelöschte Seite kommt im Vault in den Papierkorb (Einstellung „Auf dem Server gelöschte Seiten“; „Datei behalten“ lädt sie als neue Seite wieder hoch). Hast du die Datei seit der letzten Synchronisierung geändert, wird sie **nie** entfernt: Die Seite wird aus dem Papierkorb wiederhergestellt und deine Änderung hochgeladen.
+- Hat sich eine Seite auf dem Server geändert, während du sie im Vault gelöscht hast, kommt sie ohne Rückfrage zurück: die Änderung gewinnt.
+- Legst du eine gelöschte Datei (mit ihrer `nc_page_id`) wieder in den Vault, wird die Seite aus dem Collectives-Papierkorb wiederhergestellt.
+- Ein auf dem Server gelöschtes Collective (oder eins, das du verlassen hast) wird nur nach Rückfrage aus dem Vault entfernt.
+- **Schutz vor Massenlöschung:** Würdest du mindestens 3 Seiten und mehr als 20 % der Seiten eines Collectives auf einmal löschen, fragt das Plugin immer, auch mit der Einstellung „Ohne Rückfrage in den Collectives-Papierkorb“.
+- Markdown-Dateien direkt im Vault-Ordner (ohne Collective-Ordner) und Dateien in versteckten Ordnern werden nicht synchronisiert.
 
 ### Konflikte
 

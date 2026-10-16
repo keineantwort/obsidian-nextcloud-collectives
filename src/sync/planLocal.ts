@@ -5,9 +5,10 @@ import { pathKey, sanitizeName } from '../mapping/paths';
 import type { LocalFile } from './localScanner';
 import { locatePage } from './locate';
 import type { Placer } from './placement';
+import type { ParentRef } from './plannerTypes';
 import type { Context } from './plannerContext';
 import { dirnameOf, lastSegment, stemOf, withoutEntries } from './plannerContext';
-import { MASS_DELETE_SHARE } from './plannerTypes';
+import { MASS_DELETE_MIN, MASS_DELETE_SHARE } from './plannerTypes';
 import { isCollision } from './state';
 import type { PageState } from './state';
 import { descendantsOf } from './treeIndex';
@@ -69,7 +70,7 @@ function planDeletion(ctx: Context, root: PageState, deleted: Map<CollectiveId, 
 	const total = ctx.tree.counts.get(root.collectiveId) ?? 0;
 	const count = deleted.get(root.collectiveId) ?? 0;
 	const collectiveName = ctx.remoteCollectives.get(root.collectiveId)?.collective.name ?? '';
-	const mass = total > 0 && count / total > MASS_DELETE_SHARE ? { collectiveName, deleted: count, total } : null;
+	const mass = total > 0 && count >= MASS_DELETE_MIN && count / total > MASS_DELETE_SHARE ? { collectiveName, deleted: count, total } : null;
 	const ask = ctx.behaviour.localDelete === 'ask' || mass !== null;
 	const trash = (): void => {
 		ctx.finalOps.push({
@@ -78,7 +79,6 @@ function planDeletion(ctx: Context, root: PageState, deleted: Map<CollectiveId, 
 			collectiveId: root.collectiveId,
 			descendants: descendants.map((d) => ({ pageId: d.id, hasFile: hasLocalFile(ctx, d.id) })),
 		});
-		ctx.followUp = true;
 	};
 	if (!ask) {
 		trash();
@@ -128,6 +128,8 @@ export function planRemoteDeletions(ctx: Context): void {
 			continue;
 		}
 		ctx.finalOps.push({ kind: 'removeLocal', pageId: known.pageId, collectiveId: known.collectiveId, path: file.path, mode: ctx.behaviour.remoteDelete });
+		// A kept file becomes a new page in the next pass.
+		if (ctx.behaviour.remoteDelete === 'keepUnlinked') ctx.followUp = true;
 	}
 	if (dropped.length > 0) ctx.finalOps.push({ kind: 'dropState', pageIds: dropped, collectiveIds: [] });
 }
@@ -177,7 +179,7 @@ export function planLocalMove(page: PageInfo, known: PageState, file: LocalFile,
 		tidyTo: tidy,
 		order: 0,
 	});
-	ctx.followUp = true;
+	if (parentChanged && turnsIntoFolder(ctx, placer, parent)) ctx.followUp = true;
 	return tidy ?? file.path;
 }
 
@@ -209,7 +211,6 @@ function planUnknownId(file: LocalFile, pageId: PageId, ctx: Context): void {
 	const trashed = ctx.input.remoteTrash?.get(pageId);
 	if (trashed !== undefined && ctx.scanned.has(trashed) && !ctx.blocked.has(trashed)) {
 		ctx.structureOps.push({ kind: 'restoreRemote', pageId, collectiveId: trashed, path: file.path });
-		ctx.followUp = true;
 		return;
 	}
 	ctx.skips.push({ reason: 'unknownId', pageId, path: file.path });
@@ -226,5 +227,20 @@ function planNewFile(file: LocalFile, ctx: Context, placer: Placer): void {
 	const parent = placer.parentFor(file.path, { self: null, folderPage: false });
 	if (parent === null) return;
 	ctx.structureOps.push({ kind: 'createRemote', path: file.path, title: stemOf(file.path), collectiveId, parent, fileExists: true, order: 0 });
-	ctx.followUp = true;
+	if (turnsIntoFolder(ctx, placer, parent)) ctx.followUp = true;
+}
+
+/** True for a note that lies in a folder of its own name (`Name/Name.md`): it needs no move into a folder. */
+function inOwnFolder(path: string): boolean {
+	return pathKey(stemOf(path)) === pathKey(lastSegment(dirnameOf(path)));
+}
+
+/**
+ * True if a new child makes the parent a folder page on the server (a leaf page, or a page the plan creates from a local
+ * file): its note then has to move into the folder, which the next pass does.
+ */
+function turnsIntoFolder(ctx: Context, placer: Placer, parent: ParentRef): boolean {
+	if (parent.kind === 'new') return !placer.isVirtual(parent.path) && !inOwnFolder(parent.path);
+	const page = ctx.tree.pages.get(parent.pageId)?.page;
+	return page !== undefined && page.parentId !== 0 && page.fileName !== FOLDER_NOTE;
 }

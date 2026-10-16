@@ -154,8 +154,10 @@ export const de: Record<MessageKey, string> = {
 	'sync.result.trashed': 'In den Collectives-Papierkorb: {count}',
 	'sync.result.removed': 'Hier entfernt: {count}',
 	'sync.result.restored': 'Wiederhergestellt: {count}',
-	'sync.skip.unknownId': '{count} Notizen tragen eine Seiten-ID, die es auf dem Server nicht gibt. Sie wurden nicht angetastet.',
+	'sync.skip.unknownId.one': '1 Notiz trägt eine Seiten-ID, die es auf dem Server nicht gibt. Sie wurde nicht angetastet.',
+	'sync.skip.unknownId.other': '{count} Notizen tragen eine Seiten-ID, die es auf dem Server nicht gibt. Sie wurden nicht angetastet.',
 	'sync.skip.renameForbidden': 'Du darfst ein Collective nicht umbenennen. Der Ordnername wurde zurückgesetzt.',
 	'sync.skip.deleteForbidden': 'Du darfst ein Collective nicht löschen. Der Ordner wurde wiederhergestellt.',
-	'sync.skip.remoteMoveWins': '{count} Seiten wurden auf beiden Seiten verschoben. Es gilt der Ort auf dem Server.',
+	'sync.skip.remoteMoveWins.one': '1 Seite wurde auf beiden Seiten verschoben. Es gilt der Ort auf dem Server.',
+	'sync.skip.remoteMoveWins.other': '{count} Seiten wurden auf beiden Seiten verschoben. Es gilt der Ort auf dem Server.',
 };

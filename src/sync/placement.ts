@@ -29,6 +29,11 @@ export class Placer {
 		this.indexOwners();
 	}
 
+	/** True if the page at `path` is a folder page this plan creates for a folder without a note. */
+	isVirtual(path: string): boolean {
+		return this.virtuals.has(pathKey(path));
+	}
+
 	/** The collective whose folder holds `path`, or undefined (no collective yet, or not a note path). */
 	collectiveOf(path: string): CollectiveId | undefined {
 		const slash = path.indexOf('/');

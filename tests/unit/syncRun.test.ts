@@ -19,7 +19,7 @@ import { createTranslator } from '../../src/i18n';
 import { ConfigError } from '../../src/util/errors';
 import { metaHash } from '../../src/util/hash';
 import { emptyResult } from '../../src/sync/types';
-import type { Decision } from '../../src/sync/types';
+import type { Decision, Proposal } from '../../src/sync/types';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
 
@@ -119,6 +119,13 @@ class FakeNextcloud {
 		if (req.url === OCS + '/collectives/1/pages') return ocs({ pages: this.pages });
 		if (req.url === OCS + '/collectives/1/tags') return ocs(TAGS_FIXTURE);
 		if (req.url.startsWith(DAV_ROOT)) return this.dav(req);
+		const trash = /\/collectives\/1\/pages\/(\d+)$/.exec(req.url);
+		if (req.method === 'DELETE' && trash?.[1] !== undefined) {
+			const index = this.pages.findIndex((p) => p['id'] === Number(trash[1]));
+			if (index < 0) return NOT_FOUND;
+			this.pages.splice(index, 1);
+			return ocs({});
+		}
 		return NOT_FOUND;
 	}
 
@@ -408,6 +415,69 @@ describe('runSync: initial sync into a non-empty vault', () => {
 		expect(outcome).toMatchObject({ kind: 'done', result: { created: 6, failed: 0 } });
 		expect(await vault.read('Notizen/a.md')).toBe('Meine Notiz\n');
 		for (const expected of EXPECTED_FILES) expect(vault.exists(expected.path)).toBe(true);
+	});
+});
+
+describe('runSync: questions for the user', () => {
+	async function synced(): Promise<{ server: FakeNextcloud; vault: MemoryVault }> {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		await runSync(makeDeps(server, vault, new FakeStateFile()));
+		return { server, vault };
+	}
+
+	it('asks about a page whose file the user deleted, and moves it to the Collectives trash after agreement', async () => {
+		const { server, vault } = await synced();
+		const stateFile = new FakeStateFile();
+		const deps = makeDeps(server, vault, stateFile);
+		await runSync(deps);
+		await vault.remove(PAGE_102_LOCAL);
+		const confirm = vi.fn(async (proposals: Proposal[]) => new Map<string, Decision>(proposals.map((p) => [p.id, 'accept'])));
+
+		const outcome = await runSync({ ...deps, confirm });
+
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(confirm.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ kind: 'deletePage', pageId: 102, path: PAGE_102_LOCAL })]);
+		expect(outcome).toMatchObject({ kind: 'done', result: { trashed: 1, failed: 0 } });
+		expect(server.pages.some((p) => p['id'] === 102)).toBe(false);
+		expect(storedState(stateFile).pages['102']).toBeUndefined();
+	});
+
+	it('restores the file after a refusal', async () => {
+		const { server, vault } = await synced();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		await vault.remove(PAGE_102_LOCAL);
+		const confirm = vi.fn(async (proposals: Proposal[]) => new Map<string, Decision>(proposals.map((p) => [p.id, 'reject'])));
+
+		const outcome = await runSync({ ...deps, confirm });
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { trashed: 0, created: 1, failed: 0 } });
+		expect(server.pages.some((p) => p['id'] === 102)).toBe(true);
+		expect(vault.exists(PAGE_102_LOCAL)).toBe(true);
+	});
+
+	it('treats a question the dialog left unanswered as postponed: nothing happens and the question stays open', async () => {
+		const { server, vault } = await synced();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		await runSync(deps);
+		await vault.remove(PAGE_102_LOCAL);
+
+		const outcome = await runSync({ ...deps, confirm: vi.fn(async () => new Map<string, Decision>()) });
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { trashed: 0, created: 0 } });
+		expect(outcome.kind === 'done' && outcome.skips).toContainEqual({ reason: 'deferred', proposalId: 'deletePage:102' });
+		expect(server.pages.some((p) => p['id'] === 102)).toBe(true);
+		expect(vault.exists(PAGE_102_LOCAL)).toBe(false);
+	});
+
+	it('asks nothing in an idle run', async () => {
+		const { server, vault } = await synced();
+		const confirm = vi.fn(async () => new Map<string, Decision>());
+
+		await runSync({ ...makeDeps(server, vault, new FakeStateFile()), confirm });
+
+		expect(confirm).not.toHaveBeenCalled();
 	});
 });
 

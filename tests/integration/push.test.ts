@@ -109,11 +109,19 @@ const recordingRequest: RequestFn = async (req: HttpRequest) => {
 
 function makeDeps(): SyncRunDeps {
 	return {
-		settings: { serverUrl: env.baseUrl, username: env.user, conflictStrategy: 'conflictFile' },
+		settings: {
+			serverUrl: env.baseUrl,
+			username: env.user,
+			conflictStrategy: 'conflictFile',
+			newFolderBehaviour: 'createCollective',
+			localDeleteBehaviour: 'ask',
+			remoteDeleteBehaviour: 'obsidianTrash',
+		},
 		readPassword: async () => env.password,
 		request: recordingRequest,
 		vault,
 		stateStore: stateStoreOf(),
+		confirm: async () => new Map(),
 		confirmInitialSync: async () => {
 			throw new Error('confirmInitialSync must not be called: the vault is empty in the first run');
 		},

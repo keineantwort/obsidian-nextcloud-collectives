@@ -152,9 +152,11 @@ export const en = {
 	'sync.result.trashed': 'Moved to the Collectives trash: {count}',
 	'sync.result.removed': 'Removed here: {count}',
 	'sync.result.restored': 'Restored: {count}',
-	'sync.skip.unknownId': '{count} notes carry a page ID that is not on the server. They were left alone.',
+	'sync.skip.unknownId.one': '1 note carries a page ID that is not on the server. It was left alone.',
+	'sync.skip.unknownId.other': '{count} notes carry a page ID that is not on the server. They were left alone.',
 	'sync.skip.renameForbidden': 'You may not rename a collective. The folder name was reset.',
 	'sync.skip.deleteForbidden': 'You may not delete a collective. The folder was restored.',
-	'sync.skip.remoteMoveWins': '{count} pages were moved on both sides. The server’s location was used.',
+	'sync.skip.remoteMoveWins.one': '1 page was moved on both sides. The server’s location was used.',
+	'sync.skip.remoteMoveWins.other': '{count} pages were moved on both sides. The server’s location was used.',
 } as const;
 export type MessageKey = keyof typeof en;

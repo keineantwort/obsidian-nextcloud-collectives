@@ -149,7 +149,8 @@ async function renameLocal(op: Op<'renameLocal'>, deps: ExecutorDeps, result: Sy
 	const s = requireState(deps, op.page.id);
 	const mtimeBefore = requireMtime(deps.vault, op.from);
 	const unchangedSinceSync = mtimeBefore === s.localMtime;
-	if (pathKey(op.from) !== pathKey(op.path)) {
+	const renames = pathKey(op.from) !== pathKey(op.path);
+	if (renames) {
 		if (deps.vault.exists(op.path)) throw new Error(`Target of the rename exists: ${op.path}`);
 		await deps.vault.rename(op.from, op.path);
 		deps.occupied.add(pathKey(op.path));
@@ -169,7 +170,8 @@ async function renameLocal(op: Op<'renameLocal'>, deps: ExecutorDeps, result: Sy
 		localPath: op.path,
 		localMtime: unchangedSinceSync ? mtime : s.localMtime,
 	};
-	result.moved++;
+	// A page that only moved on the server, with its file already in the right place, is not a move of the vault.
+	if (renames) result.moved++;
 	return true;
 }
 
@@ -185,7 +187,10 @@ async function createRemote(op: Op<'createRemote'>, deps: ExecutorDeps, result: 
 	scratch.refreshed.set(page.id, page);
 	noteCreated(deps, op.path, page.id);
 	// A leaf parent became a folder page on the server; the next pass moves its file into the folder.
-	if (op.parent.kind === 'page') await refreshPage(deps, op.collectiveId, op.parent.pageId);
+	if (!scratch.parentsChecked.has(parentId)) {
+		scratch.parentsChecked.add(parentId);
+		await refreshPage(deps, op.collectiveId, parentId);
+	}
 	if (op.fileExists) {
 		await linkNewPage(deps, page, op.collectiveId, op.path);
 	} else {

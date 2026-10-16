@@ -46,3 +46,53 @@ describe('createObsidianVault cachedPageId', () => {
 		expect(vault.cachedPageId('Coll/Seite.md')).toBe(asPageId(97));
 	});
 });
+
+describe('createObsidianVault rename and trash', () => {
+	function appWithFileManager(): { app: App; renamed: [string, string][]; trashed: string[] } {
+		const entries = new Set(['Coll/Alt.md', 'Coll']);
+		const renamed: [string, string][] = [];
+		const trashed: string[] = [];
+		const app = {
+			vault: {
+				getAbstractFileByPath: (path: string) => (entries.has(path) ? { path } : null),
+			},
+			fileManager: {
+				renameFile: (entry: { path: string }, to: string) => {
+					renamed.push([entry.path, to]);
+					return Promise.resolve();
+				},
+				trashFile: (entry: { path: string }) => {
+					trashed.push(entry.path);
+					return Promise.resolve();
+				},
+			},
+		};
+		return { app: app as unknown as App, renamed, trashed };
+	}
+
+	it('renames files and folders through the file manager, so that links are updated', async () => {
+		const { app, renamed } = appWithFileManager();
+		const vault = createObsidianVault(app);
+
+		await vault.rename('Coll/Alt.md', 'Coll/Neu.md');
+		await vault.rename('Coll', 'Neu');
+
+		expect(renamed).toEqual([['Coll/Alt.md', 'Coll/Neu.md'], ['Coll', 'Neu']]);
+	});
+
+	it('fails to rename what is not in the vault', async () => {
+		const { app } = appWithFileManager();
+
+		await expect(createObsidianVault(app).rename('Coll/Fehlt.md', 'Coll/Neu.md')).rejects.toThrow('not found');
+	});
+
+	it('moves files and folders to the trash through the file manager, and ignores what is gone', async () => {
+		const { app, trashed } = appWithFileManager();
+		const vault = createObsidianVault(app);
+
+		await vault.trash('Coll');
+		await vault.trash('Coll/Fehlt.md');
+
+		expect(trashed).toEqual(['Coll']);
+	});
+});

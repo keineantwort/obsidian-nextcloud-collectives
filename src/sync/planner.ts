@@ -15,7 +15,7 @@ import type { Skip, SkipReason } from './types';
 
 export type { Skip, SkipReason };
 export type { PlannerBehaviour, PlannerInput, SyncOp, SyncPlan } from './plannerTypes';
-export { DEFAULT_BEHAVIOUR, MASS_DELETE_SHARE } from './plannerTypes';
+export { DEFAULT_BEHAVIOUR, MASS_DELETE_MIN, MASS_DELETE_SHARE } from './plannerTypes';
 
 type TagEntry = PlannerInput['state']['tags'][string][number];
 

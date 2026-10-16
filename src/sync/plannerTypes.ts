@@ -21,6 +21,8 @@ export const DEFAULT_BEHAVIOUR: PlannerBehaviour = { remoteDelete: 'obsidianTras
 
 /** A run deleting more than this share of a collective's pages is stopped and asked (PLAN §16). */
 export const MASS_DELETE_SHARE = 0.2;
+/** ...but only from this many pages on: deleting one page of a tiny collective is no incident. */
+export const MASS_DELETE_MIN = 3;
 
 export interface PlannerInput {
 	state: SyncState;
