@@ -443,16 +443,25 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Remote-Scanner, Pfad-Mapping, Frontmatter, Datei-Anlage und -Update, State, Erstsync-Dialog.
 - Akzeptanz: Alle Collectives des Servers erscheinen als Ordner auf oberster Ebene mit korrekter Hierarchie; zweiter Lauf ohne Änderungen erzeugt keine Schreibzugriffe.
 - Hinweis aus dem M1-Review: ESLint-`no-restricted-imports` für `src/sync/planner.ts` und `src/mapping/**` (kein `obsidian`, keine API-Module), weil der Vitest-Stub fehlende Reinheit sonst verdeckt.
+- Hinweise aus dem M2-Review (vor/zu Beginn von M3):
+  - WebDAV-Pfade brauchen die Nextcloud-**User-ID**, nicht den Login-Namen (bei Anmeldung per E-Mail/LDAP verschieden; der Login Flow liefert nur `loginName`). User-ID per `GET /ocs/v2.php/cloud/user` (`id`) ermitteln, speichern und `WebdavClient` getrennt übergeben. Bis dahin nimmt `WebdavClient` den Login-Namen.
+  - Vor `state.ts` entscheiden, ob Collective-/Seiten-/Tag-/Anhang-IDs eigene (branded) Typen bekommen; heute sind alle `number` und vertauschbar.
+  - Strikte Prüfung in `parse.ts` auf die Felder beschränken, die der Sync wirklich braucht (z. B. `subpageOrder`, Anhang-`hasPreview`/`internalPath` prüfen), damit Formatänderungen an ungenutzten Feldern nicht den ganzen Sync stoppen.
+  - Retry pro Aufruf abschaltbar machen und einen Lauf nach dauerhaftem `NetworkError` beenden statt pro Seite bis ~2 min zu warten.
+  - Reine Hilfsfunktion für den WebDAV-Pfad einer Seite (`collectivePath` + `filePath` + `fileName`, nur für `PageInfo`, nicht `TrashedPage`).
+  - Fehlerdetails aus dem Antwort-Body (OCS `meta.message`, Sabre-Exception) credential-frei an `ServerError` hängen (auch für M6/M10).
 
 ### M4 – Push Inhalt und Konflikte
 - Lokaler Scanner, Dirty-Queue, Planner (7.3), PUT mit ETag, Konfliktdatei, Konflikt-Dialog, Statusleiste.
 - Akzeptanz: Lokale Änderung landet in Collectives; gleichzeitige Änderung erzeugt Konflikt statt Datenverlust; keine Ping-Pong-Schreibvorgänge.
 - Hinweis aus M2: ETags haben Sekundenauflösung, ein veraltetes `If-Match` in derselben Sekunde wird angenommen (204 statt 412, `docs/api-notes.md` §10a). Konflikterkennung muss das abfangen, z. B. `PUT`-Antwort mit unverändertem ETag als unsicher werten und nach > 1 s neu lesen.
 - Hinweis aus M2: Weiterleitungen von `requestUrl` (Authorization-Header an fremde Hosts?) sind ungeprüft, manuell in Obsidian prüfen (spätestens M9).
+- Hinweise aus dem M2-Review: Auch der Gegenfall der ETag-Sekundenauflösung ist abzudecken (Browser schreibt in derselben Sekunde *nach* dem Plugin-`PUT` → gleicher ETag, Änderung unsichtbar): ETags aus der Schreib-Sekunde als unbestätigt behandeln und im nächsten Lauf per GET und Hash prüfen; dafür ggf. `lastModified`/`Date` in `DavFile`/`DavWriteResult` und einen `sameEtag`-Vergleich ergänzen. Fehlt der ETag in einer erfolgreichen `PUT`-Antwort, nicht den Sync stoppen, sondern per Depth-0-`PROPFIND` nachholen.
 
 ### M5 – Struktur: Anlegen, Umbenennen, Verschieben, Löschen
 - Alle Fälle aus 7.4 inklusive Blatt→Elternseite und Collective-übergreifendem Verschieben.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
+- Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
 ### M6 – Tags und Emojis
 - Abgleich laut 7.5, Tag-Anlage, `tagsProperty`-Option.
@@ -466,10 +475,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Pull/Push/Löschen laut 9.4, Größenlimit.
 - Akzeptanz: Bild in Obsidian eingefügt erscheint in Collectives und umgekehrt; unveränderte Anhänge werden nicht erneut übertragen.
 - Hinweis aus dem M1-Review: Transport (`http.ts`) für Binärdaten erweitern (`ArrayBuffer`-Body, Antwort als `arrayBuffer`).
+- Hinweis aus dem M2-Review: `WebdavClient.put` setzt fest `text/markdown`; für Anhänge Content-Type übergeben und den Timeout (30 s) für große Dateien pro Request konfigurierbar machen.
 
 ### M9 – Automatik, Mobile, Login Flow
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
 - Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
+- Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 
 ### M10 – Härtung und Release
 - Versions-Check, Log-Modal, README (Installation, Risiken, Backup-Hinweis), `manifest.json`, `versions.json`, Release-Build; Installation per BRAT.

@@ -2,8 +2,6 @@ import { ConfigError } from '../util/errors';
 import { createApiClients } from './clients';
 import type { RequestFn } from './http';
 
-export { OCS_COLLECTIVES_BASE as COLLECTIVES_OCS_BASE } from './ocsClient';
-
 export interface ConnectionCredentials { serverUrl: string; username: string; appPassword: string; }
 export interface ConnectionResult { collectiveCount: number; }
 

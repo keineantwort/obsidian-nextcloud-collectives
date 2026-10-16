@@ -34,7 +34,10 @@ export interface PageInfo {
 	trashTimestamp: number | null;
 }
 
-/** Page from the trash list (`GET …/pages/trash`). The server sends `collectivePath: null` there (M2); all other fields as in PageInfo. */
+/**
+ * Page from the trash list (`GET …/pages/trash`). The server sends `collectivePath: null` there (M2), and for leaf pages
+ * `fileName` carries a `.d<timestamp>` suffix (M0). Never build a WebDAV path from it; restore the page first.
+ */
 export interface TrashedPage extends Omit<PageInfo, 'collectivePath'> {
 	collectivePath: string | null;
 }

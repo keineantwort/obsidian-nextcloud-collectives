@@ -35,7 +35,9 @@ export class CredentialsStore {
 	 * (e.g. one chosen earlier in the Obsidian UI or planted in data.json) is replaced by a new one.
 	 */
 	store(password: string): Promise<void> {
-		const write = this.writePassword(password);
+		// Writes run one after another: an earlier write still persisting a new secret ID must not finish
+		// after a later one and put the older password back.
+		const write = this.pendingWrite.then(() => this.writePassword(password));
 		this.pendingWrite = write.catch(() => undefined);
 		return write;
 	}

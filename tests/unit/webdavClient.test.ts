@@ -179,6 +179,18 @@ describe('path encoding', () => {
 
 		expect(onlyCall(fake).url).toBe(BASE_URL + FILES_ROOT + '/.Collectives/Handbuch/Onboarding.md');
 	});
+
+	it.each(['../bob/x.md', '.Collectives/../../x.md', './Readme.md', '..'])(
+		'rejects the dot segments in %j without sending a request, so no request leaves the files root',
+		async (path) => {
+			const fake = fakeDav(responseFromFixture(readFixture('dav-get-empty-page.json')));
+
+			const err = await captureError(davClient(fake).delete(path));
+
+			expect(err).toBeInstanceOf(Error);
+			expect(fake.calls).toHaveLength(0);
+		},
+	);
 });
 
 describe('put', () => {
@@ -248,6 +260,14 @@ describe('propfind', () => {
 		expect(call.headers['Depth']).toBe('1');
 		expect(call.body).toContain('getetag');
 		expect(call.body).toContain('fileid');
+	});
+
+	it('rejects a 2xx answer other than 207 Multi-Status with ApiChangedError', async () => {
+		const fake = fakeDav({ status: 200, headers: {}, text: readPropfindXml() });
+
+		const err = await captureError(davClient(fake).propfind('.Collectives/Handbuch', 1));
+
+		expect(err).toBeInstanceOf(ApiChangedError);
 	});
 
 	it('sends Depth 0 when asked for depth 0', async () => {
@@ -331,6 +351,37 @@ describe('parsePropfind', () => {
 
 		expect(onlyCall(fake).url).toBe(`${BASE_URL}/nextcloud/remote.php/dav/files/alice/.Collectives/Handbuch`);
 		expect(entries.map((entry) => entry.path)).toEqual(EXPECTED_PATHS);
+	});
+
+	it('rejects a document that keeps its multistatus root but contains a parsererror element', () => {
+		// Chromium inserts <parsererror> into a truncated document instead of replacing the root (jsdom replaces it).
+		const xml = readPropfindXml().replace(
+			'</d:multistatus>',
+			'<parsererror xmlns="http://www.mozilla.org/newlayout/xml/parsererror.xml">truncated</parsererror></d:multistatus>',
+		);
+
+		const err = captureSync(() => parsePropfind(xml, FILES_ROOT));
+
+		expect(err).toBeInstanceOf(ApiChangedError);
+	});
+
+	it('rejects an href of another user whose name only starts with the own username', () => {
+		const xml = readPropfindXml().replace('/remote.php/dav/files/alice/.Collectives/Handbuch/Readme.md', '/remote.php/dav/files/alice2/x.md');
+
+		const err = captureSync(() => parsePropfind(xml, FILES_ROOT));
+
+		expect(err).toBeInstanceOf(ApiChangedError);
+	});
+
+	it.each([
+		['a dot-dot segment', '/remote.php/dav/files/alice/../bob/x.md'],
+		['an encoded slash inside a segment', '/remote.php/dav/files/alice/.Collectives/a%2Fb.md'],
+	])('rejects an href with %s with ApiChangedError', (_label, href) => {
+		const xml = readPropfindXml().replace('/remote.php/dav/files/alice/.Collectives/Handbuch/Readme.md', href);
+
+		const err = captureSync(() => parsePropfind(xml, FILES_ROOT));
+
+		expect(err).toBeInstanceOf(ApiChangedError);
 	});
 
 	it('rejects malformed XML with ApiChangedError', () => {

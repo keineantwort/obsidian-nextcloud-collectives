@@ -169,6 +169,45 @@ describe('CredentialsStore.store', () => {
 	});
 });
 
+describe('CredentialsStore.store – overlapping calls', () => {
+	it('keeps the password of the later call when a second store starts while the new secret ID is still being saved', async () => {
+		// Like the plugin: the ID is in the settings at once, persisting it to disk takes a while.
+		const saveGate = deferred();
+		const secrets = new Map<string, string>();
+		let heldId = '';
+		const store = new CredentialsStore(
+			{ setSecret: (id, value) => void secrets.set(id, value), getSecret: (id) => secrets.get(id) ?? null },
+			{
+				getSecretId: () => heldId,
+				async setSecretId(id: string): Promise<void> {
+					heldId = id;
+					await saveGate.promise;
+				},
+			},
+			() => FIXED_BYTES,
+		);
+
+		const first = store.store('pw-old');
+		const second = store.store('pw-new');
+		saveGate.resolve();
+		await Promise.all([first, second]);
+
+		expect(secrets.get(GENERATED_ID)).toBe('pw-new');
+		expect(await store.read()).toBe('pw-new');
+	});
+
+	it('still stores a later password when an earlier store failed', async () => {
+		const h = harness({ secretId: OWN_ID, setSecretError: new Error('storage locked') });
+
+		const first = h.store.store('pw-1');
+		const second = h.store.store('pw-2');
+
+		await expect(first).rejects.toThrow('storage locked');
+		await second;
+		expect(h.secrets.get(OWN_ID)).toBe('pw-2');
+	});
+});
+
 describe('CredentialsStore.hasPassword', () => {
 	it.each<[string, FakeOptions]>([
 		['no ID is set', {}],

@@ -99,16 +99,32 @@ function toUserPath(href: string, filesRootPath: string): string {
 	return rest.replace(/^\/+|\/+$/g, '');
 }
 
+/** Decodes each '/'-separated segment. Dot segments and encoded slashes would change the path structure. */
 function decodeSegments(path: string): string {
-	try {
-		return path.split('/').map((segment) => decodeURIComponent(segment)).join('/');
-	} catch (err) {
-		throw new ApiChangedError('PROPFIND href is not valid percent-encoding', { cause: err });
-	}
+	return path.split('/').map((segment) => {
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(segment);
+		} catch (err) {
+			throw new ApiChangedError('PROPFIND href is not valid percent-encoding', { cause: err });
+		}
+		if (isDotSegment(decoded) || decoded.includes('/')) throw new ApiChangedError('PROPFIND href has a dot segment or an encoded slash');
+		return decoded;
+	}).join('/');
 }
 
+/**
+ * Encodes a user-relative path segment by segment; empty segments are dropped.
+ * '.' and '..' are rejected: URL normalization would resolve them and the request could leave the files root.
+ */
 function encodeSegments(path: string): string {
-	return path.split('/').filter((segment) => segment !== '').map((segment) => encodeURIComponent(segment)).join('/');
+	const segments = path.split('/').filter((segment) => segment !== '');
+	if (segments.some(isDotSegment)) throw new Error('Invalid WebDAV path');
+	return segments.map((segment) => encodeURIComponent(segment)).join('/');
+}
+
+function isDotSegment(segment: string): boolean {
+	return segment === '.' || segment === '..';
 }
 
 /** Returns the ETag header of a response, or ApiChangedError if the server did not send one. */
