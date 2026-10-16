@@ -9,8 +9,8 @@ import { StateStore } from '../../src/sync/stateStore';
 import type { StateFile } from '../../src/sync/stateStore';
 import { emptyState, serializeSyncState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
-import { runPull } from '../../src/sync/pullRun';
-import type { PullRunDeps } from '../../src/sync/pullRun';
+import { runSync } from '../../src/sync/syncRun';
+import type { SyncRunDeps } from '../../src/sync/syncRun';
 import { createTranslator } from '../../src/i18n';
 import { ConfigError } from '../../src/util/errors';
 import { metaHash } from '../../src/util/hash';
@@ -132,7 +132,7 @@ class FakeStateFile implements StateFile {
 	}
 }
 
-function makeDeps(server: FakeNextcloud, vault: MemoryVault, stateFile: FakeStateFile, over: Partial<PullRunDeps> = {}): PullRunDeps {
+function makeDeps(server: FakeNextcloud, vault: MemoryVault, stateFile: FakeStateFile, over: Partial<SyncRunDeps> = {}): SyncRunDeps {
 	return {
 		settings: { serverUrl: BASE, username: 'alice' },
 		readPassword: async () => PASSWORD,
@@ -176,13 +176,13 @@ function storedState(stateFile: FakeStateFile): SyncState {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('runPull: first sync into an empty vault', () => {
+describe('runSync: first sync into an empty vault', () => {
 	it('creates each remote page as a Markdown file with its nc_page_id and stores the state', async () => {
 		const server = new FakeNextcloud();
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
 
-		const outcome = await runPull(makeDeps(server, vault, stateFile));
+		const outcome = await runSync(makeDeps(server, vault, stateFile));
 
 		expect(outcome).toMatchObject({
 			kind: 'done',
@@ -200,7 +200,7 @@ describe('runPull: first sync into an empty vault', () => {
 	it('stores the metadata hash of the remote title for the landing page, whose nc_title stays absent', async () => {
 		const stateFile = new FakeStateFile();
 
-		await runPull(makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile));
+		await runSync(makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile));
 
 		expect(storedState(stateFile).pages['92']?.metaHash).toBe(await metaHash('Landing page', null, []));
 	});
@@ -208,7 +208,7 @@ describe('runPull: first sync into an empty vault', () => {
 	it('uses the Nextcloud user ID in every WebDAV path, not the login name', async () => {
 		const server = new FakeNextcloud();
 
-		await runPull(makeDeps(server, new MemoryVault(), new FakeStateFile()));
+		await runSync(makeDeps(server, new MemoryVault(), new FakeStateFile()));
 
 		const dav = server.davRequests();
 		expect(dav).toHaveLength(DAV_FILES.length);
@@ -219,24 +219,24 @@ describe('runPull: first sync into an empty vault', () => {
 	it('does not ask for the initial-sync confirmation when the vault is empty', async () => {
 		const confirmInitialSync = vi.fn(async () => true);
 
-		await runPull(makeDeps(new FakeNextcloud(), new MemoryVault(), new FakeStateFile(), { confirmInitialSync }));
+		await runSync(makeDeps(new FakeNextcloud(), new MemoryVault(), new FakeStateFile(), { confirmInitialSync }));
 
 		expect(confirmInitialSync).not.toHaveBeenCalled();
 	});
 });
 
-describe('runPull: second run', () => {
+describe('runSync: second run', () => {
 	it('writes no file and no state and makes no WebDAV request when the remote is unchanged', async () => {
 		const server = new FakeNextcloud();
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
 		const deps = makeDeps(server, vault, stateFile);
-		await runPull(deps);
+		await runSync(deps);
 		const vaultWrites = vault.writes;
 		const stateWrites = stateFile.writes;
 		const callsBefore = server.calls.length;
 
-		const outcome = await runPull(deps);
+		const outcome = await runSync(deps);
 
 		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
 		expect(vault.writes).toBe(vaultWrites);
@@ -249,7 +249,7 @@ describe('runPull: second run', () => {
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
 		const deps = makeDeps(server, vault, stateFile);
-		await runPull(deps);
+		await runSync(deps);
 		const changed = server.pages.find((p) => p['id'] === 102);
 		if (changed === undefined) throw new Error('fixture has no page 102');
 		changed['timestamp'] = 1792139000;
@@ -258,7 +258,7 @@ describe('runPull: second run', () => {
 		server.davFiles.set('.Collectives/Handbuch/Per WebDAV.md', { content: newText, etag: '"etag-102-v2"' });
 		const writesBefore = vault.writes;
 
-		const outcome = await runPull(deps);
+		const outcome = await runSync(deps);
 
 		expect(outcome).toMatchObject({
 			kind: 'done',
@@ -269,14 +269,14 @@ describe('runPull: second run', () => {
 	});
 });
 
-describe('runPull: initial sync into a non-empty vault', () => {
+describe('runSync: initial sync into a non-empty vault', () => {
 	it('asks for confirmation and writes nothing when the user cancels', async () => {
 		const vault = new MemoryVault();
 		vault.seed('Notizen/a.md', 'Meine Notiz\n');
 		const stateFile = new FakeStateFile();
 		const confirmInitialSync = vi.fn(async () => false);
 
-		const outcome = await runPull(makeDeps(new FakeNextcloud(), vault, stateFile, { confirmInitialSync }));
+		const outcome = await runSync(makeDeps(new FakeNextcloud(), vault, stateFile, { confirmInitialSync }));
 
 		expect(confirmInitialSync).toHaveBeenCalledTimes(1);
 		expect(outcome).toEqual({ kind: 'cancelled' });
@@ -290,7 +290,7 @@ describe('runPull: initial sync into a non-empty vault', () => {
 		vault.seed('Notizen/a.md', 'Meine Notiz\n');
 		const confirmInitialSync = vi.fn(async () => true);
 
-		const outcome = await runPull(makeDeps(new FakeNextcloud(), vault, new FakeStateFile(), { confirmInitialSync }));
+		const outcome = await runSync(makeDeps(new FakeNextcloud(), vault, new FakeStateFile(), { confirmInitialSync }));
 
 		expect(confirmInitialSync).toHaveBeenCalledTimes(1);
 		expect(outcome).toMatchObject({ kind: 'done', result: { created: 6, failed: 0 } });
@@ -299,7 +299,7 @@ describe('runPull: initial sync into a non-empty vault', () => {
 	});
 });
 
-describe('runPull: refusals and errors', () => {
+describe('runSync: refusals and errors', () => {
 	it('returns serverMismatch and writes nothing when the stored state belongs to another server', async () => {
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
@@ -330,7 +330,7 @@ describe('runPull: refusals and errors', () => {
 		stateFile.text = serializeSyncState(other);
 		const storedBefore = stateFile.text;
 
-		const outcome = await runPull(makeDeps(new FakeNextcloud(), vault, stateFile));
+		const outcome = await runSync(makeDeps(new FakeNextcloud(), vault, stateFile));
 
 		expect(outcome).toEqual({ kind: 'serverMismatch', stateServer: 'https://other.example.com' });
 		expect(vault.writes).toBe(0);
@@ -341,13 +341,13 @@ describe('runPull: refusals and errors', () => {
 	it('returns accountMismatch with the stored user and server and writes nothing when the state belongs to another account on the same server', async () => {
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
-		await runPull(makeDeps(new FakeNextcloud(), vault, stateFile));
+		await runSync(makeDeps(new FakeNextcloud(), vault, stateFile));
 		const parsed = JSON.parse(stateFile.text ?? '') as SyncState;
 		stateFile.text = serializeSyncState({ ...parsed, user: 'bob-id' });
 		const storedBefore = stateFile.text;
 		const writesBefore = vault.writes;
 
-		const outcome = await runPull(makeDeps(new FakeNextcloud(), vault, stateFile));
+		const outcome = await runSync(makeDeps(new FakeNextcloud(), vault, stateFile));
 
 		expect(outcome).toEqual({ kind: 'accountMismatch', stateUser: 'bob-id', stateServer: BASE });
 		expect(vault.writes).toBe(writesBefore);
@@ -357,7 +357,7 @@ describe('runPull: refusals and errors', () => {
 	it('rejects with ConfigError for appPassword when no app password is stored, before any request', async () => {
 		const server = new FakeNextcloud();
 
-		const err: unknown = await runPull(makeDeps(server, new MemoryVault(), new FakeStateFile(), { readPassword: async () => null })).then(
+		const err: unknown = await runSync(makeDeps(server, new MemoryVault(), new FakeStateFile(), { readPassword: async () => null })).then(
 			() => null,
 			(e: unknown) => e,
 		);
@@ -368,7 +368,7 @@ describe('runPull: refusals and errors', () => {
 	});
 });
 
-describe('runPull: several runs over colliding, renamed and sibling pages', () => {
+describe('runSync: several runs over colliding, renamed and sibling pages', () => {
 	it('keeps the nc_title of a remaining sibling whose sibling disappeared remotely, and writes nothing', async () => {
 		const server = new FakeNextcloud();
 		const vault = new MemoryVault();
@@ -377,13 +377,13 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 		server.pages.push(rawPage(200, 'Notes', 'Notes.md', 92), rawPage(201, 'Notes', 'Notes (2).md', 92));
 		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes A'), etag: '"etag-200"' });
 		server.davFiles.set('.Collectives/Handbuch/Notes (2).md', { content: remoteText('Notes B'), etag: '"etag-201"' });
-		await runPull(deps);
+		await runSync(deps);
 		expect(await vault.read('Handbuch/Notes (2).md')).toContain('nc_title: "Notes"');
 
 		server.pages.splice(server.pages.findIndex((p) => p['id'] === 200), 1);
 		const writesBefore = vault.writes;
 
-		const outcome = await runPull(deps);
+		const outcome = await runSync(deps);
 
 		expect(outcome).toEqual({
 			kind: 'done',
@@ -400,7 +400,7 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 		const deps = makeDeps(server, vault, new FakeStateFile());
 		server.pages.push(rawPage(200, 'Notes', 'Notes.md', 92));
 		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes'), etag: '"etag-200a"' });
-		await runPull(deps);
+		await runSync(deps);
 
 		const renamed = serverPage(server, 200);
 		renamed['title'] = 'Neu';
@@ -410,7 +410,7 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 		server.pages.push(rawPage(201, 'Notes', 'Notes.md', 92));
 		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes neu'), etag: '"etag-201"' });
 
-		const outcome = await runPull(deps);
+		const outcome = await runSync(deps);
 
 		expect(outcome).toMatchObject({ kind: 'done', result: { created: 1, conflicts: 0, failed: 0 } });
 		expect(readPageId(await vault.read('Handbuch/Notes.md'))).toBe(200);
@@ -426,7 +426,7 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 		const userText = 'Mein eigener Text\n';
 		vault.seed('Handbuch/Per WebDAV.md', userText);
 
-		const first = await runPull(deps);
+		const first = await runSync(deps);
 
 		expect(first).toMatchObject({ kind: 'done', result: { conflicts: 1, failed: 0 } });
 		expect(storedState(stateFile).pages['102']?.status).toBe('collision');
@@ -435,7 +435,7 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 
 		const writesBefore = vault.writes;
 		const stateWritesBefore = stateFile.writes;
-		const second = await runPull(deps);
+		const second = await runSync(deps);
 
 		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
 		expect(vault.writes).toBe(writesBefore);
@@ -443,7 +443,7 @@ describe('runPull: several runs over colliding, renamed and sibling pages', () =
 
 		serverPage(server, 102)['timestamp'] = 1792139000;
 		server.davFiles.set('.Collectives/Handbuch/Per WebDAV.md', { content: userText, etag: '"etag-102-v3"' });
-		const third = await runPull(deps);
+		const third = await runSync(deps);
 
 		expect(third).toMatchObject({ kind: 'done', result: { conflicts: 0, failed: 0 } });
 		expect(readPageId(await vault.read('Handbuch/Per WebDAV.md'))).toBe(102);

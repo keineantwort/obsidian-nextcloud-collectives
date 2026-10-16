@@ -10,22 +10,22 @@ import type { Translator } from '../i18n';
 import { ConfigError } from '../util/errors';
 import { metaHash } from '../util/hash';
 import type { Logger } from '../util/logger';
-import { executePull } from './executor';
+import { executeSync } from './executor';
 import type { VaultWriter } from './executor';
 import { scanLocal } from './localScanner';
 import type { VaultReader } from './localScanner';
-import { planPull } from './planner';
+import { planSync } from './planner';
 import type { PlannerInput } from './planner';
 import { scanRemote } from './remoteScanner';
 import type { RemoteCollective } from './remoteScanner';
 import { emptyState } from './state';
 import type { SyncState } from './state';
 import type { StateStore } from './stateStore';
-import type { PullRunOutcome, Skip } from './types';
+import type { SyncRunOutcome, Skip } from './types';
 
-export type { PullRunOutcome } from './types';
+export type { SyncRunOutcome } from './types';
 
-export interface PullRunDeps {
+export interface SyncRunDeps {
 	settings: { serverUrl: string; username: string };
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
@@ -39,7 +39,7 @@ export interface PullRunDeps {
 }
 
 /** Runs one pull. Nothing is written before the config checks and the initial-sync confirmation have passed. */
-export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
+export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	const serverUrl = normalizeServerUrl(deps.settings.serverUrl);
 	const username = deps.settings.username.trim();
 	if (username === '') throw new ConfigError('username', 'missing');
@@ -74,10 +74,10 @@ export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
 	const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 
 	const input: PlannerInput = { state, remote, local, remoteMeta, paths };
-	const plan = planPull(input);
+	const plan = planSync(input);
 	for (const skip of plan.skips) logSkip(skip, deps.log);
 
-	const result = await executePull(plan, {
+	const result = await executeSync(plan, {
 		vault: deps.vault,
 		webdav: clients.webdav,
 		state,

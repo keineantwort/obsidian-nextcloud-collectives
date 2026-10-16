@@ -30,7 +30,7 @@ interface PageOpBase {
 	metaHash: string;
 }
 
-export type PullOp =
+export type SyncOp =
 	| { kind: 'ensureFolder'; path: string }
 	| { kind: 'saveCollective'; collective: CollectiveState }
 	| { kind: 'saveTags'; collectiveId: CollectiveId; tags: SyncState['tags'][string] }
@@ -46,12 +46,12 @@ export type PullOp =
 	/** Known page, only metadata changed remotely. */
 	| ({ kind: 'updateMeta' } & PageOpBase);
 
-export interface PullPlan {
-	ops: PullOp[];
+export interface SyncPlan {
+	ops: SyncOp[];
 	skips: Skip[];
 }
 
-type PageOp = Extract<PullOp, { page: PageInfo }>;
+type PageOp = Extract<SyncOp, { page: PageInfo }>;
 
 /** Shared state while planning one run. */
 interface Context {
@@ -70,7 +70,7 @@ interface Context {
  * Plans one pull run (PLAN §6.3). Operations are ordered: folders (parents first), collective saves, tag saves,
  * then page operations by target depth and path. An unchanged remote yields no operations and no skips.
  */
-export function planPull(input: PlannerInput): PullPlan {
+export function planSync(input: PlannerInput): SyncPlan {
 	const { state, remote, local, paths } = input;
 	const skips: Skip[] = [];
 	const scanned = new Set<CollectiveId>(remote.collectives.map((rc) => rc.collective.id));
@@ -102,11 +102,11 @@ export function planPull(input: PlannerInput): PullPlan {
 	};
 
 	const folderPaths = new Set<string>();
-	const collectiveSaves: PullOp[] = [];
-	const tagSaves: PullOp[] = [];
+	const collectiveSaves: SyncOp[] = [];
+	const tagSaves: SyncOp[] = [];
 	for (const rc of remote.collectives) {
 		const planned = paths.collectiveFolders.get(rc.collective.id);
-		if (planned === undefined) throw new Error(`planPull: no local folder planned for collective ${rc.collective.id}`);
+		if (planned === undefined) throw new Error(`planSync: no local folder planned for collective ${rc.collective.id}`);
 		const folder = canonicalPath(planned, local.paths);
 		const known = state.collectives[String(rc.collective.id)];
 		if (known === undefined) {
@@ -142,7 +142,7 @@ export function planPull(input: PlannerInput): PullPlan {
 	}
 
 	const pageOps = [...ctx.pageOps].sort((a, b) => depth(a.path) - depth(b.path) || comparePaths(a.path, b.path));
-	const ops: PullOp[] = [
+	const ops: SyncOp[] = [
 		...ensureFolderOps(folderPaths, pageOps, local.occupied),
 		...collectiveSaves,
 		...tagSaves,
@@ -158,7 +158,7 @@ function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context
 		return;
 	}
 	const remoteMeta = ctx.input.remoteMeta.get(page.id);
-	if (remoteMeta === undefined) throw new Error(`planPull: no metadata planned for page ${page.id}`);
+	if (remoteMeta === undefined) throw new Error(`planSync: no metadata planned for page ${page.id}`);
 	const known = ctx.input.state.pages[String(page.id)];
 	if (known === undefined) {
 		planNewPage(page, remoteMeta, ctx);
@@ -180,7 +180,7 @@ function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string },
 		return;
 	}
 	const target = ctx.input.paths.targets.get(page.id);
-	if (target === undefined) throw new Error(`planPull: no target path planned for page ${page.id}`);
+	if (target === undefined) throw new Error(`planSync: no target path planned for page ${page.id}`);
 	const { local } = ctx.input;
 	const path = canonicalPath(target.path, local.paths);
 	const key = pathKey(path);
@@ -237,7 +237,7 @@ function findKnownFile(known: PageState, ctx: Context): LocalFile | undefined {
 }
 
 /** Folder operations: new collective folders and the parent folders of created files, minus those already in the vault. */
-function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): PullOp[] {
+function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): SyncOp[] {
 	const folders = new Set(folderPaths);
 	for (const op of pageOps) {
 		if (op.kind !== 'create') continue;
@@ -249,7 +249,7 @@ function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: 
 	return [...folders]
 		.filter((path) => !occupied.has(pathKey(path)))
 		.sort((a, b) => depth(a) - depth(b) || comparePaths(a, b))
-		.map((path): PullOp => ({ kind: 'ensureFolder', path }));
+		.map((path): SyncOp => ({ kind: 'ensureFolder', path }));
 }
 
 function groupByPageId(files: LocalFile[]): Map<PageId, LocalFile[]> {

@@ -14,10 +14,10 @@ export type SkipReason =
 export interface Skip { reason: SkipReason; pageId?: PageId; collectiveId?: CollectiveId; path?: string; }
 
 /** Counters of one pull run. */
-export interface PullResult { created: number; updated: number; metaUpdated: number; conflicts: number; unchanged: number; failed: number; }
+export interface SyncResult { created: number; updated: number; metaUpdated: number; conflicts: number; unchanged: number; failed: number; }
 
-export type PullRunOutcome =
-	| { kind: 'done'; result: PullResult; skips: Skip[] }
+export type SyncRunOutcome =
+	| { kind: 'done'; result: SyncResult; skips: Skip[] }
 	| { kind: 'cancelled' }
 	| { kind: 'serverMismatch'; stateServer: string }
 	/** The state belongs to another Nextcloud account on the same server. Nothing was changed. */

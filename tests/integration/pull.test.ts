@@ -6,8 +6,8 @@ import type { Collective, PageInfo } from '../../src/api/types';
 import { createTranslator } from '../../src/i18n';
 import { readPageId, toRemote } from '../../src/mapping/frontmatter';
 import { remotePagePath, sanitizeName } from '../../src/mapping/paths';
-import { runPull, type PullRunDeps, type PullRunOutcome } from '../../src/sync/pullRun';
-import type { PullResult } from '../../src/sync/types';
+import { runSync, type SyncRunDeps, type SyncRunOutcome } from '../../src/sync/syncRun';
+import type { SyncResult } from '../../src/sync/types';
 import { StateStore, type StateFile } from '../../src/sync/stateStore';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
@@ -94,7 +94,7 @@ const recordingRequest: RequestFn = async (req: HttpRequest) => {
 	return fetchRequest(req);
 };
 
-function makeDeps(): PullRunDeps {
+function makeDeps(): SyncRunDeps {
 	return {
 		settings: { serverUrl: env.baseUrl, username: env.user },
 		readPassword: async () => env.password,
@@ -110,8 +110,8 @@ function makeDeps(): PullRunDeps {
 }
 
 /** Runs one pull and returns its counters; fails if the run did not end with kind 'done'. */
-async function pull(): Promise<PullResult> {
-	const outcome: PullRunOutcome = await runPull(makeDeps());
+async function pull(): Promise<SyncResult> {
+	const outcome: SyncRunOutcome = await runSync(makeDeps());
 	if (outcome.kind !== 'done') throw new Error(`Pull ended with "${outcome.kind}" instead of "done"`);
 	return outcome.result;
 }

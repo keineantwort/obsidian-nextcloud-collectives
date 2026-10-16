@@ -1,5 +1,5 @@
 import type { Translator } from '../i18n';
-import type { PullResult, PullRunOutcome } from '../sync/types';
+import type { SyncResult, SyncRunOutcome } from '../sync/types';
 import { describeConnectionError } from '../settings/connectionMessages';
 import { ApiChangedError, AuthError, ConfigError } from '../util/errors';
 
@@ -11,7 +11,7 @@ export interface SyncNoticeSpec { lines: string[]; level: NoticeLevel; }
 const DETAIL_SEPARATOR = ' · ';
 
 /** Notice text for a finished pull. Conflicts and failures get their own sentence on a separate line. */
-export function formatPullResult(result: PullResult, t: Translator): SyncNoticeSpec {
+export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeSpec {
 	const changed = result.created + result.updated + result.metaUpdated + result.conflicts + result.failed;
 	const lines: string[] = [];
 	if (changed === 0) {
@@ -38,17 +38,17 @@ export function formatPullResult(result: PullResult, t: Translator): SyncNoticeS
 	return { lines, level };
 }
 
-/** Notice for every non-throwing outcome of runPull(). */
-export function describePullOutcome(outcome: PullRunOutcome, t: Translator): SyncNoticeSpec {
+/** Notice for every non-throwing outcome of runSync(). */
+export function describeSyncOutcome(outcome: SyncRunOutcome, t: Translator): SyncNoticeSpec {
 	switch (outcome.kind) {
-		case 'done': return formatPullResult(outcome.result, t);
+		case 'done': return formatSyncResult(outcome.result, t);
 		case 'cancelled': return { lines: [t('sync.cancelled')], level: 'info' };
 		case 'serverMismatch': return { lines: [t('sync.serverMismatch', { server: outcome.stateServer })], level: 'error' };
 		case 'accountMismatch': return { lines: [t('sync.accountMismatch', { user: outcome.stateUser })], level: 'error' };
 	}
 }
 
-/** Notice for an error thrown by runPull(). Never includes raw error messages (they may contain credentials). */
+/** Notice for an error thrown by runSync(). Never includes raw error messages (they may contain credentials). */
 export function describeSyncError(err: unknown, t: Translator): SyncNoticeSpec {
 	const reason = err instanceof ApiChangedError ? t('sync.error.apiChanged') : describeConnectionError(err, t, 'sync.error.unknown');
 	const lines = [t('sync.error.stopped', { reason })];

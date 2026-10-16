@@ -8,12 +8,12 @@ import { conflictPath, ncTitleFor, pathKey, remotePagePath } from '../mapping/pa
 import { sha256Hex } from '../util/hash';
 import { isRunFatal } from '../util/errors';
 import type { Logger } from '../util/logger';
-import type { PullOp, PullPlan } from './planner';
+import type { SyncOp, SyncPlan } from './planner';
 import { isCollision } from './state';
 import type { PageState, PageStatus, SyncState } from './state';
-import type { PullResult } from './types';
+import type { SyncResult } from './types';
 
-export type { PullResult } from './types';
+export type { SyncResult } from './types';
 
 /** Vault writes used by the executor; implemented over app.vault in obsidianVault.ts. */
 export interface VaultWriter {
@@ -138,8 +138,8 @@ function requireState(deps: ExecutorDeps, pageId: number): PageState {
  * Applies the plan. Operations run in order. A failing page operation is counted and logged (pageId and error class
  * only), then the run continues. Errors for which isRunFatal is true abort the run and are rethrown.
  */
-export async function executePull(plan: PullPlan, deps: ExecutorDeps): Promise<PullResult> {
-	const result: PullResult = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<SyncResult> {
+	const result: SyncResult = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
 	for (const op of plan.ops) {
 		let changedState: boolean;
 		try {
@@ -160,7 +160,7 @@ export async function executePull(plan: PullPlan, deps: ExecutorDeps): Promise<P
 }
 
 /** Runs one operation and updates the counters. Returns true if the sync state changed. */
-async function applyOp(op: PullOp, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function applyOp(op: SyncOp, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	switch (op.kind) {
 		case 'ensureFolder':
 			if (!deps.vault.exists(op.path)) await deps.vault.createFolder(op.path);
@@ -185,7 +185,7 @@ async function applyOp(op: PullOp, deps: ExecutorDeps, result: PullResult): Prom
 	}
 }
 
-async function createPage(op: Extract<PullOp, { kind: 'create' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function createPage(op: Extract<SyncOp, { kind: 'create' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
 	const mtime = await deps.vault.create(op.path, toLocal(content, metaFor(op.page, op.meta, op.path)));
 	deps.occupied.add(pathKey(op.path));
@@ -202,7 +202,7 @@ async function createPage(op: Extract<PullOp, { kind: 'create' }>, deps: Executo
 	return true;
 }
 
-async function createConflict(op: Extract<PullOp, { kind: 'createConflict' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function createConflict(op: Extract<SyncOp, { kind: 'createConflict' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
 	const copyPath = await writeConflictCopy(deps, op.path, content);
 	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, etag, {
@@ -219,7 +219,7 @@ async function createConflict(op: Extract<PullOp, { kind: 'createConflict' }>, d
 	return true;
 }
 
-async function adoptPage(op: Extract<PullOp, { kind: 'adopt' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
 	const localText = await deps.vault.read(op.path);
 	const remoteCanonical = canonicalRemote(content);
@@ -263,7 +263,7 @@ async function adoptPage(op: Extract<PullOp, { kind: 'adopt' }>, deps: ExecutorD
 	return true;
 }
 
-async function updatePage(op: Extract<PullOp, { kind: 'update' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function updatePage(op: Extract<SyncOp, { kind: 'update' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	const s = requireState(deps, op.page.id);
 	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
 	const remoteCanonical = canonicalRemote(content);
@@ -322,11 +322,11 @@ async function updatePage(op: Extract<PullOp, { kind: 'update' }>, deps: Executo
  * text. Otherwise the remote text becomes a conflict copy and the state stays 'collision'.
  */
 async function updateCollision(
-	op: Extract<PullOp, { kind: 'update' }>,
+	op: Extract<SyncOp, { kind: 'update' }>,
 	s: PageState,
 	remote: { etag: string; content: string; remoteHash: string; meta: NcMeta },
 	deps: ExecutorDeps,
-	result: PullResult,
+	result: SyncResult,
 	now: number,
 ): Promise<boolean> {
 	const localText = await deps.vault.read(op.path);
@@ -352,11 +352,11 @@ async function updateCollision(
  * A collision stays a collision; a linked page becomes a conflict.
  */
 async function recordUpdateConflict(
-	op: Extract<PullOp, { kind: 'update' }>,
+	op: Extract<SyncOp, { kind: 'update' }>,
 	s: PageState,
 	remote: { etag: string; content: string },
 	deps: ExecutorDeps,
-	result: PullResult,
+	result: SyncResult,
 	now: number,
 ): Promise<boolean> {
 	const copyPath = await writeConflictCopy(deps, op.path, remote.content);
@@ -374,7 +374,7 @@ async function recordUpdateConflict(
 	return true;
 }
 
-async function updateMeta(op: Extract<PullOp, { kind: 'updateMeta' }>, deps: ExecutorDeps, result: PullResult): Promise<boolean> {
+async function updateMeta(op: Extract<SyncOp, { kind: 'updateMeta' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	const s = requireState(deps, op.page.id);
 	if (isCollision(s)) {
 		// The file is the user's own; only the expected metadata moves on.

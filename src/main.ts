@@ -6,11 +6,11 @@ import { DEFAULT_SETTINGS, NcSettings } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
 import { createObsidianVault } from './sync/obsidianVault';
-import { runPull } from './sync/pullRun';
+import { runSync } from './sync/syncRun';
 import { StateStore, type StateFile } from './sync/stateStore';
 import { showSyncNotice } from './ui/showSyncNotice';
 import { confirmInitialSync } from './ui/initialSyncModal';
-import { alreadyRunningNotice, describePullOutcome, describeSyncError } from './ui/syncNotices';
+import { alreadyRunningNotice, describeSyncOutcome, describeSyncError } from './ui/syncNotices';
 import { Logger } from './util/logger';
 import { isRecord } from './util/isRecord';
 
@@ -41,8 +41,8 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		this.t = createTranslator(resolveLocale(getLanguage()));
 		await this.loadSettings();
 		this.addSettingTab(new NcSettingTab(this.app, this));
-		this.addCommand({ id: 'sync-now', name: this.t('command.syncNow'), callback: () => { void this.runPullFromUi(); } });
-		this.addRibbonIcon('refresh-cw', this.t('ribbon.syncNow'), () => { void this.runPullFromUi(); });
+		this.addCommand({ id: 'sync-now', name: this.t('command.syncNow'), callback: () => { void this.runSyncFromUi(); } });
+		this.addRibbonIcon('refresh-cw', this.t('ribbon.syncNow'), () => { void this.runSyncFromUi(); });
 	}
 
 	/**
@@ -93,7 +93,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	 * Runs a pull from the UI (command or ribbon) and shows the outcome as notice.
 	 * Only one run at a time; a second request shows a notice and does nothing.
 	 */
-	private async runPullFromUi(): Promise<void> {
+	private async runSyncFromUi(): Promise<void> {
 		const t = this.t;
 		if (this.syncRunning) {
 			showSyncNotice(alreadyRunningNotice(t));
@@ -106,7 +106,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			progress = null;
 		};
 		try {
-			const outcome = await runPull({
+			const outcome = await runSync({
 				settings: this.settings,
 				readPassword: () => this.credentials.read(),
 				request: obsidianRequest,
@@ -122,7 +122,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 				},
 			});
 			hideProgress();
-			showSyncNotice(describePullOutcome(outcome, t));
+			showSyncNotice(describeSyncOutcome(outcome, t));
 		} catch (err) {
 			hideProgress();
 			// Log only the error class, never the message (may contain credentials or URLs with secrets).
