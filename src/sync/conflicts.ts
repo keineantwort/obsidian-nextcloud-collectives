@@ -77,27 +77,49 @@ export function countConflicts(state: SyncState): number {
 /** Pure state transition for a resolved conflict. `localHash` = sha256Hex(toRemote(current local text)). */
 export function resolveConflict(prev: PageState, choice: ConflictChoice, localHash: string): PageState {
 	if (choice === 'keepLocal') {
-		return { ...prev, status: 'synced', conflictPath: null, baseHash: '', localMtime: UNCHECKED_LOCAL_MTIME };
+		// The base stays: it is the hash of the remote text the conflict was recorded against (see state.ts).
+		return { ...prev, status: 'synced', conflictPath: null, localMtime: UNCHECKED_LOCAL_MTIME };
 	}
 	return { ...prev, status: 'synced', conflictPath: null, baseHash: localHash, remoteMtime: UNCONFIRMED_REMOTE_MTIME };
 }
 
+/** Options of applyResolution; both are optional. */
+export interface ResolutionOptions {
+	/** Current path of the local file (see withCurrentPaths). Defaults to the path in the state. */
+	localPath?: string;
+	/**
+	 * Conflict copy the user saw (the dialog may show an older one). If given and different from the page's current
+	 * conflictPath, the choice is refused: the server version of the current copy was never shown.
+	 */
+	expectedConflictPath?: string | null;
+}
+
 /**
- * Applies the user's choice for one page in `state` (mutates state.pages[id]). Returns false if the page is missing
- * or has no open conflict. The caller persists the state and then starts a sync run.
- * `localPath` is the current path of the local file (see withCurrentPaths); it defaults to the path in the state.
- * The state itself is not changed to it.
+ * Legacy fallback for states written before M4, where a conflict had baseHash ''. keepLocal takes the base from the
+ * conflict copy, which must be read before it is trashed: the copy holds the remote text the conflict was recorded against.
+ */
+async function withLegacyBase(vault: ResolutionVault, page: PageState): Promise<PageState> {
+	if (page.baseHash !== '' || page.conflictPath === null || !vault.exists(page.conflictPath)) return page;
+	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath))) };
+}
+
+/**
+ * Applies the user's choice for one page in `state` (mutates state.pages[id]). Returns false if the page is missing,
+ * has no open conflict, or the options name a conflict copy that is no longer the page's conflict (nothing changes then).
+ * The caller persists the state and then starts a sync run.
+ * The state itself keeps its localPath (see `options.localPath`).
  */
 export async function applyResolution(
 	deps: { vault: ResolutionVault; state: SyncState; log: Logger },
 	pageId: PageId,
 	choice: ConflictChoice,
-	localPath?: string,
+	options: ResolutionOptions = {},
 ): Promise<boolean> {
 	const key = String(pageId);
 	const prev = deps.state.pages[key];
 	if (prev === undefined || openStatus(prev) === null) return false;
-	const currentPath = localPath ?? prev.localPath;
+	if (options.expectedConflictPath !== undefined && options.expectedConflictPath !== prev.conflictPath) return false;
+	const currentPath = options.localPath ?? prev.localPath;
 
 	let page = prev;
 	if (prev.status === 'collision') {
@@ -114,7 +136,8 @@ export async function applyResolution(
 
 	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath)));
 	const trashPath = page.conflictPath;
-	deps.state.pages[key] = resolveConflict(page, choice, localHash);
+	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page) : page;
+	deps.state.pages[key] = resolveConflict(withBase, choice, localHash);
 
 	if (trashPath !== null && deps.vault.exists(trashPath)) {
 		try {

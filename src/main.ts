@@ -196,12 +196,11 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		}
 	}
 
-	/** Last run and open conflicts after a run. A cancelled run changes neither (PLAN §2.1). */
+	/** Last run after a run. A cancelled run changes nothing (PLAN §2.1). The conflict count comes from the state. */
 	private recordOutcome(outcome: SyncRunOutcome): void {
 		if (outcome.kind === 'cancelled') return;
 		if (outcome.kind === 'done') {
 			this.lastRun = { kind: 'success', at: Date.now() };
-			this.openConflicts = outcome.openConflicts;
 			return;
 		}
 		this.lastRun = { kind: 'failed', at: Date.now() };
@@ -219,17 +218,22 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	/** Reads the saved state once, so the status bar shows the open conflicts from the start. Errors are ignored. */
 	private async loadInitialState(): Promise<void> {
 		await this.lock.run(() => this.refreshState());
-		this.openConflicts = this.lastState === null ? 0 : countConflicts(this.lastState);
 		this.refreshStatusBar();
 	}
 
 	/** Reloads lastState. A failed read keeps the previous value; the next run or resolution loads the state again. */
 	private async refreshState(): Promise<void> {
 		try {
-			this.lastState = await this.stateStore().load();
+			this.setLastState(await this.stateStore().load());
 		} catch {
 			// Nothing to show from a failed read; the state is loaded again on the next run or resolution.
 		}
+	}
+
+	/** The only place that assigns lastState: the open conflict count is always derived from it. */
+	private setLastState(state: SyncState | null): void {
+		this.lastState = state;
+		this.openConflicts = state === null ? 0 : countConflicts(state);
 	}
 
 	private refreshStatusBar(): void {
@@ -288,11 +292,13 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		const store = this.stateStore();
 		const state = await store.load();
 		if (state === null) return false;
-		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.log }, entry.pageId, choice, entry.localPath);
+		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.log }, entry.pageId, choice, {
+			localPath: entry.localPath,
+			expectedConflictPath: entry.conflictPath,
+		});
 		if (!applied) return false;
 		await store.save(state);
-		this.lastState = state;
-		this.openConflicts = countConflicts(state);
+		this.setLastState(state);
 		this.refreshStatusBar();
 		return true;
 	}

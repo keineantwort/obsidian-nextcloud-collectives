@@ -37,6 +37,19 @@ export default defineConfig(
 			}],
 		},
 	},
+	// Sync core, its state and the pure UI helpers are testable without Obsidian: no 'obsidian' import (the rest of src/ may import it).
+	{
+		files: [
+			'src/sync/conflicts.ts', 'src/sync/dirtyQueue.ts', 'src/sync/executor.ts', 'src/sync/syncRun.ts', 'src/sync/localScanner.ts',
+			'src/sync/remoteScanner.ts', 'src/sync/state.ts', 'src/sync/stateStore.ts', 'src/sync/types.ts', 'src/ui/conflictView.ts',
+			'src/ui/statusBar.ts', 'src/ui/syncNotices.ts', 'src/util/diff.ts',
+		],
+		rules: {
+			'no-restricted-imports': ['error', {
+				paths: [{ name: 'obsidian', message: 'sync core and its pure helpers must not import Obsidian; go through the injected interfaces.' }],
+			}],
+		},
+	},
 	// The declarative settings API needs Obsidian 1.13+, but minAppVersion is 1.11.4, so the imperative tab stays.
 	{
 		files: ['src/settings/**/*.ts'],

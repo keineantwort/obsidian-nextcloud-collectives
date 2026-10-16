@@ -283,7 +283,8 @@ class ConflictModal extends Modal {
 		if (this.closed) return;
 
 		this.setBusy(false);
-		this.diffCache.delete(key);
+		// A follow-up run may have replaced other conflict copies too, so no cached diff is trusted after a resolution.
+		this.diffCache.clear();
 		this.entries = this.source.entries();
 		this.render();
 

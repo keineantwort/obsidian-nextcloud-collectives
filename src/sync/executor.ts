@@ -274,7 +274,8 @@ async function createConflict(op: Extract<SyncOp, { kind: 'createConflict' }>, d
 	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 		localPath: op.path,
 		localMtime: deps.vault.mtime(op.path) ?? 0,
-		baseHash: '',
+		// The base is the remote text of this copy, so the next run does not take it for a new remote change.
+		baseHash: remote.hash,
 		metaHash: op.metaHash,
 		status: 'collision',
 		conflictPath: copyPath,
@@ -298,7 +299,7 @@ async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorD
 		deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 			localPath: op.path,
 			localMtime: deps.vault.mtime(op.path) ?? 0,
-			baseHash: '',
+			baseHash: remote.hash,
 			metaHash: op.metaHash,
 			status: 'conflict',
 			conflictPath: copyPath,
@@ -356,9 +357,9 @@ async function updatePage(op: ContentOp, deps: ExecutorDeps, result: SyncResult,
 
 	switch (action) {
 		case 'none':
-			return refreshUnchanged(op, s, remote, deps, result, now);
+			return refreshUnchanged(op, s, remote, local, deps, result, now);
 		case 'adoptBase':
-			return adoptRemoteAsBase(op, s, remote, deps, result, now);
+			return adoptRemoteAsBase(op, s, remote, local, deps, result, now);
 		case 'pull':
 			return pullRemote(op, s, remote, local, deps, result, now);
 		case 'conflict':
@@ -372,28 +373,21 @@ function decideFor(s: PageState, local: LocalText, remote: Fetched, strategy: Co
 	return decideContent({ baseHash: s.baseHash, localHash: local.hash, remoteHash: remote.hash, status: s.status, strategy });
 }
 
-/** Action 'none': nothing to transfer. Refreshes the remote fields and, if the metadata changed, the nc fields. */
-async function refreshUnchanged(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
-	let metaHash = s.metaHash;
-	let localMtime = s.localMtime;
-	if (op.metaChanged) {
-		localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, metaFor(op.page, op.meta, op.path)));
-		metaHash = op.metaHash;
-	}
-	deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, remote), metaHash, localMtime, lastSyncedAt: now };
+/**
+ * Action 'none': nothing to transfer. Refreshes the remote fields and, if the metadata changed, the nc fields. The base and
+ * the status stay as they are (a conflict stays a conflict).
+ */
+async function refreshUnchanged(op: ContentOp, s: PageState, remote: Fetched, local: LocalText, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
+	const refreshed = { ...s, ...remoteFields(op.page, remote), localMtime: local.mtimeBefore, lastSyncedAt: now };
+	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, refreshed, local.text, deps);
 	result.unchanged++;
 	return true;
 }
 
-/** Action 'adoptBase': both sides hold the same text already, so only the base moves on. */
-async function adoptRemoteAsBase(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
-	let metaHash = s.metaHash;
-	let localMtime = s.localMtime;
-	if (op.metaChanged) {
-		localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, metaFor(op.page, op.meta, op.path)));
-		metaHash = op.metaHash;
-	}
-	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash, localMtime, now });
+/** Action 'adoptBase': both sides hold the same text already, so only the base moves on to the remote text. */
+async function adoptRemoteAsBase(op: ContentOp, s: PageState, remote: Fetched, local: LocalText, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
+	const adopted = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: s.metaHash, localMtime: local.mtimeBefore, now });
+	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, adopted, local.text, deps);
 	result.unchanged++;
 	return true;
 }
@@ -483,7 +477,8 @@ async function recordUpdateConflict(op: ContentOp, s: PageState, remote: Fetched
 		page: op.page,
 		remote,
 		status: isCollision(s) ? 'collision' : 'conflict',
-		baseHash: s.baseHash,
+		// The base is the remote text of this copy (see state.ts): the next run compares against it.
+		baseHash: remote.hash,
 		conflictPath: copyPath,
 		localMtime: deps.vault.mtime(op.path) ?? s.localMtime,
 		now,
@@ -559,14 +554,22 @@ async function updateMeta(op: Extract<SyncOp, { kind: 'updateMeta' }>, deps: Exe
 		return true;
 	}
 	const meta = metaFor(op.page, op.meta, op.path);
-	let changed = false;
-	const mtime = await deps.vault.process(op.path, (cur) => {
-		const next = replaceNcMeta(cur, meta);
-		changed = next !== cur;
-		return next;
-	});
+	const mtimeBefore = requireMtime(deps.vault, op.path);
+	const text = await deps.vault.read(op.path);
+	const next = replaceNcMeta(text, meta);
+	if (next === text) {
+		deps.state.pages[String(op.page.id)] = { ...s, metaHash: op.metaHash, localMtime: mtimeBefore };
+		result.unchanged++;
+		return true;
+	}
+	const mtime = await writeIfUnchanged(deps.vault, op.path, text, next);
+	if (mtime === null) {
+		// The user changed the file since the read: metaHash and localMtime stay, so the next run writes the metadata again.
+		deps.log.info('Metadata write skipped: file changed during sync', { pageId: op.page.id });
+		result.unchanged++;
+		return false;
+	}
 	deps.state.pages[String(op.page.id)] = { ...s, metaHash: op.metaHash, localMtime: mtime };
-	if (changed) result.metaUpdated++;
-	else result.unchanged++;
+	result.metaUpdated++;
 	return true;
 }
