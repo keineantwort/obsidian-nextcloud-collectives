@@ -1,0 +1,29 @@
+/** Base class for all plugin errors. */
+export class NcError extends Error {
+	// ES2021 lib has no `cause` on Error; declare it here.
+	declare cause?: unknown;
+
+	constructor(message: string, options?: { cause?: unknown }) {
+		super(message);
+		this.name = new.target.name;
+		if (options && 'cause' in options) this.cause = options.cause;
+	}
+}
+/** 401/403: credentials rejected. */
+export class AuthError extends NcError { constructor(readonly status: number, message = `Authentication failed (HTTP ${status})`) { super(message); } }
+/** 404: endpoint or resource not found. */
+export class NotFoundError extends NcError {}
+/** 412: precondition failed (ETag mismatch). */
+export class ConflictError extends NcError {}
+/** Request did not reach the server or timed out. */
+export class NetworkError extends NcError {}
+/** 5xx or other unexpected non-2xx status. */
+export class ServerError extends NcError { constructor(readonly status: number, message = `Server error (HTTP ${status})`) { super(message); } }
+/** Response structure does not match the expected API shape. */
+export class ApiChangedError extends NcError {}
+/** Invalid or missing user configuration. */
+export type ConfigField = 'serverUrl' | 'username' | 'appPassword';
+export type ConfigProblem = 'missing' | 'invalid';
+export class ConfigError extends NcError {
+	constructor(readonly field: ConfigField, readonly problem: ConfigProblem) { super(`Config ${field} is ${problem}`); }
+}
