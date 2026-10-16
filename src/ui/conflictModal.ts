@@ -12,13 +12,16 @@ import { describeConflict, diffRows, entryKey, hasChanges, nextFocusIndex, remot
 export interface ConflictModalSource {
 	/** Current open conflicts; called on open and after every resolution. */
 	entries(): ConflictEntry[];
-	/** Local and remote text of the page, both in canonical remote format. remote is null if there is no readable copy. */
-	loadTexts(entry: ConflictEntry): Promise<{ local: string; remote: string | null }>;
+	/**
+	 * Local and remote text of the page, both in canonical remote format. local is null if the local file is not in the
+	 * vault (e.g. renamed); remote is null if there is no readable copy.
+	 */
+	loadTexts(entry: ConflictEntry): Promise<{ local: string | null; remote: string | null }>;
 	/** true = applied; false = entry no longer open; rejects = could not apply. */
 	resolve(entry: ConflictEntry, choice: ConflictChoice): Promise<boolean>;
 }
 
-type DiffState = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; lines: DiffLine[] | null; remoteMissing: boolean };
+type DiffState = { kind: 'loading' } | { kind: 'failed' } | { kind: 'localMissing' } | { kind: 'ready'; lines: DiffLine[] | null; remoteMissing: boolean };
 
 /** Elements of one entry that the modal updates after loading or resolving. */
 interface EntryView {
@@ -111,7 +114,7 @@ class ConflictModal extends Modal {
 		});
 		this.headings[index] = heading;
 		item.createDiv({ cls: 'nc-conflict-path', text: description.path });
-		item.createEl('p', { cls: 'nc-conflict-explanation', text: description.explanation });
+		if (description.explanation !== null) item.createEl('p', { cls: 'nc-conflict-explanation', text: description.explanation });
 
 		const details = item.createEl('details', { cls: 'nc-conflict-details' });
 		details.open = index === 0;
@@ -181,9 +184,9 @@ class ConflictModal extends Modal {
 		let state: DiffState;
 		try {
 			const { local, remote } = await this.source.loadTexts(entry);
-			state = remote === null
-				? { kind: 'ready', lines: null, remoteMissing: true }
-				: { kind: 'ready', lines: lineDiff(local, remote), remoteMissing: false };
+			if (local === null) state = { kind: 'localMissing' };
+			else if (remote === null) state = { kind: 'ready', lines: null, remoteMissing: true };
+			else state = { kind: 'ready', lines: lineDiff(local, remote), remoteMissing: false };
 		} catch {
 			// Only the error class would help here, and the modal shows the same message for every failure.
 			state = { kind: 'failed' };
@@ -209,6 +212,10 @@ class ConflictModal extends Modal {
 		}
 		if (state.kind === 'failed') {
 			container.createEl('p', { cls: 'nc-diff-message', text: t('conflicts.diff.loadFailed') });
+			return;
+		}
+		if (state.kind === 'localMissing') {
+			container.createEl('p', { cls: 'nc-diff-message', text: t('conflicts.diff.localMissing') });
 			return;
 		}
 		if (state.remoteMissing) {

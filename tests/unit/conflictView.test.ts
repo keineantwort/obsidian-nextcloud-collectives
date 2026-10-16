@@ -128,12 +128,12 @@ describe('hasChanges', () => {
 });
 
 describe('describeConflict', () => {
-	it('names the page and gives the reason for a conflict', () => {
+	it('names the page and gives no reason line for a conflict', () => {
 		const description = describeConflict(entry(), en);
 
 		expect(description.name).toBe('Page');
 		expect(description.path).toBe('Coll/Sub/Page.md');
-		expect(description.explanation).toBe('Changed here and on the server.');
+		expect(description.explanation).toBeNull();
 	});
 
 	it('gives the reason for a collision', () => {
@@ -162,9 +162,10 @@ describe('describeConflict', () => {
 	});
 
 	it('uses German texts in German', () => {
-		const description = describeConflict(entry(), de);
+		const description = describeConflict(entry({ status: 'collision' }), de);
 
-		expect(description.explanation).toBe('Hier und auf dem Server geändert.');
+		expect(description.explanation).toBe('In deinem Vault gab es schon eine Datei mit diesem Namen.');
+		expect(describeConflict(entry(), de).explanation).toBeNull();
 		expect(description.keepLocalHint).toBe('Lädt deine Datei hoch und überschreibt die Server-Fassung.');
 	});
 });

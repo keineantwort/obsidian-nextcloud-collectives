@@ -54,6 +54,21 @@ export function listConflicts(state: SyncState): ConflictEntry[] {
 	return entries.sort((a, b) => compareText(a.localPath, b.localPath));
 }
 
+/**
+ * Entries with the current local path: for status 'conflict' the path of the only file carrying the page's
+ * nc_page_id (the state keeps the path of the last sync, which is stale after a local rename); otherwise, and if
+ * no or several files carry the id, localPath stays as is.
+ */
+export function withCurrentPaths(entries: ConflictEntry[], files: readonly { path: string; pageId: PageId | null }[]): ConflictEntry[] {
+	const moved = entries.map((entry): ConflictEntry => {
+		if (entry.status !== 'conflict') return entry;
+		const matches = files.filter((file) => file.pageId === entry.pageId);
+		const match = matches.length === 1 ? matches[0] : undefined;
+		return match === undefined ? entry : { ...entry, localPath: match.path };
+	});
+	return moved.sort((a, b) => compareText(a.localPath, b.localPath));
+}
+
 /** Number of pages with status 'conflict' or 'collision'. */
 export function countConflicts(state: SyncState): number {
 	return Object.values(state.pages).filter((page) => openStatus(page) !== null).length;
@@ -70,20 +85,24 @@ export function resolveConflict(prev: PageState, choice: ConflictChoice, localHa
 /**
  * Applies the user's choice for one page in `state` (mutates state.pages[id]). Returns false if the page is missing
  * or has no open conflict. The caller persists the state and then starts a sync run.
+ * `localPath` is the current path of the local file (see withCurrentPaths); it defaults to the path in the state.
+ * The state itself is not changed to it.
  */
 export async function applyResolution(
 	deps: { vault: ResolutionVault; state: SyncState; log: Logger },
 	pageId: PageId,
 	choice: ConflictChoice,
+	localPath?: string,
 ): Promise<boolean> {
 	const key = String(pageId);
 	const prev = deps.state.pages[key];
 	if (prev === undefined || openStatus(prev) === null) return false;
+	const currentPath = localPath ?? prev.localPath;
 
 	let page = prev;
 	if (prev.status === 'collision') {
 		// The user file has no nc_page_id yet: link it with the minimal nc fields. metaHash '' makes the next run rewrite them.
-		const localMtime = await deps.vault.process(prev.localPath, (current) => replaceNcMeta(current, {
+		const localMtime = await deps.vault.process(currentPath, (current) => replaceNcMeta(current, {
 			pageId,
 			collectiveId: prev.collectiveId,
 			title: null,
@@ -93,7 +112,7 @@ export async function applyResolution(
 		page = { ...prev, metaHash: '', localMtime };
 	}
 
-	const localHash = await sha256Hex(toRemote(await deps.vault.read(page.localPath)));
+	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath)));
 	const trashPath = page.conflictPath;
 	deps.state.pages[key] = resolveConflict(page, choice, localHash);
 

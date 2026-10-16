@@ -6,7 +6,7 @@ import { toRemote } from './mapping/frontmatter';
 import { DEFAULT_SETTINGS, isConflictStrategy, NcSettings } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
-import { applyResolution, countConflicts, listConflicts } from './sync/conflicts';
+import { applyResolution, countConflicts, listConflicts, withCurrentPaths } from './sync/conflicts';
 import type { ConflictChoice, ConflictEntry, ResolutionVault } from './sync/conflicts';
 import { DirtyQueue, suppressingWriter } from './sync/dirtyQueue';
 import { createObsidianVault } from './sync/obsidianVault';
@@ -245,8 +245,12 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		openConflictModal(this.app, this.t, this.conflictSource());
 	}
 
+	/** Open conflicts with the current local paths: a page renamed by the user keeps its nc_page_id under the new name. */
 	private conflictEntries(): ConflictEntry[] {
-		return this.lastState === null ? [] : listConflicts(this.lastState);
+		if (this.lastState === null) return [];
+		const vault = createObsidianVault(this.app);
+		const files = vault.listFiles().map((file) => ({ path: file.path, pageId: vault.cachedPageId(file.path) ?? null }));
+		return withCurrentPaths(listConflicts(this.lastState), files);
 	}
 
 	private conflictSource(): ConflictModalSource {
@@ -257,10 +261,13 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		};
 	}
 
-	/** Local and remote text in canonical remote format. The remote is null if the conflict copy is not in the vault. */
-	private async loadConflictTexts(entry: ConflictEntry): Promise<{ local: string; remote: string | null }> {
+	/**
+	 * Local and remote text in canonical remote format. The local text is null if the local file is not in the vault,
+	 * the remote is null if the conflict copy is not in the vault.
+	 */
+	private async loadConflictTexts(entry: ConflictEntry): Promise<{ local: string | null; remote: string | null }> {
 		const vault = createObsidianVault(this.app);
-		const local = toRemote(await vault.read(entry.localPath));
+		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath)) : null;
 		const copy = entry.conflictPath;
 		if (copy === null || !vault.exists(copy)) return { local, remote: null };
 		return { local, remote: toRemote(await vault.read(copy)) };
@@ -281,7 +288,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		const store = this.stateStore();
 		const state = await store.load();
 		if (state === null) return false;
-		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.log }, entry.pageId, choice);
+		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.log }, entry.pageId, choice, entry.localPath);
 		if (!applied) return false;
 		await store.save(state);
 		this.lastState = state;

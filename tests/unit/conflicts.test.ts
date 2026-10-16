@@ -3,8 +3,8 @@ import { asAttachmentId, asCollectiveId, asPageId } from '../../src/api/types';
 import type { PageId } from '../../src/api/types';
 import { readPageId, replaceNcMeta, toRemote } from '../../src/mapping/frontmatter';
 import { pathKey } from '../../src/mapping/paths';
-import { applyResolution, countConflicts, listConflicts, resolveConflict } from '../../src/sync/conflicts';
-import type { ResolutionVault } from '../../src/sync/conflicts';
+import { applyResolution, countConflicts, listConflicts, resolveConflict, withCurrentPaths } from '../../src/sync/conflicts';
+import type { ConflictEntry, ResolutionVault } from '../../src/sync/conflicts';
 import { emptyState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 import { sha256Hex } from '../../src/util/hash';
@@ -109,6 +109,125 @@ describe('listConflicts', () => {
 
 	it('returns an empty list when no page is in conflict', () => {
 		expect(listConflicts(stateWith(pageState(1), pageState(2)))).toEqual([]);
+	});
+});
+
+/** Conflict or collision entry as listConflicts returns it. */
+function conflictEntry(id: number, over: Partial<ConflictEntry> = {}): ConflictEntry {
+	return {
+		pageId: asPageId(id),
+		collectiveId: COLLECTIVE,
+		status: 'conflict',
+		localPath: `Coll/Seite ${id}.md`,
+		conflictPath: `Coll/Seite ${id} (Konflikt 2026-10-16 1430).md`,
+		...over,
+	};
+}
+
+describe('withCurrentPaths', () => {
+	it('gives a conflict the path of the only file that carries its nc_page_id', () => {
+		const entries = [conflictEntry(10, { localPath: 'Coll/Neue Seite.md' })];
+
+		expect(withCurrentPaths(entries, [{ path: 'Coll/Neuer Titel.md', pageId: asPageId(10) }])).toEqual([
+			{ ...entries[0], localPath: 'Coll/Neuer Titel.md' },
+		]);
+	});
+
+	it('keeps the localPath of a conflict when no file carries its nc_page_id', () => {
+		const entries = [conflictEntry(10, { localPath: 'Coll/Neue Seite.md' })];
+
+		expect(withCurrentPaths(entries, [{ path: 'Coll/Andere.md', pageId: asPageId(11) }, { path: 'Coll/Ohne.md', pageId: null }])).toEqual(entries);
+	});
+
+	it('keeps the localPath of a conflict when two files carry its nc_page_id', () => {
+		const entries = [conflictEntry(10, { localPath: 'Coll/Neue Seite.md' })];
+		const files = [
+			{ path: 'Coll/Kopie A.md', pageId: asPageId(10) },
+			{ path: 'Coll/Kopie B.md', pageId: asPageId(10) },
+		];
+
+		expect(withCurrentPaths(entries, files)).toEqual(entries);
+	});
+
+	it('ignores files with the nc_page_id for a collision and keeps its localPath', () => {
+		const entries = [conflictEntry(10, { status: 'collision', localPath: 'Coll/Alt.md', conflictPath: null })];
+
+		expect(withCurrentPaths(entries, [{ path: 'Coll/Neu.md', pageId: asPageId(10) }])).toEqual(entries);
+	});
+
+	it('sorts the result by the current local path', () => {
+		const entries = [
+			conflictEntry(1, { localPath: 'Coll/Zeta.md' }),
+			conflictEntry(2, { status: 'collision', localPath: 'Coll/Mitte.md', conflictPath: null }),
+		];
+
+		const result = withCurrentPaths(entries, [{ path: 'Coll/Alpha.md', pageId: asPageId(1) }]);
+
+		expect(result.map((entry) => entry.localPath)).toEqual(['Coll/Alpha.md', 'Coll/Mitte.md']);
+		expect(result.map((entry) => entry.pageId)).toEqual([asPageId(1), asPageId(2)]);
+	});
+
+	it('does not change the entries it is given', () => {
+		const entries = [conflictEntry(10, { localPath: 'Coll/Neue Seite.md' })];
+
+		withCurrentPaths(entries, [{ path: 'Coll/Neuer Titel.md', pageId: asPageId(10) }]);
+
+		expect(entries[0]?.localPath).toBe('Coll/Neue Seite.md');
+	});
+});
+
+describe('applyResolution with a renamed local file', () => {
+	const OLD_PATH = 'Coll/Alt.md';
+	const NEW_PATH = 'Coll/Neu.md';
+	const NEW_CONFLICT = 'Coll/Neu (Konflikt 2026-10-16 1430).md';
+	const NEW_TEXT = replaceNcMeta('# Neu\n\nUmbenannt vom Nutzer\n', {
+		pageId: PAGE_ID,
+		collectiveId: COLLECTIVE,
+		title: null,
+		emoji: null,
+		tags: [],
+	});
+
+	/** The state still has the old path; the file was renamed to NEW_PATH and keeps its nc_page_id. */
+	function renamedSetup() {
+		const vault = new RecordingVault();
+		vault.seedFolder('Coll');
+		vault.seed(NEW_PATH, NEW_TEXT);
+		vault.seed(NEW_CONFLICT, REMOTE_TEXT);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: OLD_PATH, conflictPath: NEW_CONFLICT })), vault);
+		return { vault, ctx };
+	}
+
+	it('takeRemote reads the renamed file, hashes its text and trashes the conflict copy', async () => {
+		const { vault, ctx } = renamedSetup();
+
+		expect(await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', NEW_PATH)).toBe(true);
+
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: await sha256Hex(toRemote(NEW_TEXT)) });
+		expect(vault.trashed).toEqual([NEW_CONFLICT]);
+	});
+
+	it('keepLocal succeeds for the renamed file and trashes the conflict copy', async () => {
+		const { vault, ctx } = renamedSetup();
+
+		expect(await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', NEW_PATH)).toBe(true);
+
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null, baseHash: '' });
+		expect(vault.trashed).toEqual([NEW_CONFLICT]);
+	});
+
+	it('keeps the old localPath in the state', async () => {
+		const { ctx } = renamedSetup();
+
+		await applyResolution(ctx.deps, PAGE_ID, 'takeRemote', NEW_PATH);
+
+		expect(ctx.state.pages['10']?.localPath).toBe(OLD_PATH);
+	});
+
+	it('without the path it fails on the old path, which is gone', async () => {
+		const { ctx } = renamedSetup();
+
+		await expect(applyResolution(ctx.deps, PAGE_ID, 'keepLocal')).rejects.toThrow();
 	});
 });
 

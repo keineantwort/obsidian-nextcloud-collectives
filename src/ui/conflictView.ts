@@ -10,8 +10,8 @@ export interface ConflictDescription {
 	name: string;
 	/** Full localPath, shown muted. */
 	path: string;
-	/** One short reason line. */
-	explanation: string;
+	/** One short reason line; null for 'conflict', where the diff already shows that both versions differ. */
+	explanation: string | null;
 	/** Consequence of each button; the same for both statuses. Shown as tooltip and accessible description. */
 	keepLocalHint: string;
 	takeRemoteHint: string;
@@ -38,7 +38,7 @@ export function describeConflict(e: ConflictEntry, t: Translator): ConflictDescr
 	return {
 		name,
 		path: e.localPath,
-		explanation: e.status === 'collision' ? t('conflicts.reason.collision') : t('conflicts.reason.conflict'),
+		explanation: e.status === 'collision' ? t('conflicts.reason.collision') : null,
 		keepLocalHint: t('conflicts.hint.keepLocal'),
 		takeRemoteHint: t('conflicts.hint.takeRemote'),
 		laterHint: t('conflicts.hint.later'),
