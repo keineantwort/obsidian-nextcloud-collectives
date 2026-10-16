@@ -8,6 +8,7 @@ Projekt: Obsidian-Plugin, das Nextcloud Collectives bidirektional mit einem Vaul
 - Immer genau einen Meilenstein (M0–M10 aus `PLAN.md` §14) pro Branch/PR bearbeiten. Branch-Name: `m<nr>-<kurzname>`, z. B. `m3-pull`.
 - Mit M0 beginnen. Keine Implementierung auf Annahmen, die in `PLAN.md` mit [VERIFIZIEREN] markiert und noch nicht bestätigt sind.
 - Unklare Anforderungen: nachfragen statt raten.
+- Architekturentscheidungen stehen in `docs/adr/`. Vor einer Abweichung den passenden ADR lesen; neue oder geänderte Entscheidungen als neuen ADR im selben PR festhalten (Vorlage `docs/adr/template.md`).
 - Vor eigenen Lösungen für Auth, WebDAV-Konflikte oder Mobile-Trigger die Referenzprojekte in `PLAN.md` §18 ansehen. Übernommener Code nur mit passender Lizenz und Quellenangabe.
 - Nach Abschluss: Status-Tabelle in `PLAN.md` §17 aktualisieren, Abweichungen und Erkenntnisse in `docs/api-notes.md` bzw. im Plan festhalten.
 

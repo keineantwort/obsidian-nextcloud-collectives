@@ -105,13 +105,26 @@ Code-Lektüre (`src/views/PagePicker.vue`, `src/stores/pages.js`, `lib/Fs/Markdo
 - Die deklarative Settings-API (`getSettingDefinitions`, `SettingDefinition*`) gibt es ab 1.13.0.
 - Empfehlung `minAppVersion`: **1.11.4**, Settings-Tab klassisch per `PluginSettingTab`.
 
-## 9. Offen: manuelle Prüfung im Browser
+## 9. Manuelle Prüfung im Browser (2026-10-16)
 
-Diese Punkte brauchen einen Browser mit der Collectives-Oberfläche (http://localhost:8080, Nutzer `alice`) und sind nicht automatisiert:
+Durchgeführt in der Collectives-Oberfläche des Testservers (Pretty-URLs aktiv), Collective „Admins Wiki“, Seiten „Linktest“ und „Ziel“.
 
-1. **Offene Text-Session**: Seite im Browser öffnen und bearbeiten, gleichzeitig `PUT` per WebDAV. Wie reagiert der Editor? Überschreibt er die WebDAV-Änderung beim nächsten Autosave? Bis zur Klärung gilt: ETag-Prüfung vor jedem `PUT` (bereits geplant) und Hinweis in der README.
-2. **Klickbarkeit relativer `?fileId=`-Links** im Text-Editor (Collectives-Ansicht). Ist sie nicht gegeben, schreiben wir lokal → remote stattdessen das absolute Picker-Format.
-3. **Frontmatter-Darstellung**: Wie zeigt der Text-Editor einen YAML-Block am Seitenanfang an, und bleibt er beim Speichern im Browser erhalten?
+**Frontmatter:** Der Text-Editor zeigt YAML-Frontmatter als Codeblock an. Beim Speichern im Browser bleibt der Block byte-genau erhalten, ebenso alle Links. Der Editor normalisiert aber: **Leerzeile nach dem schließenden `---`** einfügen, **abschließenden Zeilenumbruch entfernen**. Das Remote-Format des Plugins sollte genau diese Normalform erzeugen (ADR 0005).
+
+**Links** (Klick im Editor):
+
+| Form | Ergebnis |
+|---|---|
+| `Ziel.md?fileId=138` | ✔ öffnet Ziel |
+| `http://host/index.php/apps/collectives/Admins-Wiki-3/Ziel-138` | ✘ neuer Tab, „Collective nicht gefunden“ |
+| `/index.php/apps/collectives/Admins-Wiki-3/Ziel-138` | ✘ neuer Tab, „Collective nicht gefunden“ |
+| `/apps/collectives/Admins-Wiki-3/Ziel-138` | ✔ |
+| `Ziel.md` | ✔ (vom Server aber nicht als Seitenlink erkannt) |
+| `Ziel.md?fileId=138#abschnitt-zwei` | ✔ (Anker nicht prüfbar, Seite zu kurz) |
+
+→ Push schreibt relative Links mit `?fileId=` (ADR 0008). Ursache für die `/index.php/`-Fehlschläge ist offen (vermutlich Pretty-URLs). Für den Pull ist sie irrelevant, weil wir alle Formen auflösen.
+
+**Gleichzeitige Bearbeitung** (zwei Durchläufe, ADR 0012): Ein WebDAV-`PUT` während einer offenen Editor-Sitzung führt nach einigen Sekunden zur Meldung „Die Bearbeitungssitzung ist abgelaufen. Bitte die Seite neu laden.“ (Button „Aktualisieren“). Der Editor lässt weiter tippen, speichert aber nichts mehr. **Die WebDAV-Fassung gewinnt**, Browser-Eingaben nach der Meldung gehen verloren. Bereits per Autosave gespeicherte Browser-Änderungen sind sicher: Entweder liest das Plugin sie vor dem `PUT`, oder sein `PUT` scheitert mit 412.
 
 ## 10. Weitere Server-Befunde
 

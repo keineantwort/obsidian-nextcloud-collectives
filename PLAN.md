@@ -197,7 +197,7 @@ nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweich
 ---
 ```
 
-- Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen.
+- Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
 - Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
@@ -312,7 +312,7 @@ Der Server erkennt drei Formen als Seitenlink (Fixture `tests/fixtures/m0/conten
 
 `/index.php` fehlt bei Pretty-URLs. Statt `{collectiveSlug}-{cId}` ist auch der URL-kodierte Collective-Name zulässig. Anker/Query hinter der ID werden ignoriert. Bilder: `![name](.attachments.{pageId}/name)`.
 
-Pull löst alle drei Formen auf. Push schreibt Form 1. Offen ist nur die manuelle Prüfung, ob der Text-Editor relative `?fileId=`-Links anklickbar darstellt; falls nicht, schreibt Push Form 2 (`docs/api-notes.md` §9).
+Pull löst alle drei Formen auf (mit und ohne `/index.php`). Push schreibt Form 1: Im Text-Editor anklickbar, vom Server als Seitenlink erkannt (manuell geprüft, ADR 0008). Die absoluten bzw. root-relativen Formen mit `/index.php/` waren bei aktiven Pretty-URLs im Editor nicht klickbar.
 
 ### 9.2 Remote → lokal
 
@@ -474,7 +474,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | Risiko | Wirkung | Gegenmaßnahme |
 |---|---|---|
 | Collectives-API ändert sich | Sync bricht | Versions-Check, `ApiChanged`-Fehler, Fixtures je Version |
-| Gleichzeitige Bearbeitung im Browser (Text-Session) | Überschreiben | ETag-Prüfung, M0-Test, Hinweis in README |
+| Gleichzeitige Bearbeitung im Browser (Text-Session) | Plugin-PUT beendet die Browser-Sitzung („Bearbeitungssitzung abgelaufen“); danach Getipptes geht verloren (M0, ADR 0012) | `If-Match` schützt Browser-Speicherungen (412 → Konfliktdatei), Debounce vor Push, Hinweis in README |
 | Link-Konvertierung nicht verlustfrei | Inhaltsänderungen, Ping-Pong | Rundlauf-Tests, Hash auf Remote-Format, unbekannte Links unverändert lassen |
 | Falsch erkannte Löschungen | Datenverlust | Löschen nur nach Bestätigung, immer in den Collectives-Papierkorb (wiederherstellbar); lokale Wiederherstellung stellt auch remote wieder her. Sicherung: Löscht ein Lauf > 20 % der Seiten eines Collectives, wird der Lauf angehalten und gesondert nachgefragt |
 | Credential-Leak | Zugriff auf Nextcloud | App-Passwort nur im Secret Storage |
@@ -484,7 +484,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 | Meilenstein | Status |
 |---|---|
-| M0 | umgesetzt, PR offen (manuelle Browser-Prüfung siehe `docs/api-notes.md` §9) |
+| M0 | umgesetzt inkl. manueller Browser-Prüfung, PR offen |
 | M1 | offen |
 | M2 | offen |
 | M3 | offen |
