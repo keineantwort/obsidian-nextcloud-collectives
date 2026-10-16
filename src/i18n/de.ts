@@ -1,0 +1,31 @@
+import type { MessageKey } from './en';
+
+/** German UI texts. Must contain every key of en.ts (enforced by the type). */
+export const de: Record<MessageKey, string> = {
+	'settings.heading.connection': 'Verbindung',
+	'settings.serverUrl.name': 'Server-URL',
+	'settings.serverUrl.desc': 'Adresse deines Nextcloud-Servers. Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen.',
+	'settings.username.name': 'Benutzername',
+	'settings.appPassword.name': 'App-Passwort',
+	'settings.appPassword.desc': 'In Nextcloud unter „Persönliche Einstellungen › Sicherheit“ ein App-Passwort erstellen. Es wird im sicheren Speicher von Obsidian abgelegt, nicht in den Plugin-Einstellungen.',
+	'settings.appPassword.placeholderEmpty': 'App-Passwort',
+	'settings.appPassword.placeholderStored': 'Gespeichert – zum Ersetzen neu eingeben',
+	'settings.test.name': 'Verbindung testen',
+	'settings.test.desc': 'Prüft Server-URL, Benutzername und App-Passwort.',
+	'settings.test.button': 'Verbindung testen',
+	'settings.test.buttonRunning': 'Wird geprüft …',
+	'settings.test.statusRunning': 'Verbindung wird geprüft …',
+	'connection.success.none': 'Verbindung erfolgreich. Es wurden noch keine Collectives gefunden.',
+	'connection.success.one': 'Verbindung erfolgreich: 1 Collective gefunden.',
+	'connection.success.other': 'Verbindung erfolgreich: {count} Collectives gefunden.',
+	'connection.error.serverUrlMissing': 'Bitte die Server-URL angeben.',
+	'connection.error.serverUrlInvalid': 'Die Server-URL ist ungültig. Beispiel: https://cloud.example.com',
+	'connection.error.usernameMissing': 'Bitte den Benutzernamen angeben.',
+	'connection.error.appPasswordMissing': 'Bitte ein App-Passwort hinterlegen.',
+	'connection.error.auth': 'Anmeldung fehlgeschlagen. Bitte Benutzername und App-Passwort prüfen.',
+	'connection.error.notFound': 'Die Collectives-API wurde nicht gefunden. Bitte die Server-URL prüfen und sicherstellen, dass die App Collectives auf dem Server aktiviert ist.',
+	'connection.error.network': 'Der Server ist nicht erreichbar. Bitte Server-URL und Netzwerkverbindung prüfen.',
+	'connection.error.server': 'Der Server hat mit einem Fehler geantwortet (HTTP {status}).',
+	'connection.error.apiChanged': 'Unerwartete Antwort vom Server. Ist die Server-URL korrekt und läuft dort Nextcloud mit der App Collectives?',
+	'connection.error.unknown': 'Unbekannter Fehler beim Verbindungstest.',
+};

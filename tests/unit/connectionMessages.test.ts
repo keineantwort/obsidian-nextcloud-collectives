@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { describeConnectionError, formatConnectionSuccess } from '../../src/settings/connectionMessages';
+import { createTranslator } from '../../src/i18n';
 import { ApiChangedError, AuthError, ConfigError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+
+const t = createTranslator('de');
 
 describe('describeConnectionError', () => {
 	it.each([
@@ -37,19 +40,19 @@ describe('describeConnectionError', () => {
 		['thrown string', 'string', 'Unbekannter Fehler beim Verbindungstest.'],
 		['thrown undefined', undefined, 'Unbekannter Fehler beim Verbindungstest.'],
 	])('describes %s in German', (_label, err, expected) => {
-		const message = describeConnectionError(err);
+		const message = describeConnectionError(err, t);
 
 		expect(message).toBe(expected);
 	});
 
 	it('reports the actual status code of a ServerError, not a fixed one', () => {
-		const message = describeConnectionError(new ServerError(500));
+		const message = describeConnectionError(new ServerError(500), t);
 
 		expect(message).toBe('Der Server hat mit einem Fehler geantwortet (HTTP 500).');
 	});
 
 	it('does not leak the raw message of an unknown error, which may contain credentials', () => {
-		const message = describeConnectionError(new Error('secret-token-123'));
+		const message = describeConnectionError(new Error('secret-token-123'), t);
 
 		expect(message).not.toContain('secret-token-123');
 	});
@@ -61,7 +64,7 @@ describe('formatConnectionSuccess', () => {
 		[1, 'Verbindung erfolgreich: 1 Collective gefunden.'],
 		[3, 'Verbindung erfolgreich: 3 Collectives gefunden.'],
 	])('formats collectiveCount %i', (collectiveCount, expected) => {
-		const message = formatConnectionSuccess({ collectiveCount });
+		const message = formatConnectionSuccess({ collectiveCount }, t);
 
 		expect(message).toBe(expected);
 	});

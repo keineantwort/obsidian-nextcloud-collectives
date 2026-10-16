@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, SecretComponent, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 
@@ -9,13 +9,14 @@ export class NcSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		const { plugin } = this;
 		const settings = plugin.settings;
+		const t = plugin.t;
 		containerEl.empty();
 
-		new Setting(containerEl).setName('Verbindung').setHeading();
+		new Setting(containerEl).setName(t('settings.heading.connection')).setHeading();
 
 		new Setting(containerEl)
-			.setName('Server-URL')
-			.setDesc('Adresse deines Nextcloud-Servers. Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen.')
+			.setName(t('settings.serverUrl.name'))
+			.setDesc(t('settings.serverUrl.desc'))
 			.addText((text) => {
 				text
 					.setPlaceholder('https://cloud.example.com')
@@ -29,7 +30,7 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Benutzername')
+			.setName(t('settings.username.name'))
 			.addText((text) => {
 				text
 					.setValue(settings.username)
@@ -41,34 +42,43 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('App-Passwort')
-			.setDesc('In Nextcloud unter „Persönliche Einstellungen › Sicherheit“ ein App-Passwort erstellen. Es wird im sicheren Speicher von Obsidian abgelegt, nicht in den Plugin-Einstellungen.')
-			.addComponent((el) => new SecretComponent(this.app, el)
-				.setValue(settings.appPasswordSecretId)
-				.onChange(async (id) => {
-					settings.appPasswordSecretId = id ?? '';
-					await plugin.saveSettings();
-				}));
+			.setName(t('settings.appPassword.name'))
+			.setDesc(t('settings.appPassword.desc'))
+			.addText((text) => {
+				text.inputEl.type = 'password';
+				text.inputEl.autocomplete = 'off';
+				applyPlainInputAttributes(text.inputEl);
+				text.setPlaceholder(plugin.hasStoredAppPassword() ? t('settings.appPassword.placeholderStored') : t('settings.appPassword.placeholderEmpty'));
+				// Save on commit (blur/Enter), not on every keystroke; the field never shows the stored password.
+				// The element is discarded by containerEl.empty() on the next display(), so the listener does not outlive it.
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					const value = text.inputEl.value;
+					if (value === '') return;
+					await plugin.storeAppPassword(value);
+					text.setValue('');
+					text.setPlaceholder(t('settings.appPassword.placeholderStored'));
+				})(); });
+			});
 
 		const testSetting = new Setting(containerEl)
-			.setName('Verbindung testen')
-			.setDesc('Prüft Server-URL, Benutzername und App-Passwort.');
+			.setName(t('settings.test.name'))
+			.setDesc(t('settings.test.desc'));
 		const resultEl = containerEl.createDiv({ cls: 'nc-connection-result', attr: { role: 'status', 'aria-live': 'polite' } });
 
 		testSetting.addButton((btn) => {
-			btn.setButtonText('Verbindung testen').setCta().onClick(async () => {
-				btn.setDisabled(true).setButtonText('Wird geprüft …');
-				resultEl.setText('Verbindung wird geprüft …');
+			btn.setButtonText(t('settings.test.button')).setCta().onClick(async () => {
+				btn.setDisabled(true).setButtonText(t('settings.test.buttonRunning'));
+				resultEl.setText(t('settings.test.statusRunning'));
 				resultEl.removeClass('is-success', 'is-error');
 				try {
 					const result = await plugin.testConnection();
-					resultEl.setText(formatConnectionSuccess(result));
+					resultEl.setText(formatConnectionSuccess(result, t));
 					resultEl.addClass('is-success');
 				} catch (err) {
-					resultEl.setText(describeConnectionError(err));
+					resultEl.setText(describeConnectionError(err, t));
 					resultEl.addClass('is-error');
 				} finally {
-					btn.setDisabled(false).setButtonText('Verbindung testen');
+					btn.setDisabled(false).setButtonText(t('settings.test.button'));
 				}
 			});
 		});

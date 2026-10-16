@@ -27,12 +27,10 @@ export default defineConfig(
 		files: ['src/**/*.ts'],
 		rules: { 'obsidianmd/no-nodejs-modules': 'error', 'no-restricted-globals': 'error' },
 	},
-	// German UI texts (AGENTS.md): sentence-case expects English casing and would flag capitalized German nouns.
 	// The declarative settings API needs Obsidian 1.13+, but minAppVersion is 1.11.4, so the imperative tab stays.
 	{
 		files: ['src/settings/**/*.ts'],
 		rules: {
-			'obsidianmd/ui/sentence-case': 'off',
 			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
 		},
 	},
