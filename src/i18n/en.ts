@@ -8,6 +8,7 @@ export const en = {
 	'settings.appPassword.desc': 'Create an app password in Nextcloud under “Personal settings › Security”. It is kept in Obsidian’s secure storage, not in the plugin settings.',
 	'settings.appPassword.placeholderEmpty': 'App password',
 	'settings.appPassword.placeholderStored': 'Saved – type to replace',
+	'settings.appPassword.saveFailed': 'The app password could not be saved.',
 	'settings.test.name': 'Test connection',
 	'settings.test.desc': 'Checks server URL, username and app password.',
 	'settings.test.button': 'Test connection',

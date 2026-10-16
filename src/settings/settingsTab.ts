@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 
@@ -54,7 +54,13 @@ export class NcSettingTab extends PluginSettingTab {
 				text.inputEl.addEventListener('change', () => { void (async () => {
 					const value = text.inputEl.value;
 					if (value === '') return;
-					await plugin.storeAppPassword(value);
+					try {
+						await plugin.storeAppPassword(value);
+					} catch {
+						// Keep the typed value so the user can retry; the error itself may contain the secret, so it is not shown.
+						new Notice(t('settings.appPassword.saveFailed'));
+						return;
+					}
 					text.setValue('');
 					text.setPlaceholder(t('settings.appPassword.placeholderStored'));
 				})(); });

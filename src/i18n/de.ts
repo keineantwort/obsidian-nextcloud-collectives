@@ -10,6 +10,7 @@ export const de: Record<MessageKey, string> = {
 	'settings.appPassword.desc': 'In Nextcloud unter „Persönliche Einstellungen › Sicherheit“ ein App-Passwort erstellen. Es wird im sicheren Speicher von Obsidian abgelegt, nicht in den Plugin-Einstellungen.',
 	'settings.appPassword.placeholderEmpty': 'App-Passwort',
 	'settings.appPassword.placeholderStored': 'Gespeichert – zum Ersetzen neu eingeben',
+	'settings.appPassword.saveFailed': 'Das App-Passwort konnte nicht gespeichert werden.',
 	'settings.test.name': 'Verbindung testen',
 	'settings.test.desc': 'Prüft Server-URL, Benutzername und App-Passwort.',
 	'settings.test.button': 'Verbindung testen',
