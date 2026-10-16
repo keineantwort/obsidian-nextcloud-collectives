@@ -1,0 +1,14 @@
+{
+	"request": {
+		"method": "PUT",
+		"path": "/.Collectives/Handbuch/Onboarding.md",
+		"headers": {
+			"If-Match": "\"9f5fe63ab652040a5c861cf2b414ee3e\""
+		}
+	},
+	"status": 412,
+	"headers": {
+		"content-type": "application/xml; charset=utf-8",
+		"etag": "\"4860db6fd2d2e7ee2a3828dd0e0ea2d0\""
+	}
+}

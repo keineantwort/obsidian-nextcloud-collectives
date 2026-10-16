@@ -1,0 +1,13 @@
+{
+	"request": {
+		"method": "POST",
+		"path": "/collectives/1/tags",
+		"body": {
+			"name": "Projekt"
+		}
+	},
+	"status": 400,
+	"response": {
+		"raw": ""
+	}
+}

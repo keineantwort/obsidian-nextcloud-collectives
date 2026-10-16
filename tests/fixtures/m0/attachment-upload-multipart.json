@@ -1,0 +1,26 @@
+{
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"attachment": {
+					"id": 110,
+					"name": "notiz.txt",
+					"filesize": 5,
+					"mimetype": "text/plain",
+					"timestamp": 1792138978,
+					"path": "/notiz.txt",
+					"src": ".attachments.100/notiz.txt",
+					"internalPath": "Prozesse/.attachments.100/notiz.txt",
+					"hasPreview": true,
+					"type": "text"
+				}
+			}
+		}
+	}
+}

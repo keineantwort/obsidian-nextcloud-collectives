@@ -1,0 +1,47 @@
+{
+	"request": {
+		"method": "POST",
+		"path": "/collectives",
+		"body": {
+			"name": "Handbuch",
+			"emoji": "📘"
+		}
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"collective": {
+					"id": 1,
+					"slug": "Handbuch",
+					"circleId": "CIRCLE_ID_1",
+					"emoji": "📘",
+					"trashTimestamp": null,
+					"pageMode": 0,
+					"name": "Handbuch",
+					"level": 9,
+					"editPermissionLevel": 1,
+					"sharePermissionLevel": 1,
+					"canEdit": true,
+					"canShare": true,
+					"shareToken": null,
+					"isPageShare": false,
+					"sharePageId": 0,
+					"shareEditable": false,
+					"userPageOrder": 0,
+					"userShowMembers": true,
+					"userShowRecentPages": true,
+					"userFavoritePages": [],
+					"userNotify": 1,
+					"canLeave": false
+				},
+				"info": ""
+			}
+		}
+	}
+}

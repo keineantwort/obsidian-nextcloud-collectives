@@ -1,0 +1,33 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/collectives/1/pages/97/attachments",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"attachments": [
+					{
+						"id": 108,
+						"name": "bild.png",
+						"filesize": 69,
+						"mimetype": "image/png",
+						"timestamp": 1792138978,
+						"path": "/.Collectives/Handbuch/.attachments.97/bild.png",
+						"src": ".attachments.97/bild.png",
+						"internalPath": ".attachments.97/bild.png",
+						"hasPreview": true,
+						"type": "text"
+					}
+				]
+			}
+		}
+	}
+}

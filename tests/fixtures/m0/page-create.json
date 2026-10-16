@@ -1,0 +1,43 @@
+{
+	"request": {
+		"method": "POST",
+		"path": "/collectives/1/pages/92",
+		"body": {
+			"title": "Onboarding"
+		}
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"page": {
+					"id": 97,
+					"slug": "Onboarding",
+					"lastUserId": "alice",
+					"lastUserDisplayName": "Alice Test",
+					"emoji": null,
+					"subpageOrder": [],
+					"isFullWidth": false,
+					"tags": [],
+					"trashTimestamp": null,
+					"title": "Onboarding",
+					"timestamp": 1792138977,
+					"size": 0,
+					"fileName": "Onboarding.md",
+					"filePath": "",
+					"filePathString": "",
+					"collectivePath": ".Collectives/Handbuch",
+					"collectiveNameWithEmoji": null,
+					"parentId": 92,
+					"shareToken": null,
+					"linkedPageIds": []
+				}
+			}
+		}
+	}
+}

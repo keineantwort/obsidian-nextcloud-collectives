@@ -1,0 +1,14 @@
+{
+	"request": {
+		"method": "PROPFIND",
+		"path": "/.Collectives/Handbuch",
+		"headers": {
+			"Depth": "1",
+			"Content-Type": "application/xml"
+		}
+	},
+	"status": 207,
+	"headers": {
+		"content-type": "application/xml; charset=utf-8"
+	}
+}

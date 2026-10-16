@@ -1,0 +1,164 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/collectives/1/pages",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"pages": [
+					{
+						"id": 92,
+						"slug": "",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [
+							98,
+							97
+						],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Landing page",
+						"timestamp": 1792138978,
+						"size": 324,
+						"fileName": "Readme.md",
+						"filePath": "",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 0,
+						"shareToken": null,
+						"linkedPageIds": [
+							97,
+							98,
+							100
+						]
+					},
+					{
+						"id": 102,
+						"slug": "",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Per WebDAV",
+						"timestamp": 1792138978,
+						"size": 3,
+						"fileName": "Per WebDAV.md",
+						"filePath": "",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 92,
+						"shareToken": null,
+						"linkedPageIds": []
+					},
+					{
+						"id": 98,
+						"slug": "Prozesse",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [
+							101
+						],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Prozesse",
+						"timestamp": 1792138977,
+						"size": 20,
+						"fileName": "Readme.md",
+						"filePath": "Prozesse",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 92,
+						"shareToken": null,
+						"linkedPageIds": []
+					},
+					{
+						"id": 101,
+						"slug": "Umbenannt",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Umbenannt",
+						"timestamp": 1792138977,
+						"size": 0,
+						"fileName": "Umbenannt.md",
+						"filePath": "Prozesse",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 98,
+						"shareToken": null,
+						"linkedPageIds": []
+					},
+					{
+						"id": 97,
+						"slug": "Onboarding",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [
+							114
+						],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Onboarding",
+						"timestamp": 1792138978,
+						"size": 17,
+						"fileName": "Readme.md",
+						"filePath": "Onboarding",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 92,
+						"shareToken": null,
+						"linkedPageIds": []
+					},
+					{
+						"id": 114,
+						"slug": "Erster-Tag",
+						"lastUserId": "alice",
+						"lastUserDisplayName": "Alice Test",
+						"emoji": null,
+						"subpageOrder": [],
+						"isFullWidth": false,
+						"tags": [],
+						"trashTimestamp": null,
+						"title": "Erster Tag",
+						"timestamp": 1792138978,
+						"size": 0,
+						"fileName": "Erster Tag.md",
+						"filePath": "Onboarding",
+						"filePathString": "",
+						"collectivePath": ".Collectives/Handbuch",
+						"collectiveNameWithEmoji": null,
+						"parentId": 97,
+						"shareToken": null,
+						"linkedPageIds": []
+					}
+				]
+			}
+		}
+	}
+}

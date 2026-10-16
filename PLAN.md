@@ -1,9 +1,9 @@
 # PLAN – Obsidian-Plugin „Nextcloud Collectives Sync“
 
-Status: Entwurf v1 · Stand: 2026-10-15
+Status: Entwurf v1.1 (M0 eingearbeitet) · Stand: 2026-10-16
 Plugin-ID: `nextcloud-collectives` · Lizenz: MIT
 
-Dieses Dokument ist die verbindliche Spezifikation für die Umsetzung durch Coding-Agents (Claude Code, Codex). Abschnitte mit **[VERIFIZIEREN]** beruhen auf Code-Lektüre des Collectives-Repos und müssen in Meilenstein M0 gegen den echten Server bestätigt werden, bevor darauf aufgebaut wird.
+Dieses Dokument ist die verbindliche Spezifikation für die Umsetzung durch Coding-Agents (Claude Code, Codex). Die ursprünglichen **[VERIFIZIEREN]**-Stellen wurden in M0 gegen Nextcloud 33.0.10 / Collectives 4.7.1 geprüft und sind hier als „(M0 ✔)“ bzw. korrigiert eingearbeitet. Details und Fixtures: `docs/api-notes.md`, `tests/fixtures/m0/`.
 
 ---
 
@@ -44,8 +44,8 @@ Obsidian wird das primäre Frontend für Nextcloud Collectives. Ein Obsidian-Com
 | Dateizugriff | nur Obsidian Vault-API (`app.vault`, `app.fileManager`), kein `fs` |
 | Tests | Vitest für reine Logik; Integrationstests gegen Nextcloud in Docker |
 | Lint | ESLint mit `eslint-plugin-obsidianmd` (Regeln für Community-Plugins) |
-| Mindestversion | Obsidian ≥ 1.11.4 wegen Secret Storage (genaue Einführungsversion der API in M0 bestätigen); ≥ 1.13.0, falls die deklarative Settings-API genutzt wird |
-| Server | Nextcloud mit Collectives-App, OCS-API `v1.0` (Version des Zielservers in M0 dokumentieren) |
+| Mindestversion | Obsidian ≥ 1.11.4 wegen Secret Storage (`app.secretStorage` `@since 1.11.4`, M0 ✔); ≥ 1.13.0, falls die deklarative Settings-API genutzt wird (v1: nicht genutzt) |
+| Server | Nextcloud mit Collectives-App, OCS-API `v1.0`. Getestet: Nextcloud 33.0.10, Collectives 4.7.1, Circles 33.0.0, Text 7.0.1 |
 
 ## 4. Schnittstellen zum Server
 
@@ -55,6 +55,7 @@ Obsidian wird das primäre Frontend für Nextcloud Collectives. Ein Obsidian-Com
 - Pflicht-Header: `OCS-APIRequest: true`, `Accept: application/json`
 - Antworten sind in `{ ocs: { meta, data } }` gekapselt → Client entpackt `data`.
 - Auth: HTTP Basic mit Benutzername + App-Passwort.
+- Der Collectives-Ordner ist pro Nutzer konfigurierbar (Default: versteckt `.Collectives/`). WebDAV-Pfade immer aus `collectivePath` der API bilden, nie fest kodieren (M0).
 - Seiteninhalt liegt **nicht** in der OCS-API, sondern als Datei. Lesen/Schreiben per WebDAV:
   `{server}/remote.php/dav/files/{user}/{collectivePath}/{filePath}/{fileName}`
 - Seiten-ID = Nextcloud-File-ID der Markdown-Datei.
@@ -64,45 +65,54 @@ Obsidian wird das primäre Frontend für Nextcloud Collectives. Ein Obsidian-Com
 | Zweck | Methode + Pfad | Parameter |
 |---|---|---|
 | Collectives auflisten | `GET /collectives` | – |
-| Collective anlegen | `POST /collectives` | `name`, `emoji?` [VERIFIZIEREN] |
+| Collective anlegen | `POST /collectives` | `name`, `emoji?` (M0 ✔) |
+| Collective-Emoji | `PUT /collectives/{id}` | nur `emoji` – **kein Umbenennen** (M0) |
+| Collective umbenennen | `PUT /ocs/v2.php/apps/circles/circles/{circleId}/name` | `value` (Circles-API, M0 ✔) |
+| Collective in Papierkorb | `DELETE /collectives/{id}` | – nur Circle-Admin/Owner, sonst 403 (M0 ✔) |
+| Collective wiederherstellen | `PATCH /collectives/trash/{id}` | – (`GET /collectives/trash` listet) |
 | Seiten eines Collectives | `GET /collectives/{cId}/pages` | → `{ pages: PageInfo[] }` |
 | Eine Seite | `GET /collectives/{cId}/pages/{id}` | → `{ page }` |
 | Seite anlegen | `POST /collectives/{cId}/pages/{parentId}` | `title`, `templateId?` |
-| Seite „touch“ (letzter Bearbeiter) | `GET /collectives/{cId}/pages/{id}/touch` | – |
+| Seite „touch“ (letzter Bearbeiter) | `GET /collectives/{cId}/pages/{id}/touch` | – **wird nicht verwendet**, WebDAV-PUT setzt den letzten Bearbeiter selbst (M0) |
 | Verschieben/Umbenennen | `PUT /collectives/{cId}/pages/{id}` | `parentId?`, `title?`, `index?`, `copy=false` |
-| In anderes Collective verschieben | `PUT /collectives/{cId}/pages/{id}/to/{newCId}` | `parentId?`, `index?`, `copy=false` |
+| In anderes Collective verschieben | `PUT /collectives/{cId}/pages/{id}/to/{newCId}` | `parentId?`, `index?`, `copy=false` – ID und Emoji bleiben, Tags gehen verloren und müssen im Ziel neu gesetzt werden (M0) |
 | Emoji setzen/entfernen | `PUT /collectives/{cId}/pages/{id}/emoji` | `emoji` (null = entfernen) |
-| Tag zuweisen / entfernen | `PUT` / `DELETE /collectives/{cId}/pages/{id}/tags/{tagId}` | – |
+| Tag zuweisen / entfernen | `PUT` / `DELETE /collectives/{cId}/pages/{id}/tags/{tagId}` | – (idempotent, M0) |
 | Seite in Papierkorb | `DELETE /collectives/{cId}/pages/{id}` | – |
 | Tags des Collectives | `GET /collectives/{cId}/tags` | – |
-| Tag anlegen | `POST /collectives/{cId}/tags` | `name`, `color` [VERIFIZIEREN] |
+| Tag anlegen | `POST /collectives/{cId}/tags` | `name`, `color` – beide Pflicht; `color` = 6 Hex-Zeichen ohne `#` oder `""`; Duplikat → 400 (M0 ✔) |
 | Anhänge auflisten | `GET /collectives/{cId}/pages/{id}/attachments` | – |
-| Anhang hochladen | `POST /collectives/{cId}/pages/{id}/attachments` | multipart, Feld `file` |
+| Anhang hochladen | `POST /collectives/{cId}/pages/{id}/attachments` | multipart, Feld `file` (M0 ✔; alternativ WebDAV-PUT, siehe 9.4) |
 | Anhang löschen | `DELETE /collectives/{cId}/pages/{id}/attachments/{attId}` | – |
 | Seiten-Papierkorb | `GET /collectives/{cId}/pages/trash` | – (nur für Lösch-Erkennung/Restore) |
+| Seite wiederherstellen | `PATCH /collectives/{cId}/pages/trash/{id}` | – inkl. Unterseiten und Anhängen (M0 ✔) |
 
 ### 4.3 PageInfo-Felder (relevant)
 
-`id`, `slug`, `title`, `emoji`, `tags` (Liste von Tag-IDs [VERIFIZIEREN]), `timestamp` (mtime), `size`, `fileName`, `filePath`, `collectivePath`, `parentId`, `subpageOrder`, `lastUserId`, `linkedPageIds`, `trashTimestamp`.
+`id`, `slug`, `title`, `emoji`, `tags` (Liste von Tag-IDs, M0 ✔), `timestamp` (mtime, Unix-Sekunden), `size`, `fileName`, `filePath` (`""` auf Root-Ebene), `collectivePath`, `parentId`, `subpageOrder`, `lastUserId`, `linkedPageIds`, `trashTimestamp`.
+
+Startseite: `title` = „Landing page“ (lokalisiert), `slug` = `""`. Per WebDAV angelegte Seiten haben ebenfalls `slug = ""`. Die Collectives-Version steht nicht in den Capabilities (M0).
 
 ### 4.4 Dateistruktur auf dem Server
 
 - Startseite eines Collectives: `Readme.md` im Collective-Root, `parentId = 0`.
 - Seite ohne Unterseiten: `Titel.md`.
 - Seite mit Unterseiten: Ordner `Titel/` mit `Titel/Readme.md`; Unterseiten liegen im Ordner.
-- Anhänge: Ordner `.attachments.{pageId}/` neben der Seitendatei [VERIFIZIEREN].
-- Wird eine Blattseite zur Elternseite, wandelt Collectives `Titel.md` in `Titel/Readme.md` um. Ob die File-ID erhalten bleibt: [VERIFIZIEREN].
+- Anhänge: Ordner `.attachments.{pageId}/` neben der Seitendatei (M0 ✔); bei Elternseiten also in `Titel/`. Zusätzlich gelten Nicht-Markdown-Dateien im Ordner einer Elternseite als Anhänge (Typ `folder`).
+- Wird eine Blattseite zur Elternseite, wandelt Collectives `Titel.md` in `Titel/Readme.md` um. Die File-ID bleibt erhalten, der Anhang-Ordner wandert mit (M0 ✔).
+- Elternseiten bleiben Ordner, auch ohne Unterseiten. Ein Ordner ohne `Readme.md` bekommt beim Auflisten automatisch eine (M0).
+- Roh-WebDAV-Operationen werden erkannt: `PUT` legt eine Seite an, `MOVE` benennt um/verschiebt (ID bleibt), `DELETE` landet im Collectives-Papierkorb (M0).
 
 ### 4.5 WebDAV
 
 | Zweck | Aufruf |
 |---|---|
 | Inhalt lesen | `GET` → Body + `ETag`-Header |
-| Inhalt schreiben | `PUT` mit `If-Match: <etag>` → `412` bedeutet Konflikt |
+| Inhalt schreiben | `PUT` mit `If-Match: <etag>` → `412` bedeutet Konflikt (M0 ✔); Antwort enthält neuen `ETag`. Neue Dateien mit `If-None-Match: *` |
 | ETags mehrerer Dateien | `PROPFIND` Depth 1 mit `getetag`, `getlastmodified`, `oc:fileid` |
 | Anhang laden | `GET` auf `.attachments.{id}/{name}` |
 
-Nach erfolgreichem `PUT` wird `touch` aufgerufen, damit Collectives den letzten Bearbeiter aktualisiert [VERIFIZIEREN, ob nötig].
+Kein `touch` nach `PUT`: Collectives setzt bei jedem WebDAV-Schreibzugriff selbst den letzten Bearbeiter, verschickt Benachrichtigungen und aktualisiert `linkedPageIds` (M0).
 
 ## 5. Architektur
 
@@ -187,7 +197,7 @@ nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweich
 ---
 ```
 
-- Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen.
+- Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
 - Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
@@ -213,6 +223,7 @@ Wichtig: `baseHash` wird auf dem konvertierten Remote-Format berechnet. Sonst er
 ### 6.4 Dateinamen
 
 - Unzulässig in Obsidian-Dateinamen/Links: `* " \ / < > : | ? # ^ [ ]`. Diese werden durch `_` ersetzt (konfigurierbar), der Originaltitel steht dann in `nc_title`.
+- Der Server bereinigt Titel selbst (`/` → `-`, entfernt `* | \ : " < > ?`, M0). Remote-Titel enthalten also höchstens noch `# ^ [ ]`. Nach Anlegen/Umbenennen übernimmt das Plugin immer den Titel aus der Server-Antwort.
 - Umbenennen lokal → neuer Titel = Dateiname (bzw. `nc_title`, wenn gesetzt und nur Sanitizing-Unterschied).
 - Namenskollisionen bei Sanitizing: Suffix ` (2)`; Originaltitel in `nc_title`.
 
@@ -266,8 +277,8 @@ Ein Mutex verhindert parallele Läufe; Auslöser während eines Laufs setzen ein
 | Neues Remote-Collective | ID nicht im State | Ordner auf oberster Ebene anlegen, Seiten herunterladen |
 | Neuer lokaler Ordner auf oberster Ebene | kein bekanntes Collective | Collective anlegen (`POST /collectives`, Name = Ordnername). Die Datei im Ordner mit Ordnernamen wird zur Startseite, übrige Dateien zu Seiten |
 | Collective remote gelöscht/entzogen | ID fehlt in Liste | wie „Remote gelöscht“, für den ganzen Ordner; immer mit Rückfrage |
-| Lokaler Collective-Ordner gelöscht | Ordner fehlt | Nach Bestätigung (eigener Dialog mit Collective-Name und Seitenzahl) → `DELETE /collectives/{id}` (Collectives-Papierkorb, wiederherstellbar). Abgelehnt → Ordner lokal wiederherstellen. Fehlen die Rechte (nur Collective-Admin darf löschen [VERIFIZIEREN]) → Ordner wiederherstellen, Hinweis |
-| Collective-Ordner umbenannt | gleiche Collective-ID | Collective umbenennen (`PUT /collectives/{id}`) [VERIFIZIEREN, ob Umbenennen per API möglich]; sonst lokal zurückbenennen und Hinweis |
+| Lokaler Collective-Ordner gelöscht | Ordner fehlt | Nach Bestätigung (eigener Dialog mit Collective-Name und Seitenzahl) → `DELETE /collectives/{id}` (Collectives-Papierkorb, wiederherstellbar). Abgelehnt → Ordner lokal wiederherstellen. Fehlen die Rechte (nur Circle-Admin/Owner darf löschen, Mitglieder erhalten 403, M0 ✔; vorab über `level` erkennbar) → Ordner wiederherstellen, Hinweis |
+| Collective-Ordner umbenannt | gleiche Collective-ID | Collective über die Circles-API umbenennen (`PUT …/apps/circles/circles/{circleId}/name`, M0 ✔); fehlen die Rechte → lokal zurückbenennen und Hinweis |
 
 Neue lokale Unterseite unter einer Blattseite: Remote-Elternseite wird dadurch zum Ordner. Lokal muss danach die Folder-Note-Struktur hergestellt werden (Datei in den neuen Ordner verschieben).
 
@@ -275,6 +286,7 @@ Neue lokale Unterseite unter einer Blattseite: Remote-Elternseite wird dadurch z
 
 - Emoji: Vergleich `nc_emoji` vs. Remote; Änderung lokal → `PUT …/emoji`.
 - Tags: Abgleich der Namen; fehlende Tags im Collective per `POST /tags` anlegen (Default-Farbe), dann `PUT`/`DELETE …/tags/{tagId}`.
+  Vor dem Anlegen case-insensitiv gegen den Tag-Cache prüfen (Server-Duplikatprüfung hängt von der DB-Collation ab, M0). Default-Farbe als 6 Hex-Zeichen ohne `#`. Nach einem Collective-übergreifenden Verschieben die Tags im Ziel-Collective neu zuweisen.
 - Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash`; bei beidseitiger Änderung gewinnt Remote, Hinweis im Log.
 
 ### 7.6 Eigene Schreibzugriffe ignorieren
@@ -290,9 +302,17 @@ Vault-Events, die das Plugin selbst auslöst, dürfen keinen neuen Sync triggern
 
 ## 9. Links und Anhänge
 
-### 9.1 Link-Format in Collectives [VERIFIZIEREN in M0]
+### 9.1 Link-Format in Collectives (M0 ✔)
 
-Erwartet werden relative Markdown-Links mit File-ID, z. B. `[Titel](Unterordner/Seite.md?fileId=1234)`, sowie absolute URLs auf `/apps/collectives/{Collective}/{slug}-{id}`. M0 erstellt dazu Fixtures aus echten Seiten (Link per Collectives-UI einfügen, Datei per WebDAV lesen).
+Der Server erkennt drei Formen als Seitenlink (Fixture `tests/fixtures/m0/content-links.md`):
+
+1. relativ mit File-ID: `[Titel](Unterordner/Seite.md?fileId=1234)`
+2. absolut: `https://host/index.php/apps/collectives/{collectiveSlug}-{cId}/{pageSlug}-{id}` – **das schreibt der Link-Picker der Collectives-UI**
+3. root-relativ: `/index.php/apps/collectives/{collectiveSlug}-{cId}/{pageSlug}-{id}`
+
+`/index.php` fehlt bei Pretty-URLs. Statt `{collectiveSlug}-{cId}` ist auch der URL-kodierte Collective-Name zulässig. Anker/Query hinter der ID werden ignoriert. Bilder: `![name](.attachments.{pageId}/name)`.
+
+Pull löst alle drei Formen auf (mit und ohne `/index.php`). Push schreibt Form 1: Im Text-Editor anklickbar, vom Server als Seitenlink erkannt (manuell geprüft, ADR 0008). Die absoluten bzw. root-relativen Formen mit `/index.php/` waren bei aktiven Pretty-URLs im Editor nicht klickbar.
 
 ### 9.2 Remote → lokal
 
@@ -320,7 +340,8 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 
 - Ablage: `{SeitenOrdner}/_attachments/{Seitentitel}/{datei}` (Setting `attachmentFolderPattern`).
 - Pull: Liste per OCS, Download per WebDAV, nur wenn ETag/Größe neu.
-- Push: neue eingebettete Dateien hochladen. Bevorzugt WebDAV-`PUT` in `.attachments.{pageId}/` (mit `requestUrl` einfach); falls Collectives das nicht erkennt, Multipart-Upload per OCS mit manuell gebautem `multipart/form-data`-Body [VERIFIZIEREN, welcher Weg funktioniert].
+- Push: neue eingebettete Dateien per WebDAV-`PUT` in `.attachments.{pageId}/` hochladen (vorher `MKCOL`, falls der Ordner fehlt). Collectives erkennt das, M0 ✔. Der OCS-Multipart-Upload funktioniert ebenfalls, benennt bei Kollision aber eigenmächtig um (`name (1).ext`) und wird daher nicht verwendet.
+- ETags von Anhängen per `PROPFIND` (die OCS-Liste enthält keine).
 - Lokal gelöschter, nicht mehr referenzierter Anhang → Remote löschen (Setting, Default an). Max. Dateigröße als Setting (Default 20 MB).
 
 ## 10. Authentifizierung und Settings
@@ -367,7 +388,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 ## 12. Fehlerbehandlung und Logging
 
 - Fehlerklassen: `AuthError` (401/403 → Sync pausieren, Notice), `NotFound`, `Conflict` (412), `Network` (Retry mit Backoff 1/2/4 s, max. 3), `ServerError` (5xx, Retry), `ApiChanged` (unerwartete Antwortstruktur → Sync stoppen, klare Meldung).
-- Beim Start Versions-Check: Collectives-Capabilities/Version abfragen (`/ocs/v2.php/cloud/capabilities`) und gegen getestete Versionen prüfen; bei Abweichung Warnung.
+- Beim Start Versions-Check: Nextcloud-Version aus `/ocs/v2.php/cloud/capabilities` gegen getestete Versionen prüfen; bei Abweichung Warnung. Die Collectives-Version ist für normale Nutzer nicht abfragbar (nicht in den Capabilities, App-API nur für Admins, M0). Kompatibilität sichert daher die Strukturprüfung der Antworten (`ApiChanged`).
 - Logger mit Ringpuffer (letzte 500 Einträge), anzeigbar im Modal, kopierbar; `debugLogging` schaltet Request-Details (ohne Auth-Header) zu.
 
 ## 13. Tests und Qualität
@@ -444,15 +465,16 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | 3 | Veröffentlichung im Community-Store | erst nach M10 entscheiden; bis dahin BRAT |
 | 4 | Mehrere Nextcloud-Server | **entschieden:** ein Server pro Vault; alle Collectives bilden den Vault |
 | 5 | Nutzer-Frontmatter mit hochladen? | **entschieden:** ja, nur `nc_*` entfernen |
-| 6 | Ziel-Version Nextcloud/Collectives | wird in M0 erfasst |
+| 6 | Ziel-Version Nextcloud/Collectives | **erfasst (M0):** Nextcloud 33.0.10, Collectives 4.7.1 |
 | 7 | Eigenes Plugin oder bestehendes nutzen/forken? | **entschieden:** eigenes Plugin; bestehende Plugins nur als Referenz (siehe 18) |
+| 8 | Integrationstests in CI | Remote-Testserver (z. B. im HomeLab) aufbauen, damit Forgejo Actions `test:int` ausführen kann. Bis dahin lokal per Docker. Entscheidung spätestens vor M4 |
 
 ## 16. Risiken
 
 | Risiko | Wirkung | Gegenmaßnahme |
 |---|---|---|
 | Collectives-API ändert sich | Sync bricht | Versions-Check, `ApiChanged`-Fehler, Fixtures je Version |
-| Gleichzeitige Bearbeitung im Browser (Text-Session) | Überschreiben | ETag-Prüfung, M0-Test, Hinweis in README |
+| Gleichzeitige Bearbeitung im Browser (Text-Session) | Plugin-PUT beendet die Browser-Sitzung („Bearbeitungssitzung abgelaufen“); danach Getipptes geht verloren (M0, ADR 0012) | `If-Match` schützt Browser-Speicherungen (412 → Konfliktdatei), Debounce vor Push, Hinweis in README |
 | Link-Konvertierung nicht verlustfrei | Inhaltsänderungen, Ping-Pong | Rundlauf-Tests, Hash auf Remote-Format, unbekannte Links unverändert lassen |
 | Falsch erkannte Löschungen | Datenverlust | Löschen nur nach Bestätigung, immer in den Collectives-Papierkorb (wiederherstellbar); lokale Wiederherstellung stellt auch remote wieder her. Sicherung: Löscht ein Lauf > 20 % der Seiten eines Collectives, wird der Lauf angehalten und gesondert nachgefragt |
 | Credential-Leak | Zugriff auf Nextcloud | App-Passwort nur im Secret Storage |
@@ -462,7 +484,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 | Meilenstein | Status |
 |---|---|
-| M0 | offen |
+| M0 | umgesetzt inkl. manueller Browser-Prüfung, PR offen |
 | M1 | offen |
 | M2 | offen |
 | M3 | offen |
@@ -476,12 +498,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 ## 18. Referenzen und Marktlage
 
-Recherche 2026-10-15: Es gibt kein Obsidian-Plugin für Nextcloud Collectives. Folgende Projekte dienen als Referenz; Code darf unter Einhaltung der jeweiligen Lizenz übernommen werden, mit Quellenangabe im Code und in `README.md`.
+Recherche 2026-10-15: Es gibt kein Obsidian-Plugin für Nextcloud Collectives. Folgende Projekte dienen als Referenz; Code darf unter Einhaltung der jeweiligen Lizenz übernommen werden, mit Quellenangabe im Code und in `README.md`. Gesichtete Commits und übernehmbare Muster: `docs/api-notes.md` §11.
 
 | Projekt | Lizenz | Übernehmen / ansehen |
 |---|---|---|
 | [siosig/obsidian-nextcloudsync](https://github.com/siosig/obsidian-nextcloudsync) („Nextcloud Sync“) | MIT | Login Flow v2, Secret Storage, `If-Match`/412-Konfliktbehandlung, Capabilities- und Wartungsmodus-Erkennung (`/status.php`), Mobile-Trigger (Start, Rückkehr in App), Massenlösch-Schutz, Teststrategie mit echtem Nextcloud |
-| [onlymykazari/obsidian-nextcloud-deck](https://github.com/onlymykazari/obsidian-nextcloud-deck) („NextDeck“) | in M0 prüfen | Muster „App-API ↔ Markdown-Notizen“, Ringpuffer-Sync-Log, Schutz gegen selbst ausgelöste Vault-Events |
+| [onlymykazari/obsidian-nextcloud-deck](https://github.com/onlymykazari/obsidian-nextcloud-deck) („NextDeck“) | MIT (M0) | Muster „App-API ↔ Markdown-Notizen“, Ringpuffer-Sync-Log, Schutz gegen selbst ausgelöste Vault-Events |
 
 Bewusst verworfen:
 - Nextcloud Sync direkt auf den `Collectives/`-Ordner richten: keine Emojis, Tags, Link-Umwandlung, Collective-Anlage; `Readme.md`-Struktur bleibt sichtbar.

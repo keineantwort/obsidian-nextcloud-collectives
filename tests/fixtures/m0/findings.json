@@ -1,0 +1,102 @@
+[
+	{
+		"key": "nextcloudVersion",
+		"value": "33.0.10"
+	},
+	{
+		"key": "collectivesInCapabilities",
+		"value": false
+	},
+	{
+		"key": "landingPage",
+		"value": {
+			"title": "Landing page",
+			"fileName": "Readme.md",
+			"collectivePath": ".Collectives/Handbuch",
+			"parentId": 0
+		}
+	},
+	{
+		"key": "leafToParentKeepsFileId",
+		"value": true
+	},
+	{
+		"key": "serverSanitisedTitle",
+		"value": "A-B Fragen #1 [x]"
+	},
+	{
+		"key": "ifMatch",
+		"value": {
+			"ok": 204,
+			"stale": 412,
+			"putReturnsEtag": true
+		}
+	},
+	{
+		"key": "davCreatedFileBecomesPage",
+		"value": true
+	},
+	{
+		"key": "ocFileIdHeaderFormat",
+		"value": "00000102ocmptl0gs6qx"
+	},
+	{
+		"key": "linkedPageIds",
+		"value": {
+			"expected": [
+				100,
+				97,
+				98
+			],
+			"actual": [
+				100,
+				97,
+				98
+			]
+		}
+	},
+	{
+		"key": "davUploadedAttachmentListed",
+		"value": true
+	},
+	{
+		"key": "attachmentDelete",
+		"value": {
+			"status": 200,
+			"removed": true
+		}
+	},
+	{
+		"key": "attachmentsAfterLeafToParent",
+		"value": [
+			"Onboarding/.attachments.97/bild.png"
+		]
+	},
+	{
+		"key": "crossCollectiveMove",
+		"value": {
+			"idKept": true,
+			"tagsKept": false,
+			"emojiKept": true
+		}
+	},
+	{
+		"key": "restoreParentRestoresChildren",
+		"value": true
+	},
+	{
+		"key": "collectiveRenameViaCircles",
+		"value": {
+			"status": 200,
+			"name": "Projekte Neu",
+			"slug": "Projekte-Neu"
+		}
+	},
+	{
+		"key": "collectiveTrash",
+		"value": {
+			"member": 403,
+			"admin": 200
+		}
+	}
+]

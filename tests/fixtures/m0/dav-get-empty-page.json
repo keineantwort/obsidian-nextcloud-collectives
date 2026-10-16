@@ -1,0 +1,14 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/.Collectives/Handbuch/Onboarding.md",
+		"headers": {}
+	},
+	"status": 200,
+	"headers": {
+		"content-type": "text/markdown;charset=UTF-8",
+		"etag": "\"9f5fe63ab652040a5c861cf2b414ee3e\"",
+		"last-modified": "Fri, 16 Oct 2026 08:22:57 GMT",
+		"oc-etag": "\"9f5fe63ab652040a5c861cf2b414ee3e\""
+	}
+}

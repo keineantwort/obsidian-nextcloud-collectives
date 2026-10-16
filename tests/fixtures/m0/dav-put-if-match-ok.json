@@ -1,0 +1,15 @@
+{
+	"request": {
+		"method": "PUT",
+		"path": "/.Collectives/Handbuch/Onboarding.md",
+		"headers": {
+			"If-Match": "\"9f5fe63ab652040a5c861cf2b414ee3e\""
+		}
+	},
+	"status": 204,
+	"headers": {
+		"etag": "\"4860db6fd2d2e7ee2a3828dd0e0ea2d0\"",
+		"oc-etag": "\"4860db6fd2d2e7ee2a3828dd0e0ea2d0\"",
+		"oc-fileid": "00000097ocmptl0gs6qx"
+	}
+}

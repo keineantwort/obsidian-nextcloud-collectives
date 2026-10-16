@@ -1,0 +1,49 @@
+{
+	"request": {
+		"method": "GET",
+		"path": "/collectives/1/pages/92",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": {
+				"page": {
+					"id": 92,
+					"slug": "",
+					"lastUserId": "alice",
+					"lastUserDisplayName": "Alice Test",
+					"emoji": null,
+					"subpageOrder": [
+						101,
+						98,
+						97
+					],
+					"isFullWidth": false,
+					"tags": [],
+					"trashTimestamp": null,
+					"title": "Landing page",
+					"timestamp": 1792138978,
+					"size": 324,
+					"fileName": "Readme.md",
+					"filePath": "",
+					"filePathString": "",
+					"collectivePath": ".Collectives/Handbuch",
+					"collectiveNameWithEmoji": null,
+					"parentId": 0,
+					"shareToken": null,
+					"linkedPageIds": [
+						97,
+						98,
+						100
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,18 @@
+{
+	"request": {
+		"method": "DELETE",
+		"path": "/collectives/1/pages/100/attachments/110",
+		"body": null
+	},
+	"status": 200,
+	"response": {
+		"ocs": {
+			"meta": {
+				"status": "ok",
+				"statuscode": 200,
+				"message": "OK"
+			},
+			"data": []
+		}
+	}
+}
