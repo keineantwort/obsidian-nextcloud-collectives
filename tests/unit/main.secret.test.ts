@@ -257,7 +257,7 @@ describe('loadSettings', () => {
 
 		await plugin.loadSettings();
 
-		expect(plugin.settings).toStrictEqual({ serverUrl: 'https://x', username: '', appPasswordSecretId: 'id-1' });
+		expect(plugin.settings).toStrictEqual({ serverUrl: 'https://x', username: '', appPasswordSecretId: 'id-1', conflictStrategy: 'conflictFile' });
 	});
 
 	it('falls back to defaults when no data was saved', async () => {

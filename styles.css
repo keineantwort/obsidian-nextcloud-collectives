@@ -16,3 +16,75 @@
 }
 .nc-initial-sync .modal-button-container { flex-wrap: wrap; gap: var(--size-4-2); }
 .is-mobile .nc-initial-sync .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }
+
+/* Shared */
+.nc-visually-hidden {
+	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+	overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* Status bar */
+.nc-status-bar-item { font-variant-numeric: tabular-nums; }
+.nc-status-bar-item[aria-disabled="true"] { cursor: default; }
+.nc-status-bar-item:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: var(--radius-s); }
+
+/* Settings: strategy warning */
+.nc-strategy-warning {
+	margin: 0 0 var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-inline-start: 3px solid var(--color-orange);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+}
+.nc-strategy-warning:empty { display: none; }
+
+/* Conflict modal */
+.nc-conflict-modal { --dialog-width: 820px; }
+.nc-conflicts-intro { margin: 0 0 var(--size-4-3); }
+.nc-conflicts-status {
+	margin: 0 0 var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-inline-start: 3px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+}
+.nc-conflicts-status:empty { display: none; }
+.nc-conflicts-status.is-error { border-inline-start-color: var(--color-red); }
+.nc-conflicts-list { list-style: none; margin: 0; padding: 0; }
+.nc-conflict { padding: var(--size-4-3) 0; border-top: 1px solid var(--background-modifier-border); }
+.nc-conflict:first-child { border-top: none; padding-top: 0; }
+.nc-conflict-name { margin: 0 0 var(--size-4-1); font-size: var(--font-ui-medium); font-weight: var(--font-semibold); }
+.nc-conflict-name:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: var(--radius-s); }
+.nc-conflict-path { margin: 0 0 var(--size-4-2); color: var(--text-muted); font-size: var(--font-ui-small); overflow-wrap: anywhere; }
+.nc-conflict-explanation { margin: 0 0 var(--size-4-2); }
+.nc-conflict-details { margin: 0 0 var(--size-4-2); }
+.nc-conflict-details > summary { cursor: pointer; padding-block: var(--size-4-1); }
+.is-mobile .nc-conflict-details > summary { padding-block: var(--size-4-3); }
+.nc-diff-legend { display: flex; flex-wrap: wrap; gap: var(--size-4-3); margin: var(--size-4-2) 0; font-size: var(--font-ui-small); color: var(--text-normal); }
+.nc-diff {
+	max-height: 50vh; overflow: auto;
+	border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	font-family: var(--font-monospace); font-size: var(--font-ui-small); color: var(--text-normal);
+}
+.is-mobile .nc-diff { max-height: 40vh; }
+.nc-diff:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
+.nc-diff-line {
+	display: flex; gap: var(--size-4-2); padding: 0 var(--size-4-2);
+	border-inline-start: 3px solid transparent; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.nc-diff-line.is-removed { background-color: rgba(var(--color-red-rgb), 0.15); border-inline-start-color: var(--color-red); }
+.nc-diff-line.is-added { background-color: rgba(var(--color-green-rgb), 0.15); border-inline-start-color: var(--color-green); }
+.nc-diff-line.is-skipped { justify-content: center; color: var(--text-muted); font-family: var(--font-interface); font-style: italic; }
+.nc-diff-marker { flex: none; width: 1ch; font-weight: var(--font-bold); user-select: none; }
+.nc-diff-text { flex: 1 1 auto; min-width: 0; }
+.nc-diff-message { margin: var(--size-4-2) 0; color: var(--text-normal); }
+.nc-conflict-effects { margin: 0 0 var(--size-4-2); padding-inline-start: var(--size-4-6); font-size: var(--font-ui-small); }
+.nc-conflict-effects li { margin-bottom: var(--size-4-1); }
+.nc-conflict-actions { display: flex; flex-wrap: wrap; gap: var(--size-4-2); }
+.is-mobile .nc-conflict-actions { flex-direction: column; align-items: stretch; }
+.is-mobile .nc-conflict-actions button,
+.is-mobile .nc-conflicts-done .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }
+.nc-conflicts-done { margin: 0 0 var(--size-4-3); }

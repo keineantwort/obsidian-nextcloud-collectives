@@ -10,9 +10,9 @@ export interface SyncNoticeSpec { lines: string[]; level: NoticeLevel; }
 
 const DETAIL_SEPARATOR = ' · ';
 
-/** Notice text for a finished pull. Conflicts and failures get their own sentence on a separate line. */
+/** Notice text for a finished sync. Conflicts and failures get their own sentence on a separate line. */
 export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeSpec {
-	const changed = result.created + result.updated + result.metaUpdated + result.conflicts + result.failed;
+	const changed = result.created + result.updated + result.pushed + result.metaUpdated + result.conflicts + result.failed;
 	const lines: string[] = [];
 	if (changed === 0) {
 		lines.push(upToDate(result.unchanged, t));
@@ -20,6 +20,7 @@ export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeS
 		const details: string[] = [];
 		if (result.created > 0) details.push(t('sync.result.created', { count: result.created }));
 		if (result.updated > 0) details.push(t('sync.result.updated', { count: result.updated }));
+		if (result.pushed > 0) details.push(t('sync.result.pushed', { count: result.pushed }));
 		if (result.metaUpdated > 0) details.push(t('sync.result.metaUpdated', { count: result.metaUpdated }));
 		if (result.unchanged > 0) details.push(t('sync.result.unchanged', { count: result.unchanged }));
 		// Only conflicts/failures changed: the first line still confirms completion, without a trailing empty detail list.
@@ -30,6 +31,7 @@ export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeS
 		lines.push(result.conflicts === 1
 			? t('sync.result.conflicts.one', { label })
 			: t('sync.result.conflicts.other', { count: result.conflicts, label }));
+		lines.push(t('sync.result.conflicts.hint'));
 	}
 	if (result.failed > 0) {
 		lines.push(result.failed === 1 ? t('sync.result.failed.one') : t('sync.result.failed.other', { count: result.failed }));

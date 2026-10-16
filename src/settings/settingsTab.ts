@@ -2,6 +2,8 @@ import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
+import { strategyWarning } from './behaviourMessages';
+import { isConflictStrategy } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
@@ -103,6 +105,34 @@ export class NcSettingTab extends PluginSettingTab {
 				}
 			});
 		});
+
+		new Setting(containerEl).setName(t('settings.heading.behaviour')).setHeading();
+
+		const strategySetting = new Setting(containerEl)
+			.setName(t('settings.conflictStrategy.name'))
+			.setDesc(t('settings.conflictStrategy.desc'));
+		strategySetting.descEl.id = 'nc-conflict-strategy-desc';
+		const strategyWarningEl = containerEl.createDiv({
+			cls: 'nc-strategy-warning',
+			attr: { id: 'nc-conflict-strategy-warning', role: 'status', 'aria-live': 'polite' },
+		});
+		strategySetting.addDropdown((dd) => {
+			dd.addOptions({
+				conflictFile: t('settings.conflictStrategy.option.conflictFile'),
+				preferLocal: t('settings.conflictStrategy.option.preferLocal'),
+				preferRemote: t('settings.conflictStrategy.option.preferRemote'),
+			})
+				.setValue(settings.conflictStrategy)
+				.onChange(async (value) => {
+					if (!isConflictStrategy(value)) return;
+					settings.conflictStrategy = value;
+					strategyWarningEl.setText(strategyWarning(value, t));
+					await plugin.saveSettings();
+				});
+			dd.selectEl.setAttribute('aria-label', t('settings.conflictStrategy.name'));
+			dd.selectEl.setAttribute('aria-describedby', 'nc-conflict-strategy-desc nc-conflict-strategy-warning');
+		});
+		strategyWarningEl.setText(strategyWarning(settings.conflictStrategy, t));
 	}
 }
 

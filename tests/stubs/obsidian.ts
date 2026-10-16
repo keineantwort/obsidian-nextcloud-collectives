@@ -31,7 +31,19 @@ export class Plugin {
 		// no-op: unit tests never use the returned element
 		return {} as HTMLElement;
 	}
+
+	addStatusBarItem(): HTMLElement {
+		// no-op: unit tests never use the returned element
+		return {} as HTMLElement;
+	}
+
+	registerEvent(_eventRef: unknown): void {
+		// no-op: no vault events in unit tests
+	}
 }
+
+/** Platform flags; unit tests run as desktop. */
+export const Platform = { isMobile: false, isDesktop: true };
 
 export class Modal {
 	constructor(_app: unknown) {

@@ -1,15 +1,18 @@
-// Pull executor (PLAN §6.3, spec §7): applies the planner's operations to the vault and the sync state.
+// Sync executor (PLAN §6.3, §7.3, spec M4 §9): applies the planner's operations to the vault and the sync state.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
+import { isEtagConfirmed } from '../api/webdavClient';
 import type { WebdavClient } from '../api/webdavClient';
 import type { CollectiveId, PageInfo } from '../api/types';
 import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
 import type { NcMeta } from '../mapping/frontmatter';
 import { conflictPath, ncTitleFor, pathKey, remotePagePath } from '../mapping/paths';
 import { sha256Hex } from '../util/hash';
-import { isRunFatal } from '../util/errors';
+import { ConflictError, isRunFatal } from '../util/errors';
 import type { Logger } from '../util/logger';
+import { decideContent } from './decide';
+import type { ConflictStrategy, ContentAction } from './decide';
 import type { SyncOp, SyncPlan } from './planner';
-import { isCollision } from './state';
+import { UNCONFIRMED_REMOTE_MTIME, isCollision } from './state';
 import type { PageState, PageStatus, SyncState } from './state';
 import type { SyncResult } from './types';
 
@@ -29,26 +32,61 @@ export interface VaultWriter {
 
 export interface ExecutorDeps {
 	vault: VaultWriter;
-	webdav: Pick<WebdavClient, 'get'>;
+	webdav: Pick<WebdavClient, 'get' | 'put'>;
 	state: SyncState;
 	/** Persist state after each op (StateStore.save). */
 	persist: (state: SyncState) => Promise<void>;
 	now: () => Date;
 	/** Translated label for conflict file names ('Konflikt' / 'Conflict'). */
 	conflictLabel: string;
+	/** Conflict decision for pages changed on both sides (PLAN §7.3). */
+	strategy: ConflictStrategy;
+	/** Waits before a second GET when an ETag is not confirmed yet. Injectable for tests. */
+	sleep: (ms: number) => Promise<void>;
 	log: Logger;
 	/** Set of pathKey of all vault paths; executor adds the paths it creates. */
 	occupied: Set<string>;
 }
 
-/** Remote fields of PageState, taken from the listing and the GET response. */
-function remoteFields(page: PageInfo, etag: string): Pick<PageState, 'remoteFilePath' | 'remoteFileName' | 'parentId' | 'remoteEtag' | 'remoteMtime' | 'remoteSize'> {
+/** Wait before fetching a page again when its ETag cannot be trusted for If-Match (ETags have one-second resolution). */
+const CONFIRM_WAIT_MS = 1100;
+/** Attempts of one page operation: a 412 on the upload starts a second attempt with a fresh GET; a 412 there is rethrown. */
+const MAX_ATTEMPTS = 2;
+
+/** The remote version a state stores: its ETag and the remoteMtime that may be trusted for it. */
+interface RemoteVersion {
+	etag: string;
+	remoteMtime: number;
+}
+
+/** A GET of a remote page with the values derived from it. */
+interface Fetched extends RemoteVersion {
+	content: string;
+	/** sha256Hex(canonicalRemote(content)). */
+	hash: string;
+	/** True if the ETag can be used for If-Match (isEtagConfirmed). */
+	confirmed: boolean;
+}
+
+/** The local text of a page read for a content decision, with the mtime captured before the read. */
+interface LocalText {
+	text: string;
+	/** sha256Hex(toRemote(text)). */
+	hash: string;
+	mtimeBefore: number;
+}
+
+/** Operations that bring the content of a linked page in line with the remote: an update, or a push that may fall back to one. */
+type ContentOp = Extract<SyncOp, { kind: 'update' }> | Extract<SyncOp, { kind: 'push' }>;
+
+/** Remote fields of PageState, taken from the listing and the remote version. */
+function remoteFields(page: PageInfo, remote: RemoteVersion): Pick<PageState, 'remoteFilePath' | 'remoteFileName' | 'parentId' | 'remoteEtag' | 'remoteMtime' | 'remoteSize'> {
 	return {
 		remoteFilePath: page.filePath,
 		remoteFileName: page.fileName,
 		parentId: page.parentId,
-		remoteEtag: etag,
-		remoteMtime: page.timestamp,
+		remoteEtag: remote.etag,
+		remoteMtime: remote.remoteMtime,
 		remoteSize: page.size,
 	};
 }
@@ -64,19 +102,19 @@ interface LocalFields {
 	lastSyncedAt: number;
 }
 
-/** State of a page that the state does not know yet. Remote fields come from the listing and the GET (etag). */
-function newPageState(page: PageInfo, collectiveId: CollectiveId, etag: string, fields: LocalFields): PageState {
-	return { pageId: page.id, collectiveId, ...remoteFields(page, etag), attachments: [], ...fields };
+/** State of a page that the state does not know yet. Remote fields come from the listing and the GET. */
+function newPageState(page: PageInfo, collectiveId: CollectiveId, remote: RemoteVersion, fields: LocalFields): PageState {
+	return { pageId: page.id, collectiveId, ...remoteFields(page, remote), attachments: [], ...fields };
 }
 
 /** State of a linked page after its file was written or checked against the remote text `baseHash`. */
 function markSynced(
 	prev: PageState,
-	update: { page: PageInfo; etag: string; baseHash: string; metaHash: string; localMtime: number; now: number },
+	update: { page: PageInfo; remote: RemoteVersion; baseHash: string; metaHash: string; localMtime: number; now: number },
 ): PageState {
 	return {
 		...prev,
-		...remoteFields(update.page, update.etag),
+		...remoteFields(update.page, update.remote),
 		baseHash: update.baseHash,
 		metaHash: update.metaHash,
 		localMtime: update.localMtime,
@@ -89,11 +127,11 @@ function markSynced(
 /** State of a page after a conflict copy was written next to its file. */
 function markConflict(
 	prev: PageState,
-	update: { page: PageInfo; etag: string; status: PageStatus; baseHash: string; conflictPath: string; localMtime: number; now: number },
+	update: { page: PageInfo; remote: RemoteVersion; status: PageStatus; baseHash: string; conflictPath: string; localMtime: number; now: number },
 ): PageState {
 	return {
 		...prev,
-		...remoteFields(update.page, update.etag),
+		...remoteFields(update.page, update.remote),
 		status: update.status,
 		baseHash: update.baseHash,
 		conflictPath: update.conflictPath,
@@ -134,12 +172,38 @@ function requireState(deps: ExecutorDeps, pageId: number): PageState {
 	return entry;
 }
 
+function requireMtime(vault: VaultWriter, path: string): number {
+	const mtime = vault.mtime(path);
+	if (mtime === null) throw new Error(`no file at ${path}`);
+	return mtime;
+}
+
+/** GET of a remote page. The state may store the page timestamp as remoteMtime only if the ETag is confirmed. */
+async function fetchPage(deps: ExecutorDeps, page: PageInfo): Promise<Fetched> {
+	const file = await deps.webdav.get(remotePagePath(page));
+	const confirmed = isEtagConfirmed(file);
+	return {
+		content: file.content,
+		etag: file.etag,
+		confirmed,
+		remoteMtime: confirmed ? page.timestamp : UNCONFIRMED_REMOTE_MTIME,
+		hash: await sha256Hex(canonicalRemote(file.content)),
+	};
+}
+
+/** Reads the local text of a page for a content decision. The mtime is taken before the read (a later edit stays detectable). */
+async function readLocal(vault: VaultWriter, path: string): Promise<LocalText> {
+	const mtimeBefore = requireMtime(vault, path);
+	const text = await vault.read(path);
+	return { text, hash: await sha256Hex(toRemote(text)), mtimeBefore };
+}
+
 /**
- * Applies the plan. Operations run in order. A failing page operation is counted and logged (pageId and error class
+ * Applies the planner's operations in order. A failing page operation is counted and logged (pageId and error class
  * only), then the run continues. Errors for which isRunFatal is true abort the run and are rethrown.
  */
 export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<SyncResult> {
-	const result: SyncResult = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+	const result: SyncResult = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
 	for (const op of plan.ops) {
 		let changedState: boolean;
 		try {
@@ -180,19 +244,21 @@ async function applyOp(op: SyncOp, deps: ExecutorDeps, result: SyncResult): Prom
 			return adoptPage(op, deps, result);
 		case 'update':
 			return updatePage(op, deps, result);
+		case 'push':
+			return pushPage(op, deps, result);
 		case 'updateMeta':
 			return updateMeta(op, deps, result);
 	}
 }
 
 async function createPage(op: Extract<SyncOp, { kind: 'create' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
-	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
-	const mtime = await deps.vault.create(op.path, toLocal(content, metaFor(op.page, op.meta, op.path)));
+	const remote = await fetchPage(deps, op.page);
+	const mtime = await deps.vault.create(op.path, toLocal(remote.content, metaFor(op.page, op.meta, op.path)));
 	deps.occupied.add(pathKey(op.path));
-	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, etag, {
+	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 		localPath: op.path,
 		localMtime: mtime,
-		baseHash: await sha256Hex(canonicalRemote(content)),
+		baseHash: remote.hash,
 		metaHash: op.metaHash,
 		status: 'synced',
 		conflictPath: null,
@@ -203,9 +269,9 @@ async function createPage(op: Extract<SyncOp, { kind: 'create' }>, deps: Executo
 }
 
 async function createConflict(op: Extract<SyncOp, { kind: 'createConflict' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
-	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
-	const copyPath = await writeConflictCopy(deps, op.path, content);
-	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, etag, {
+	const remote = await fetchPage(deps, op.page);
+	const copyPath = await writeConflictCopy(deps, op.path, remote.content);
+	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 		localPath: op.path,
 		localMtime: deps.vault.mtime(op.path) ?? 0,
 		baseHash: '',
@@ -220,16 +286,16 @@ async function createConflict(op: Extract<SyncOp, { kind: 'createConflict' }>, d
 }
 
 async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
-	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
+	const remote = await fetchPage(deps, op.page);
 	const localText = await deps.vault.read(op.path);
-	const remoteCanonical = canonicalRemote(content);
+	const remoteCanonical = canonicalRemote(remote.content);
 	const now = deps.now().getTime();
 	const meta = metaFor(op.page, op.meta, op.path);
 
 	if (toRemote(localText) !== remoteCanonical) {
 		// The base is unknown here: the page stays linked by nc_page_id, and the next run compares by content.
-		const copyPath = await writeConflictCopy(deps, op.path, content);
-		deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, etag, {
+		const copyPath = await writeConflictCopy(deps, op.path, remote.content);
+		deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 			localPath: op.path,
 			localMtime: deps.vault.mtime(op.path) ?? 0,
 			baseHash: '',
@@ -251,10 +317,10 @@ async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorD
 	} else {
 		result.unchanged++;
 	}
-	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, etag, {
+	deps.state.pages[String(op.page.id)] = newPageState(op.page, op.meta.collectiveId, remote, {
 		localPath: op.path,
 		localMtime: mtime,
-		baseHash: await sha256Hex(remoteCanonical),
+		baseHash: remote.hash,
 		metaHash: op.metaHash,
 		status: 'synced',
 		conflictPath: null,
@@ -263,81 +329,141 @@ async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorD
 	return true;
 }
 
-async function updatePage(op: Extract<SyncOp, { kind: 'update' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
+/**
+ * Update of a known page (GET first). At most MAX_ATTEMPTS attempts; `attempt` is the number of this one. The content
+ * decision (PLAN §7.3) picks the action. A push on an unconfirmed ETag waits, fetches again and decides once more.
+ */
+async function updatePage(op: ContentOp, deps: ExecutorDeps, result: SyncResult, attempt = 1): Promise<boolean> {
 	const s = requireState(deps, op.page.id);
-	const { content, etag } = await deps.webdav.get(remotePagePath(op.page));
-	const remoteCanonical = canonicalRemote(content);
-	const remoteHash = await sha256Hex(remoteCanonical);
 	const now = deps.now().getTime();
-	const meta = metaFor(op.page, op.meta, op.path);
+	let remote = await fetchPage(deps, op.page);
+	if (isCollision(s)) return updateCollision(op, s, remote, deps, result, now);
 
-	if (isCollision(s)) return updateCollision(op, s, { etag, content, remoteHash, meta }, deps, result, now);
-
-	if (remoteHash === s.baseHash) {
-		// Remote text unchanged: only the remote fields (and metadata, if it changed) are refreshed.
-		let metaHash = s.metaHash;
-		let localMtime = s.localMtime;
-		if (op.metaChanged) {
-			localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, meta));
-			metaHash = op.metaHash;
-		}
-		deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, etag), metaHash, localMtime, lastSyncedAt: now };
-		result.unchanged++;
-		return true;
-	}
-
-	const localText = await deps.vault.read(op.path);
-	const localHash = await sha256Hex(toRemote(localText));
-
-	if (localHash === s.baseHash) {
-		// Local file still equals the last synced text: take the new remote text.
-		const mtime = await writeIfUnchanged(deps.vault, op.path, localText, toLocal(content, meta));
-		if (mtime !== null) {
-			deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, etag, baseHash: remoteHash, metaHash: op.metaHash, localMtime: mtime, now });
-			result.updated++;
+	let local = await readLocal(deps.vault, op.path);
+	let action = decideFor(s, local, remote, deps.strategy);
+	if (action === 'push' && !remote.confirmed) {
+		await deps.sleep(CONFIRM_WAIT_MS);
+		remote = await fetchPage(deps, op.page);
+		local = await readLocal(deps.vault, op.path);
+		action = decideFor(s, local, remote, deps.strategy);
+		if (action === 'push' && !remote.confirmed) {
+			deps.log.info('Push deferred: remote version not confirmed', { pageId: op.page.id });
+			deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, remote), lastSyncedAt: now };
+			result.unchanged++;
 			return true;
 		}
-		// The user edited the file between read and write: keep it and fall through to the conflict copy.
-		return recordUpdateConflict(op, s, { etag, content }, deps, result, now);
 	}
 
-	if (localHash === remoteHash) {
-		// Both sides hold the same text already: only the base moves on.
-		let localMtime = s.localMtime;
-		let metaHash = s.metaHash;
-		if (op.metaChanged) {
-			localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, meta));
-			metaHash = op.metaHash;
-		}
-		deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, etag, baseHash: remoteHash, metaHash, localMtime, now });
-		result.unchanged++;
-		return true;
+	switch (action) {
+		case 'none':
+			return refreshUnchanged(op, s, remote, deps, result, now);
+		case 'adoptBase':
+			return adoptRemoteAsBase(op, s, remote, deps, result, now);
+		case 'pull':
+			return pullRemote(op, s, remote, local, deps, result, now);
+		case 'conflict':
+			return recordUpdateConflict(op, s, remote, deps, result, now);
+		case 'push':
+			return pushFetched(op, s, remote, local, deps, result, now, attempt);
 	}
+}
 
-	return recordUpdateConflict(op, s, { etag, content }, deps, result, now);
+function decideFor(s: PageState, local: LocalText, remote: Fetched, strategy: ConflictStrategy): ContentAction {
+	return decideContent({ baseHash: s.baseHash, localHash: local.hash, remoteHash: remote.hash, status: s.status, strategy });
+}
+
+/** Action 'none': nothing to transfer. Refreshes the remote fields and, if the metadata changed, the nc fields. */
+async function refreshUnchanged(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
+	let metaHash = s.metaHash;
+	let localMtime = s.localMtime;
+	if (op.metaChanged) {
+		localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, metaFor(op.page, op.meta, op.path)));
+		metaHash = op.metaHash;
+	}
+	deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, remote), metaHash, localMtime, lastSyncedAt: now };
+	result.unchanged++;
+	return true;
+}
+
+/** Action 'adoptBase': both sides hold the same text already, so only the base moves on. */
+async function adoptRemoteAsBase(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
+	let metaHash = s.metaHash;
+	let localMtime = s.localMtime;
+	if (op.metaChanged) {
+		localMtime = await deps.vault.process(op.path, (cur) => replaceNcMeta(cur, metaFor(op.page, op.meta, op.path)));
+		metaHash = op.metaHash;
+	}
+	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash, localMtime, now });
+	result.unchanged++;
+	return true;
 }
 
 /**
- * Remote changed for a collision: the user file is linked only if it has no nc_page_id and its text equals the remote
- * text. Otherwise the remote text becomes a conflict copy and the state stays 'collision'.
+ * Action 'pull': the local file takes the remote text. Written only if the user did not change the file since the read;
+ * otherwise the remote text becomes a conflict copy.
  */
-async function updateCollision(
-	op: Extract<SyncOp, { kind: 'update' }>,
+async function pullRemote(
+	op: ContentOp,
 	s: PageState,
-	remote: { etag: string; content: string; remoteHash: string; meta: NcMeta },
+	remote: Fetched,
+	local: LocalText,
 	deps: ExecutorDeps,
 	result: SyncResult,
 	now: number,
 ): Promise<boolean> {
+	const meta = metaFor(op.page, op.meta, op.path);
+	const mtime = await writeIfUnchanged(deps.vault, op.path, local.text, toLocal(remote.content, meta));
+	if (mtime === null) return recordUpdateConflict(op, s, remote, deps, result, now);
+	if (local.hash !== s.baseHash) {
+		// Both sides changed and the strategy is preferRemote (the only one that pulls then): the local changes are replaced.
+		deps.log.info('Local changes replaced by remote text', { pageId: op.page.id });
+	}
+	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: op.metaHash, localMtime: mtime, now });
+	result.updated++;
+	return true;
+}
+
+/**
+ * Action 'push' during an update: the remote text was fetched and is confirmed (an unconfirmed ETag was refetched before).
+ * A 412 means the remote changed again: the first attempt is followed by a second one with a fresh GET.
+ */
+async function pushFetched(
+	op: ContentOp,
+	s: PageState,
+	remote: Fetched,
+	local: LocalText,
+	deps: ExecutorDeps,
+	result: SyncResult,
+	now: number,
+	attempt: number,
+): Promise<boolean> {
+	let next: PageState;
+	try {
+		next = await uploadLocal(op, s, local, remote.etag, deps, now);
+	} catch (err) {
+		if (!(err instanceof ConflictError) || attempt >= MAX_ATTEMPTS) throw err;
+		deps.log.info('Upload rejected, remote changed: fetching again', { pageId: op.page.id });
+		return updatePage(op, deps, result, attempt + 1);
+	}
+	deps.state.pages[String(op.page.id)] = next;
+	result.pushed++;
+	return true;
+}
+
+/**
+ * Update of a collision page (its file is the user's own). Linked only if the file has no nc_page_id and its text equals
+ * the remote text. Otherwise the remote text becomes a conflict copy and the state stays 'collision'.
+ */
+async function updateCollision(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
 	const localText = await deps.vault.read(op.path);
-	const linkable = readPageId(localText) === null && (await sha256Hex(toRemote(localText))) === remote.remoteHash;
+	const linkable = readPageId(localText) === null && (await sha256Hex(toRemote(localText))) === remote.hash;
 	if (!linkable) return recordUpdateConflict(op, s, remote, deps, result, now);
-	const mtime = await writeIfUnchanged(deps.vault, op.path, localText, replaceNcMeta(localText, remote.meta));
+	const mtime = await writeIfUnchanged(deps.vault, op.path, localText, replaceNcMeta(localText, metaFor(op.page, op.meta, op.path)));
 	if (mtime === null) return recordUpdateConflict(op, s, remote, deps, result, now);
 	deps.state.pages[String(op.page.id)] = markSynced(s, {
 		page: op.page,
-		etag: remote.etag,
-		baseHash: remote.remoteHash,
+		remote,
+		baseHash: remote.hash,
 		metaHash: op.metaHash,
 		localMtime: mtime,
 		now,
@@ -351,18 +477,11 @@ async function updateCollision(
  * Both sides changed: keep the local file, save the remote text as conflict copy, move the remote fields on.
  * A collision stays a collision; a linked page becomes a conflict.
  */
-async function recordUpdateConflict(
-	op: Extract<SyncOp, { kind: 'update' }>,
-	s: PageState,
-	remote: { etag: string; content: string },
-	deps: ExecutorDeps,
-	result: SyncResult,
-	now: number,
-): Promise<boolean> {
+async function recordUpdateConflict(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
 	const copyPath = await writeConflictCopy(deps, op.path, remote.content);
 	deps.state.pages[String(op.page.id)] = markConflict(s, {
 		page: op.page,
-		etag: remote.etag,
+		remote,
 		status: isCollision(s) ? 'collision' : 'conflict',
 		baseHash: s.baseHash,
 		conflictPath: copyPath,
@@ -372,6 +491,63 @@ async function recordUpdateConflict(
 	deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
 	result.conflicts++;
 	return true;
+}
+
+/** Push of a known page whose remote is unchanged since the state (no GET, see planner). */
+async function pushPage(op: Extract<SyncOp, { kind: 'push' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
+	const s = requireState(deps, op.page.id);
+	const now = deps.now().getTime();
+	const local = await readLocal(deps.vault, op.path);
+	// The remote is known to be unchanged, so the remote hash is the base: only the local side can have changed.
+	const action = decideContent({ baseHash: s.baseHash, localHash: local.hash, remoteHash: s.baseHash, status: s.status, strategy: deps.strategy });
+	if (action === 'none') {
+		// Content equal to the base (or a conflict page, which is not pushed): only the mtime moved, nothing is uploaded.
+		const next = await applyMetaChange(op, { ...s, localMtime: local.mtimeBefore }, local.text, deps);
+		deps.state.pages[String(op.page.id)] = next;
+		result.unchanged++;
+		return true;
+	}
+	// The only other action for this input is 'push'.
+	let next: PageState;
+	try {
+		next = await uploadLocal(op, s, local, s.remoteEtag, deps, now);
+	} catch (err) {
+		if (!(err instanceof ConflictError)) throw err;
+		// The first attempt was this upload; the update path gets the second one.
+		deps.log.info('Upload rejected, remote changed: fetching again', { pageId: op.page.id });
+		return updatePage(op, deps, result, MAX_ATTEMPTS);
+	}
+	deps.state.pages[String(op.page.id)] = next;
+	result.pushed++;
+	return true;
+}
+
+/** Uploads the local text under If-Match and records the push (base = text hash, remote mtime unconfirmed). */
+async function uploadLocal(op: ContentOp, s: PageState, local: LocalText, ifMatch: string, deps: ExecutorDeps, now: number): Promise<PageState> {
+	const put = await deps.webdav.put(remotePagePath(op.page), toRemote(local.text), { ifMatch });
+	const pushed = markSynced(s, {
+		page: op.page,
+		remote: { etag: put.etag, remoteMtime: UNCONFIRMED_REMOTE_MTIME },
+		baseHash: local.hash,
+		metaHash: s.metaHash,
+		localMtime: local.mtimeBefore,
+		now,
+	});
+	return applyMetaChange(op, pushed, local.text, deps);
+}
+
+/**
+ * Writes the nc fields after a content step if the metadata changed. Only if the file still holds `expectedText`
+ * (the text the step read); otherwise the metaHash stays and the next run retries.
+ */
+async function applyMetaChange(op: ContentOp, state: PageState, expectedText: string, deps: ExecutorDeps): Promise<PageState> {
+	if (!op.metaChanged) return state;
+	const mtime = await writeIfUnchanged(deps.vault, op.path, expectedText, replaceNcMeta(expectedText, metaFor(op.page, op.meta, op.path)));
+	if (mtime === null) {
+		deps.log.info('Metadata write skipped: file changed during sync', { pageId: op.page.id });
+		return state;
+	}
+	return { ...state, metaHash: op.metaHash, localMtime: mtime };
 }
 
 async function updateMeta(op: Extract<SyncOp, { kind: 'updateMeta' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {

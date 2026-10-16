@@ -1,7 +1,7 @@
 // Result types shared by planner, executor, runner and UI. Types only, no runtime code.
 import type { CollectiveId, PageId } from '../api/types';
 
-/** Why the pull left a page or collective alone. Structural cases are handled from M5 on. */
+/** Why the sync left a page or collective alone. Structural cases are handled from M5 on. */
 export type SkipReason =
 	| 'remoteMoved'        // filePath/fileName/parentId differ from state; content/meta still handled at the state's local path
 	| 'remoteDeleted'      // in state, collective scanned OK, page missing
@@ -13,11 +13,11 @@ export type SkipReason =
 
 export interface Skip { reason: SkipReason; pageId?: PageId; collectiveId?: CollectiveId; path?: string; }
 
-/** Counters of one pull run. */
-export interface SyncResult { created: number; updated: number; metaUpdated: number; conflicts: number; unchanged: number; failed: number; }
+/** Counters of one sync run. */
+export interface SyncResult { created: number; updated: number; pushed: number; metaUpdated: number; conflicts: number; unchanged: number; failed: number; }
 
 export type SyncRunOutcome =
-	| { kind: 'done'; result: SyncResult; skips: Skip[] }
+	| { kind: 'done'; result: SyncResult; skips: Skip[]; openConflicts: number }
 	| { kind: 'cancelled' }
 	| { kind: 'serverMismatch'; stateServer: string }
 	/** The state belongs to another Nextcloud account on the same server. Nothing was changed. */

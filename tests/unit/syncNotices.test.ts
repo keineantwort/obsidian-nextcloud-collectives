@@ -54,12 +54,30 @@ describe('formatSyncResult', () => {
 	it('puts a single conflict on its own line, with the conflict label, as a warning', () => {
 		const spec = formatSyncResult(result({ conflicts: 1 }), en);
 
-		expect(spec.lines).toHaveLength(2);
+		expect(spec.lines).toHaveLength(3);
 		expect(spec.lines[1]).toContain('Conflict');
 		expect(spec.lines[1]).toBe(
 			'1 conflict: your file was kept, and the server version was saved next to it with “Conflict” in its name.',
 		);
 		expect(spec.level).toBe('warning');
+	});
+
+	it('adds the hint to the command for deciding conflicts right after the conflict line', () => {
+		const spec = formatSyncResult(result({ conflicts: 1 }), en);
+
+		expect(spec.lines[2]).toBe('Use the command “Show conflicts” to decide which version to keep.');
+	});
+
+	it('adds the same hint in German after the conflict line', () => {
+		const spec = formatSyncResult(result({ conflicts: 2 }), de);
+
+		expect(spec.lines[2]).toBe('Mit dem Befehl „Konflikte anzeigen“ entscheidest du, welche Fassung bleibt.');
+	});
+
+	it('shows no conflict hint when there are no conflicts', () => {
+		const spec = formatSyncResult(result({ created: 1, failed: 1 }), en);
+
+		expect(spec.lines.join('\n')).not.toContain('Show conflicts');
 	});
 
 	it('uses the German conflict label in German', () => {
@@ -99,10 +117,11 @@ describe('formatSyncResult', () => {
 	it('keeps conflicts and failures on separate lines with the summary first', () => {
 		const spec = formatSyncResult(result({ created: 1, conflicts: 1, failed: 2 }), en);
 
-		expect(spec.lines).toHaveLength(3);
+		expect(spec.lines).toHaveLength(4);
 		expect(spec.lines[0]).toBe('Sync complete. New: 1');
 		expect(spec.lines[1]).toContain('conflict');
-		expect(spec.lines[2]).toContain('2 pages could not be synced');
+		expect(spec.lines[2]).toContain('Show conflicts');
+		expect(spec.lines[3]).toContain('2 pages could not be synced');
 		expect(spec.level).toBe('warning');
 	});
 
