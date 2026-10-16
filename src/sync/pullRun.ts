@@ -56,7 +56,7 @@ export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
 	const hasPages = Object.keys(state.pages).length > 0;
 	if (hasPages && state.serverUrl !== serverUrl) return { kind: 'serverMismatch', stateServer: state.serverUrl };
 	// Same server, other account: the page IDs in the state would belong to someone else's collectives.
-	if (hasPages && state.user !== userId) return { kind: 'serverMismatch', stateServer: `${state.user} @ ${state.serverUrl}` };
+	if (hasPages && state.user !== userId) return { kind: 'accountMismatch', stateUser: state.user, stateServer: state.serverUrl };
 	if (!hasPages) {
 		state.serverUrl = serverUrl;
 		state.user = userId;
@@ -96,7 +96,10 @@ function toTree(rc: RemoteCollective): CollectiveTree {
 	return { collectiveId: rc.collective.id, name: rc.collective.name, pages: rc.pages };
 }
 
-/** Metadata hash input for every page that has a planned local target. Orphans get none; the planner skips them first. */
+/**
+ * Metadata hash input for every page that has a planned local target. The title is the remote title; the executor
+ * derives the nc_title it actually writes from the file name. Orphans get none; the planner skips them first.
+ */
 async function buildRemoteMeta(
 	collectives: RemoteCollective[],
 	paths: PathPlan,
@@ -111,7 +114,7 @@ async function buildRemoteMeta(
 			const meta: NcMeta = {
 				pageId: page.id,
 				collectiveId: rc.collective.id,
-				title: target.ncTitle,
+				title: page.title,
 				emoji: page.emoji,
 				tags: tagNamesOf(page, tagNames, log),
 			};

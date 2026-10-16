@@ -1,10 +1,11 @@
 // Pull planner (PLAN §6, M3). Pure: no Obsidian, no network. Decides which operations the executor runs.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
-import { pathKey } from '../mapping/paths';
+import { canonicalPath, pathKey } from '../mapping/paths';
 import type { PathPlan } from '../mapping/paths';
 import type { LocalFile, LocalSnapshot } from './localScanner';
 import type { RemoteSnapshot } from './remoteScanner';
+import { isCollision } from './state';
 import type { CollectiveState, PageState, SyncState } from './state';
 import type { Skip, SkipReason } from './types';
 
@@ -14,7 +15,7 @@ export interface PlannerInput {
 	state: SyncState;
 	remote: RemoteSnapshot;
 	local: LocalSnapshot;
-	/** Precomputed by the runner: metaHash for each remote page (title-for-frontmatter = target ncTitle or null, emoji, tag names). */
+	/** Precomputed by the runner: metaHash for each remote page (remote title, emoji, tag names). */
 	remoteMeta: Map<PageId, { meta: NcMeta; hash: string }>;
 	paths: PathPlan;
 }
@@ -35,13 +36,13 @@ export type PullOp =
 	| { kind: 'saveTags'; collectiveId: CollectiveId; tags: SyncState['tags'][string] }
 	/** New page: create file at target.path (path free). */
 	| ({ kind: 'create' } & PageOpBase)
-	/** New page, target path occupied by a file that is not this page: write remote as conflict copy next to it,
-	 *  record state with status 'conflict', localPath = path, baseHash ''. */
+	/** New page, target path held by a user file without nc_page_id: write remote as conflict copy next to it,
+	 *  record state with status 'collision', localPath = the file's actual path, baseHash ''. */
 	| ({ kind: 'createConflict' } & PageOpBase)
 	/** Page not in state, but a local file carries its nc_page_id (state lost/reset): adopt. */
 	| ({ kind: 'adopt' } & PageOpBase)
-	/** Known page, remote mtime or size changed: fetch and compare. localChanged = local file mtime ≠ state.localMtime. */
-	| ({ kind: 'update'; localChanged: boolean; metaChanged: boolean } & PageOpBase)
+	/** Known page, remote mtime or size changed: fetch and compare. metaChanged = metaHash differs from the state. */
+	| ({ kind: 'update'; metaChanged: boolean } & PageOpBase)
 	/** Known page, only metadata changed remotely. */
 	| ({ kind: 'updateMeta' } & PageOpBase);
 
@@ -61,6 +62,8 @@ interface Context {
 	duplicates: Set<PageId>;
 	orphans: Set<PageId>;
 	pageOps: PageOp[];
+	/** pathKeys of the files that create operations of this plan write to. */
+	claimed: Set<string>;
 }
 
 /**
@@ -95,14 +98,16 @@ export function planPull(input: PlannerInput): PullPlan {
 		duplicates,
 		orphans: new Set(paths.orphans),
 		pageOps: [],
+		claimed: new Set<string>(),
 	};
 
 	const folderPaths = new Set<string>();
 	const collectiveSaves: PullOp[] = [];
 	const tagSaves: PullOp[] = [];
 	for (const rc of remote.collectives) {
-		const folder = paths.collectiveFolders.get(rc.collective.id);
-		if (folder === undefined) throw new Error(`planPull: no local folder planned for collective ${rc.collective.id}`);
+		const planned = paths.collectiveFolders.get(rc.collective.id);
+		if (planned === undefined) throw new Error(`planPull: no local folder planned for collective ${rc.collective.id}`);
+		const folder = canonicalPath(planned, local.paths);
 		const known = state.collectives[String(rc.collective.id)];
 		if (known === undefined) {
 			folderPaths.add(folder);
@@ -162,7 +167,11 @@ function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context
 	}
 }
 
-/** Page unknown to the state: adopt a local file with its nc_page_id, else create at the target path. */
+/**
+ * Page unknown to the state: adopt a local file with its nc_page_id, else create at the target path. A user file without
+ * nc_page_id on the target gets a conflict copy next to it. Any other occupied target (a file of another page, a folder,
+ * a file claimed earlier in this plan) gets the next free suffixed name in the same folder.
+ */
 function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string }, ctx: Context): void {
 	const base = { page, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
 	const adoptable = ctx.filesById.get(page.id);
@@ -172,10 +181,28 @@ function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string },
 	}
 	const target = ctx.input.paths.targets.get(page.id);
 	if (target === undefined) throw new Error(`planPull: no target path planned for page ${page.id}`);
-	if (ctx.input.local.occupied.has(pathKey(target.path))) {
-		ctx.pageOps.push({ kind: 'createConflict', ...base, path: target.path });
-	} else {
-		ctx.pageOps.push({ kind: 'create', ...base, path: target.path });
+	const { local } = ctx.input;
+	const path = canonicalPath(target.path, local.paths);
+	const key = pathKey(path);
+	const userFile = local.files.find((file) => file.pageId === null && pathKey(file.path) === key);
+	if (userFile !== undefined) {
+		ctx.pageOps.push({ kind: 'createConflict', ...base, path: userFile.path });
+		return;
+	}
+	const free = freePath(path, (candidate) => local.occupied.has(candidate) || ctx.claimed.has(candidate));
+	ctx.claimed.add(pathKey(free));
+	ctx.pageOps.push({ kind: 'create', ...base, path: free });
+}
+
+/** `path` if `taken` does not hold its key, else the first `dir/Name (n).md` (n >= 2) that is free. */
+function freePath(path: string, taken: (key: string) => boolean): string {
+	if (!taken(pathKey(path))) return path;
+	const slash = path.lastIndexOf('/');
+	const dir = path.slice(0, slash + 1);
+	const stem = path.slice(slash + 1, -'.md'.length);
+	for (let n = 2; ; n++) {
+		const candidate = `${dir}${stem} (${n}).md`;
+		if (!taken(pathKey(candidate))) return candidate;
 	}
 }
 
@@ -191,37 +218,36 @@ function planKnownPage(page: PageInfo, known: PageState, remoteMeta: { meta: NcM
 	}
 	const base = { page, path: file.path, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
 	if (page.timestamp !== known.remoteMtime || page.size !== known.remoteSize) {
-		ctx.pageOps.push({
-			kind: 'update',
-			...base,
-			localChanged: file.mtime !== known.localMtime,
-			metaChanged: remoteMeta.hash !== known.metaHash,
-		});
+		ctx.pageOps.push({ kind: 'update', ...base, metaChanged: remoteMeta.hash !== known.metaHash });
 	} else if (remoteMeta.hash !== known.metaHash) {
 		ctx.pageOps.push({ kind: 'updateMeta', ...base });
 	}
 }
 
-/** The local file of a known page: by path while the page is a name collision without base, else by nc_page_id. */
+/**
+ * The local file of a known page. A collision page has no nc_page_id in its file, so it is found by its path (any case)
+ * among the files without nc_page_id. Every other page is found by its nc_page_id only.
+ */
 function findKnownFile(known: PageState, ctx: Context): LocalFile | undefined {
-	if (known.status === 'conflict' && known.baseHash === '') {
-		return ctx.input.local.files.find((file) => file.path === known.localPath);
+	if (isCollision(known)) {
+		const key = pathKey(known.localPath);
+		return ctx.input.local.files.find((file) => file.pageId === null && pathKey(file.path) === key);
 	}
 	return ctx.filesById.get(known.pageId);
 }
 
-/** Folder operations: new collective folders, then every missing parent folder of a created file (not yet occupied). */
+/** Folder operations: new collective folders and the parent folders of created files, minus those already in the vault. */
 function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): PullOp[] {
 	const folders = new Set(folderPaths);
 	for (const op of pageOps) {
-		if (op.kind !== 'create' && op.kind !== 'createConflict') continue;
+		if (op.kind !== 'create') continue;
 		const segments = op.path.split('/');
 		for (let i = 1; i < segments.length; i++) {
-			const folder = segments.slice(0, i).join('/');
-			if (!occupied.has(pathKey(folder))) folders.add(folder);
+			folders.add(segments.slice(0, i).join('/'));
 		}
 	}
 	return [...folders]
+		.filter((path) => !occupied.has(pathKey(path)))
 		.sort((a, b) => depth(a) - depth(b) || comparePaths(a, b))
 		.map((path): PullOp => ({ kind: 'ensureFolder', path }));
 }

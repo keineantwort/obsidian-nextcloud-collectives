@@ -236,7 +236,7 @@ Gespeichert in der Datei `sync-state.json` im Plugin-Ordner via `app.vault.adapt
 | `attachments` | Liste `{ id, name, etag, localPath }` |
 | `lastSyncedAt` | Zeitstempel |
 | `localMtime` | mtime der lokalen Datei nach dem letzten eigenen Schreiben; Abweichung = Kandidat für lokale Änderung (M3) |
-| `status`, `conflictPath` | `synced` / `conflict` und Pfad der letzten Konfliktkopie (M3). `conflict` mit `baseHash = ''`: Pfadkollision, die Datei am `localPath` ist eine fremde Nutzerdatei ohne `nc_page_id` (ADR 0016) |
+| `status`, `conflictPath` | `synced` / `conflict` / `collision` und Pfad der letzten Konfliktkopie (M3). `conflict`: Datei trägt ihre `nc_page_id`, beide Seiten verschieden (`baseHash = ''`, wenn die Basis unbekannt ist). `collision`: Zielpfad war durch eine fremde Nutzerdatei ohne `nc_page_id` belegt; `localPath` ist deren Pfad (ADR 0016) |
 
 Zusätzlich: `schemaVersion`, `serverUrl`, `user`, Tag-Cache je Collective.
 
@@ -462,7 +462,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 ### M4 – Push Inhalt und Konflikte
 - Lokaler Scanner, Dirty-Queue, Planner (7.3), PUT mit ETag, Konfliktdatei, Konflikt-Dialog, Statusleiste.
-- Hinweise aus M3: Konfliktkopien und `status: conflict` entstehen schon im Pull (ADR 0016); der Push darf Seiten mit `status: conflict` nicht hochladen, der Konflikt-Dialog wertet `conflictPath` aus. Lokale Änderungen erkennt M3 über `localMtime`; prüfen, ob `file.stat.mtime` direkt nach `vault.process`/`vault.create` in Obsidian schon aktualisiert ist (sonst falsches `localChanged`). Pull-Planer und Push-Planer zusammenführen (`planPull` → `plan`).
+- Hinweise aus M3: Konfliktkopien und `status: conflict` entstehen schon im Pull (ADR 0016); der Push darf Seiten mit `status: conflict` oder `collision` nicht hochladen, der Konflikt-Dialog wertet `conflictPath` aus. Lokale Änderungen erkennt M3 über `localMtime`; prüfen, ob `file.stat.mtime` direkt nach `vault.process`/`vault.create` in Obsidian schon aktualisiert ist (sonst falsches `localChanged`). Pull-Planer und Push-Planer zusammenführen (`planPull` → `plan`).
+- Hinweise aus dem M3-Review: Die Entscheidung nach dem `GET` (Tabelle 7.3: `baseHash`/`localHash`/`remoteHash`, `collision`/`conflict`) als reine Funktion herauslösen (z. B. `src/sync/decide.ts`, unter die ESLint-Reinheitsregel), bevor Push und `preferLocal`/`preferRemote` dazukommen; der Executor führt dann nur noch aus. Konfliktnamen-Erkennung (`Konflikt|Conflict` fest im Regex) aus den Labels aller Locales ableiten.
 - Akzeptanz: Lokale Änderung landet in Collectives; gleichzeitige Änderung erzeugt Konflikt statt Datenverlust; keine Ping-Pong-Schreibvorgänge.
 - Hinweis aus M2: ETags haben Sekundenauflösung, ein veraltetes `If-Match` in derselben Sekunde wird angenommen (204 statt 412, `docs/api-notes.md` §10a). Konflikterkennung muss das abfangen, z. B. `PUT`-Antwort mit unverändertem ETag als unsicher werten und nach > 1 s neu lesen.
 - Hinweis aus M2: Weiterleitungen von `requestUrl` (Authorization-Header an fremde Hosts?) sind ungeprüft, manuell in Obsidian prüfen (spätestens M9).
@@ -470,7 +471,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 ### M5 – Struktur: Anlegen, Umbenennen, Verschieben, Löschen
 - Alle Fälle aus 7.4 inklusive Blatt→Elternseite und Collective-übergreifendem Verschieben.
-- Hinweise aus M3: Der Pull meldet Strukturfälle bereits als Skips (`remoteMoved`, `remoteDeleted`, `localDeleted`, `collectiveRenamed`, `collectiveRemoved`, `orphan`, `duplicateId`, `src/sync/types.ts`); M5 setzt sie um. Kollisionsdateien (`status: conflict`, `baseHash ''`) dürfen nicht als neue Seite hochgeladen werden. Text `initialSync.point.localFiles` an den Upload anpassen.
+- Hinweise aus M3: Der Pull meldet Strukturfälle bereits als Skips (`remoteMoved`, `remoteDeleted`, `localDeleted`, `collectiveRenamed`, `collectiveRemoved`, `orphan`, `duplicateId`, `src/sync/types.ts`); M5 setzt sie um. Kollisionsdateien (`status: collision`) dürfen nicht als neue Seite hochgeladen werden. Text `initialSync.point.localFiles` an den Upload anpassen.
+- Hinweis aus dem M3-Review: `Skip` in eine diskriminierte Union umbauen (je Grund garantierte Felder), bevor M5 die Gründe in Operationen und Dialoge umsetzt.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
 - Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
@@ -492,6 +494,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M9 – Automatik, Mobile, Login Flow
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
 - Hinweis aus M3: Der manuelle Lauf zeigt immer eine Ergebnis-Notice; automatische Läufe nur bei Level `warning`/`error` (`src/ui/syncNotices.ts`). Der einfache In-Flight-Schutz in `main.ts` wird durch den Mutex mit Re-Run-Flag ersetzt.
+- Hinweis aus dem M3-Review: Der Executor speichert nach jeder Operation den gesamten State (Erstsync mit N Seiten: O(N²) Serialisierung/Schreiben). Vor M9 mit ~1000 Seiten messen und `persist` drosseln (alle k Ops/t ms, am Laufende und vor jedem Abbruch; Konfliktkopien sofort).
 - Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
 - Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 

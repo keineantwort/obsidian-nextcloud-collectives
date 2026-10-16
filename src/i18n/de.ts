@@ -38,6 +38,7 @@ export const de: Record<MessageKey, string> = {
 	'sync.alreadyRunning': 'Es läuft bereits eine Synchronisierung.',
 	'sync.cancelled': 'Synchronisierung abgebrochen. Es wurde nichts geändert.',
 	'sync.serverMismatch': 'Dieser Vault wird bereits mit einem anderen Server synchronisiert ({server}). Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen. Es wurde nichts geändert.',
+	'sync.accountMismatch': 'Dieser Vault wird bereits mit einem anderen Nextcloud-Konto ({user}) auf diesem Server synchronisiert. Ein Vault ist fest an ein Konto gebunden – für ein anderes Konto bitte einen neuen Vault anlegen. Es wurde nichts geändert.',
 	'sync.result.upToDate.none': 'Synchronisierung abgeschlossen. In deinen Collectives wurden keine Seiten gefunden.',
 	'sync.result.upToDate.one': 'Synchronisierung abgeschlossen. Die Seite ist aktuell.',
 	'sync.result.upToDate.other': 'Synchronisierung abgeschlossen. Alle {count} Seiten sind aktuell.',

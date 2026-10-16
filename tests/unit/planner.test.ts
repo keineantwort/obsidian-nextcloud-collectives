@@ -100,14 +100,19 @@ function localFile(path: string, pageId: number | null, mtime = 500): LocalFile 
 	return { path, mtime, pageId: pageId === null ? null : asPageId(pageId) };
 }
 
-/** Occupied set as the scanner builds it: keys of all files and all ancestor folders. */
+/** Occupied set and path spellings as the scanner builds them: keys of all files and all ancestor folders. */
 function localSnapshot(files: LocalFile[]): LocalSnapshot {
 	const occupied = new Set<string>();
+	const paths = new Map<string, string>();
 	for (const file of files) {
 		const parts = file.path.split('/');
-		for (let i = 1; i <= parts.length; i++) occupied.add(pathKey(parts.slice(0, i).join('/')));
+		for (let i = 1; i <= parts.length; i++) {
+			const path = parts.slice(0, i).join('/');
+			occupied.add(pathKey(path));
+			paths.set(pathKey(path), path);
+		}
 	}
-	return { files, occupied, nonEmpty: files.length > 0 };
+	return { files, occupied, paths, nonEmpty: files.length > 0 };
 }
 
 function syncState(parts: { collectives?: CollectiveState[]; pages?: PageState[]; tags?: SyncState['tags'] }): SyncState {
@@ -162,7 +167,8 @@ function inputFor(parts: Parts = {}): PlannerInput {
 			const meta: NcMeta = {
 				pageId: p.id,
 				collectiveId: rc.collective.id,
-				title: paths.targets.get(p.id)?.ncTitle ?? null,
+				// Remote title as the runner passes it; the executor derives nc_title from the file name it writes to.
+				title: p.title,
 				emoji: p.emoji,
 				tags: [],
 			};
@@ -222,21 +228,21 @@ describe('planPull: new and known pages', () => {
 		expect(opsOf(plan, 'adopt')).toEqual([expect.objectContaining({ path: 'Coll/Umzug.md', metaHash: 'm11' })]);
 	});
 
-	it('updates a known page with localChanged false when the local mtime still matches the state', () => {
+	it('updates a known page when its remote timestamp changed, with no localChanged field in the op', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
 		});
-		expect(opsOf(plan, 'update')).toEqual([
-			expect.objectContaining({ path: 'Coll/Seite.md', localChanged: false, metaChanged: false }),
-		]);
+		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md', metaChanged: false })]);
+		expect(opsOf(plan, 'update')[0]).not.toHaveProperty('localChanged');
 	});
 
-	it('updates a known page with localChanged true when the local mtime differs from the state', () => {
+	it('updates a known page whose local mtime differs from the state, with no localChanged field in the op', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
 			files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)],
 		});
-		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md', localChanged: true })]);
+		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md' })]);
+		expect(opsOf(plan, 'update')[0]).not.toHaveProperty('localChanged');
 	});
 
 	it('updates a known page when only the remote size changed', () => {
@@ -315,9 +321,9 @@ describe('planPull: skips for moved, deleted and inconsistent pages', () => {
 		expect(opsOf(plan, 'update')).toEqual([]);
 	});
 
-	it('handles a state page with status conflict and empty baseHash via its localPath, even without nc_page_id', () => {
+	it('handles a state page with status collision via its localPath, even without nc_page_id', () => {
 		const state = baseState();
-		state.pages['10'] = { ...state.pages['10']!, status: 'conflict', baseHash: '', localPath: 'Coll/Seite.md' };
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
 		const plan = planFor({
 			state,
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
@@ -326,11 +332,99 @@ describe('planPull: skips for moved, deleted and inconsistent pages', () => {
 		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md' })]);
 	});
 
-	it('skips localDeleted for a conflict page whose file at localPath is missing', () => {
+	it('skips localDeleted for a collision page whose file at localPath is missing', () => {
 		const state = baseState();
-		state.pages['10'] = { ...state.pages['10']!, status: 'conflict', baseHash: '', localPath: 'Coll/Seite.md' };
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
 		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1)] });
 		expect(findSkip(plan, 'localDeleted')).toMatchObject({ pageId: 10 });
+	});
+});
+
+describe('planPull: collisions, case and foreign files', () => {
+	it('finds a collision page by its localPath case-insensitively when the file carries no nc_page_id', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
+		const plan = planFor({
+			state,
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
+			files: [localFile('Coll/Coll.md', 1), localFile('coll/seite.md', null)],
+		});
+		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'coll/seite.md' })]);
+		expect(skipReasons(plan)).not.toContain('localDeleted');
+	});
+
+	it('ignores a file with an nc_page_id at the collision path and skips the page as localDeleted', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
+		const plan = planFor({
+			state,
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
+			files: [localFile('Coll/Coll.md', 1), localFile('coll/seite.md', 10)],
+		});
+		expect(findSkip(plan, 'localDeleted')).toMatchObject({ pageId: 10 });
+		expect(opsOf(plan, 'update')).toEqual([]);
+	});
+
+	it('finds a conflict page after its file was renamed by the user, via its nc_page_id', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'conflict', baseHash: '', localPath: 'Coll/Seite.md' };
+		const plan = planFor({
+			state,
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
+			files: [localFile('Coll/Coll.md', 1), localFile('Coll/Umbenannt.md', 10)],
+		});
+		expect(plan.skips).toEqual([]);
+		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Umbenannt.md' })]);
+	});
+
+	it('creates a new page at a free suffix in the same folder when the target holds a file with another nc_page_id', () => {
+		const plan = planFor({
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage(), page(11, { title: 'Neu', parentId: asPageId(1) })])]),
+			files: [...baseFiles(), localFile('Coll/Neu.md', 99)],
+		});
+		expect(opsOf(plan, 'createConflict')).toEqual([]);
+		expect(opsOf(plan, 'create')).toEqual([expect.objectContaining({ path: 'Coll/Neu (2).md', metaHash: 'm11' })]);
+	});
+
+	it('plans no two creates for the same path and no conflict copy when a suffixed name is claimed in the plan', () => {
+		const plan = planFor({
+			remote: remote([
+				remoteCollective(1, 'Coll', [
+					startPage(),
+					seitePage(),
+					page(11, { title: 'Neu', fileName: 'Neu.md', parentId: asPageId(1) }),
+					page(12, { title: 'Neu', fileName: 'Neu (2).md', parentId: asPageId(1) }),
+				]),
+			]),
+			files: [...baseFiles(), localFile('Coll/Neu.md', 99)],
+		});
+		const creates = opsOf(plan, 'create').map((op) => op.path);
+		expect(opsOf(plan, 'createConflict')).toEqual([]);
+		expect(new Set(creates).size).toBe(creates.length);
+	});
+
+	it('writes a new page as conflict copy at the path of a user file that differs from the target only in case', () => {
+		const plan = planFor({
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage(), page(11, { title: 'Neu', parentId: asPageId(1) })])]),
+			files: [...baseFiles(), localFile('coll/neu.md', null)],
+		});
+		expect(opsOf(plan, 'createConflict')).toEqual([expect.objectContaining({ path: 'coll/neu.md' })]);
+		expect(opsOf(plan, 'create')).toEqual([]);
+	});
+
+	it('uses the spelling on disk for the folder of a new collective and for the paths below it', () => {
+		const plan = planFor({
+			state: syncState({}),
+			remote: remote([
+				remoteCollective(2, 'Coll', [startPage({ id: asPageId(20) }), page(21, { title: 'Neu', parentId: asPageId(20) })]),
+			]),
+			files: [localFile('coll/Altes.md', null)],
+		});
+		expect(opsOf(plan, 'saveCollective')).toEqual([
+			expect.objectContaining({ collective: { collectiveId: 2, name: 'Coll', localFolder: 'coll' } }),
+		]);
+		expect(opsOf(plan, 'ensureFolder').map((op) => op.path)).not.toContain('Coll');
+		expect(opsOf(plan, 'create').map((op) => op.path).sort()).toEqual(['coll/Coll.md', 'coll/Neu.md']);
 	});
 });
 

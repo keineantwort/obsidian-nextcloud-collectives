@@ -217,7 +217,7 @@ describe('Pull against the local Docker Nextcloud with an in-memory vault', () =
 
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.writes).toBe(stateWritesBefore);
-		expect(result.created + result.updated + result.metaUpdated + result.conflicts).toBe(0);
+		expect(result).toEqual({ created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 });
 		expect(davGetsSince(requestsBefore)).toEqual([]);
 		expect(readPageId(await readLocal(`${f.name}/Notiz.md`))).toBe(f.note.id);
 	});

@@ -5,12 +5,16 @@ import { isRecord } from '../util/isRecord';
 
 export const STATE_SCHEMA_VERSION = 1;
 
-export type PageStatus = 'synced' | 'conflict';
+/**
+ * synced: linked page, its file carries its nc_page_id. conflict: linked page with a conflict copy (baseHash may be '' after an
+ * adopt conflict). collision: the target path was held by a user file without nc_page_id; that file is not linked.
+ */
+export type PageStatus = 'synced' | 'conflict' | 'collision';
 
 export interface PageState {
 	pageId: PageId;
 	collectiveId: CollectiveId;
-	/** Vault path at last sync. For status 'conflict' after a path collision: the occupied path (file has no nc_page_id). */
+	/** Vault path at last sync. For status 'collision': the actual spelling of the user file at the occupied path. */
 	localPath: string;
 	/** file.stat.mtime of the local file right after our last write/check (ms). */
 	localMtime: number;
@@ -21,7 +25,7 @@ export interface PageState {
 	/** PageInfo.timestamp (s). */
 	remoteMtime: number;
 	remoteSize: number;
-	/** sha256Hex(canonical remote format) at last sync. '' = unknown base (collision conflict). */
+	/** sha256Hex(canonical remote format) at last sync. '' = no known base (collision, or adopt conflict). */
 	baseHash: string;
 	/** metaHash(title-for-frontmatter, emoji, tag names) at last sync. */
 	metaHash: string;
@@ -110,7 +114,12 @@ function isText(value: unknown): value is string {
 }
 
 function isPageStatus(value: unknown): value is PageStatus {
-	return value === 'synced' || value === 'conflict';
+	return value === 'synced' || value === 'conflict' || value === 'collision';
+}
+
+/** True for a page whose target path was occupied by a user file without nc_page_id. Such a file is never linked by path. */
+export function isCollision(s: Pick<PageState, 'status'>): boolean {
+	return s.status === 'collision';
 }
 
 /** True if the record has exactly the given keys (no more, no less). */

@@ -77,6 +77,21 @@ describe('scanLocal', () => {
 		expect([...snapshot.occupied].sort()).toEqual([...expected].sort());
 	});
 
+	it('paths maps the key of every file and folder to the spelling that is on disk', async () => {
+		const vault = new MemoryVault();
+		vault.seed('Handbuch/Prozesse/Seite.md', '---\nnc_page_id: 10\n---\n');
+		vault.seed('Bild.png', 'bytes');
+		vault.seedFolder('Leer');
+
+		const snapshot = await scanLocal(vault);
+
+		expect(snapshot.paths.get(pathKey('handbuch'))).toBe('Handbuch');
+		expect(snapshot.paths.get(pathKey('HANDBUCH/prozesse'))).toBe('Handbuch/Prozesse');
+		expect(snapshot.paths.get(pathKey('handbuch/prozesse/seite.md'))).toBe('Handbuch/Prozesse/Seite.md');
+		expect(snapshot.paths.get(pathKey('bild.png'))).toBe('Bild.png');
+		expect(snapshot.paths.get(pathKey('leer'))).toBe('Leer');
+	});
+
 	it('nonEmpty is false when only the config folder has content', async () => {
 		const vault = new MemoryVault();
 		vault.seed('.obsidian/app.json', '{}');

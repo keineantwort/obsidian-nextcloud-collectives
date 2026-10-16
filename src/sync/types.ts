@@ -19,4 +19,6 @@ export interface PullResult { created: number; updated: number; metaUpdated: num
 export type PullRunOutcome =
 	| { kind: 'done'; result: PullResult; skips: Skip[] }
 	| { kind: 'cancelled' }
-	| { kind: 'serverMismatch'; stateServer: string };
+	| { kind: 'serverMismatch'; stateServer: string }
+	/** The state belongs to another Nextcloud account on the same server. Nothing was changed. */
+	| { kind: 'accountMismatch'; stateUser: string; stateServer: string };

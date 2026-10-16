@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { asAttachmentId, asCollectiveId, asPageId, asTagId } from '../../src/api/types';
-import { emptyState, parseSyncState, serializeSyncState } from '../../src/sync/state';
+import { emptyState, isCollision, parseSyncState, serializeSyncState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 
 const SERVER = 'https://cloud.example.com';
@@ -82,8 +82,25 @@ describe('parseSyncState', () => {
 		expect(parseSyncState(mutated((raw) => { (raw.pages as Record<string, Record<string, unknown>>)['10']!.status = 'bogus'; }))).toBeNull();
 	});
 
+	it('accepts a page with status collision and keeps the status', () => {
+		const state = validState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Handbuch/Seite 10.md' };
+		const parsed = parseSyncState(JSON.parse(JSON.stringify(state)));
+		expect(parsed?.pages['10']).toMatchObject({ status: 'collision', baseHash: '' });
+	});
+
 	it.each([null, 'text', 42, []])('returns null for a non-object value (%j)', (raw) => {
 		expect(parseSyncState(raw)).toBeNull();
+	});
+});
+
+describe('isCollision', () => {
+	it.each<{ name: string; status: PageState['status']; expected: boolean }>([
+		{ name: 'is true for status collision', status: 'collision', expected: true },
+		{ name: 'is false for status synced', status: 'synced', expected: false },
+		{ name: 'is false for status conflict, which is a linked page', status: 'conflict', expected: false },
+	])('$name', ({ status, expected }) => {
+		expect(isCollision({ status })).toBe(expected);
 	});
 });
 

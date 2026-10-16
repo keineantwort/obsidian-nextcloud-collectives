@@ -44,6 +44,7 @@ export function describePullOutcome(outcome: PullRunOutcome, t: Translator): Syn
 		case 'done': return formatPullResult(outcome.result, t);
 		case 'cancelled': return { lines: [t('sync.cancelled')], level: 'info' };
 		case 'serverMismatch': return { lines: [t('sync.serverMismatch', { server: outcome.stateServer })], level: 'error' };
+		case 'accountMismatch': return { lines: [t('sync.accountMismatch', { user: outcome.stateUser })], level: 'error' };
 	}
 }
 

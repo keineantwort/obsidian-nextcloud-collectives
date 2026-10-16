@@ -271,7 +271,7 @@ describe('executePull: createConflict and conflict naming', () => {
 		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V1));
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
 		expect(stateOf(h, NOTE)).toMatchObject({
-			status: 'conflict',
+			status: 'collision',
 			localPath: NOTE_PATH,
 			baseHash: '',
 			conflictPath: NOTE_CONFLICT,
@@ -353,7 +353,7 @@ describe('executePull: update', () => {
 		h.dav.serve(newer, REMOTE_V2, '"e2"');
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -380,7 +380,7 @@ describe('executePull: update', () => {
 		const baseBefore = stateOf(h, NOTE).baseHash;
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: touched, path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: touched, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -400,7 +400,7 @@ describe('executePull: update', () => {
 		const baseBefore = stateOf(h, NOTE).baseHash;
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: true, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -425,7 +425,7 @@ describe('executePull: update', () => {
 		const newer = page(10, { timestamp: 2000, size: 30 });
 		h.dav.serve(newer, REMOTE_V2, '"e2"');
 		await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: true, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -433,6 +433,7 @@ describe('executePull: update', () => {
 		const local: LocalSnapshot = {
 			files: [{ path: NOTE_PATH, mtime: h.vault.mtime(NOTE_PATH) ?? 0, pageId: asPageId(10) }],
 			occupied: new Set<string>(),
+			paths: new Map<string, string>(),
 			nonEmpty: true,
 		};
 		const next = planPull({
@@ -456,7 +457,7 @@ describe('executePull: update', () => {
 		const writesBefore = h.vault.writes;
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: true, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -480,7 +481,7 @@ describe('executePull: update', () => {
 		};
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH, metaChanged: false }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
 			h.deps,
 		);
 
@@ -540,7 +541,7 @@ describe('executePull: errors', () => {
 		const result = await executePull(
 			plan([
 				{ kind: 'ensureFolder', path: 'Coll' },
-				{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH, metaChanged: false },
+				{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false },
 				{ kind: 'create', page: zweite, path: 'Coll/Zweite.md', meta: metaOf(30), metaHash: META_HASH },
 			]),
 			h.deps,
@@ -569,7 +570,7 @@ describe('executePull: errors', () => {
 		await expect(
 			executePull(
 				plan([
-					{ kind: 'update', page: page(10, { timestamp: 2000 }), path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH, metaChanged: false },
+					{ kind: 'update', page: page(10, { timestamp: 2000 }), path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false },
 					{ kind: 'create', page: zweite, path: 'Coll/Zweite.md', meta: metaOf(30), metaHash: META_HASH },
 				]),
 				h.deps,
@@ -579,14 +580,14 @@ describe('executePull: errors', () => {
 	});
 });
 
-describe('executePull: unlinked collision conflict (baseHash empty)', () => {
+describe('executePull: collision page (status collision, baseHash empty)', () => {
 	const USER_TEXT = '# Eigene Notiz\n\nVon mir\n';
 
 	/** State as createConflict leaves it: the user file at NOTE_PATH has no nc_page_id and is not linked. */
 	async function rememberCollision(h: Harness): Promise<void> {
 		h.vault.seed(NOTE_PATH, USER_TEXT);
 		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
-		h.state.pages[String(NOTE.id)] = { ...stateOf(h, NOTE), baseHash: '', status: 'conflict', conflictPath: NOTE_CONFLICT };
+		h.state.pages[String(NOTE.id)] = { ...stateOf(h, NOTE), baseHash: '', status: 'collision', conflictPath: NOTE_CONFLICT };
 	}
 
 	it('never writes nc fields into the unlinked user file on a metadata change', async () => {
@@ -602,7 +603,7 @@ describe('executePull: unlinked collision conflict (baseHash empty)', () => {
 		expect(await h.vault.read(NOTE_PATH)).toBe(USER_TEXT);
 		expect(h.vault.writes).toBe(writesBefore);
 		expect(result).toEqual({ ...ZERO_RESULT, unchanged: 1 });
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: '', metaHash: META_HASH_2 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', baseHash: '', metaHash: META_HASH_2 });
 	});
 
 	it('keeps the user file byte-identical and writes a new conflict copy when the remote text changed to other text', async () => {
@@ -613,13 +614,13 @@ describe('executePull: unlinked collision conflict (baseHash empty)', () => {
 		h.dav.serve(newer, REMOTE_V2, '"e2"');
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: false, meta: metaOf(10), metaHash: META_HASH_2, metaChanged: true }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH_2, metaChanged: true }]),
 			h.deps,
 		);
 
 		expect(await h.vault.read(NOTE_PATH)).toBe(USER_TEXT);
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
-		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: '', remoteMtime: 2000 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', baseHash: '', remoteMtime: 2000 });
 	});
 
 	it('links the user file and records a synced state when the remote text now equals it', async () => {
@@ -630,7 +631,7 @@ describe('executePull: unlinked collision conflict (baseHash empty)', () => {
 		const meta = metaOf(10);
 
 		const result = await executePull(
-			plan([{ kind: 'update', page: newer, path: NOTE_PATH, localChanged: false, meta, metaHash: META_HASH_2, metaChanged: true }]),
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH_2, metaChanged: true }]),
 			h.deps,
 		);
 
@@ -642,5 +643,82 @@ describe('executePull: unlinked collision conflict (baseHash empty)', () => {
 			baseHash: await sha256Hex(canonicalRemote(USER_TEXT)),
 			metaHash: META_HASH_2,
 		});
+	});
+});
+
+describe('executePull: collision names, links and nc_title', () => {
+	const USER_TEXT = '# Eigene Notiz\n\nVon mir\n';
+
+	it('never links a collision file that carries an nc_page_id, and writes a conflict copy instead', async () => {
+		const h = harness();
+		const linked = toLocal(USER_TEXT, metaOf(10));
+		h.vault.seed(NOTE_PATH, linked);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		h.state.pages['10'] = { ...stateOf(h, NOTE), baseHash: '', status: 'collision', conflictPath: null };
+		const newer = page(10, { timestamp: 2000, size: 30 });
+		h.dav.serve(newer, USER_TEXT, '"e2"');
+
+		const result = await executePull(
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH, metaChanged: false }]),
+			h.deps,
+		);
+
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(await h.vault.read(NOTE_PATH)).toBe(linked);
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(USER_TEXT));
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', baseHash: '', conflictPath: NOTE_CONFLICT });
+	});
+
+	it('keeps an adopt conflict findable by nc_page_id after the user renamed its file, so no page is skipped as localDeleted', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		h.vault.seed(NOTE_PATH, `${toLocal(REMOTE_V1, meta)}Eigener Zusatz\n`);
+		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
+		await executePull(plan([{ kind: 'adopt', page: NOTE, path: NOTE_PATH, meta, metaHash: META_HASH }]), h.deps);
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', baseHash: '' });
+		h.state.collectives['1'] = { collectiveId: asCollectiveId(1), name: 'Coll', localFolder: 'Coll' };
+
+		const planned = planPull({
+			state: h.state,
+			remote: { collectives: [{ collective: collective(), pages: [NOTE], tags: [] }], failed: [] },
+			local: {
+				files: [{ path: 'Coll/Umbenannt.md', mtime: 1, pageId: asPageId(10) }],
+				occupied: new Set<string>(),
+				paths: new Map<string, string>(),
+				nonEmpty: true,
+			},
+			remoteMeta: new Map([[asPageId(10), { meta, hash: META_HASH }]]),
+			paths: { collectiveFolders: new Map([[asCollectiveId(1), 'Coll']]), targets: new Map(), orphans: [] },
+		});
+
+		expect(planned.skips).toEqual([]);
+	});
+
+	it('writes nc_title from the file name it is written to, so a suffixed file keeps the original title', async () => {
+		const h = harness();
+		h.vault.seedFolder('Coll');
+		const note = page(12, { title: 'Notes', fileName: 'Notes.md' });
+		h.dav.serve(note, REMOTE_V1, '"e12"');
+
+		await executePull(
+			plan([{ kind: 'create', page: note, path: 'Coll/Notes (2).md', meta: metaOf(12, { title: null }), metaHash: META_HASH }]),
+			h.deps,
+		);
+
+		expect(await h.vault.read('Coll/Notes (2).md')).toBe(toLocal(REMOTE_V1, metaOf(12, { title: 'Notes' })));
+	});
+
+	it('never writes nc_title into a landing page, whatever title the planned meta carries', async () => {
+		const h = harness();
+		h.vault.seedFolder('Coll');
+		const landing = page(92, { title: 'Landing page', fileName: 'Readme.md', parentId: asPageId(0) });
+		h.dav.serve(landing, REMOTE_V1, '"e92"');
+
+		await executePull(
+			plan([{ kind: 'create', page: landing, path: 'Coll/Coll.md', meta: metaOf(92, { title: 'Landing page' }), metaHash: META_HASH }]),
+			h.deps,
+		);
+
+		expect(await h.vault.read('Coll/Coll.md')).toBe(toLocal(REMOTE_V1, metaOf(92)));
 	});
 });

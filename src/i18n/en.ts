@@ -36,6 +36,7 @@ export const en = {
 	'sync.alreadyRunning': 'A sync is already running.',
 	'sync.cancelled': 'Sync cancelled. Nothing was changed.',
 	'sync.serverMismatch': 'This vault is already synced with another server ({server}). A vault is bound to one server – to use a different server, create a new vault. Nothing was changed.',
+	'sync.accountMismatch': 'This vault is already synced with another Nextcloud account ({user}) on this server. A vault is bound to one account – to use a different account, create a new vault. Nothing was changed.',
 	'sync.result.upToDate.none': 'Sync complete. No pages found in your collectives.',
 	'sync.result.upToDate.one': 'Sync complete. The page is up to date.',
 	'sync.result.upToDate.other': 'Sync complete. All {count} pages are up to date.',

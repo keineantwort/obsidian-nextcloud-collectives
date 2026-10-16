@@ -4,9 +4,11 @@ import { asCollectiveId, asPageId } from '../../src/api/types';
 import type { CollectiveId, PageInfo, PageId } from '../../src/api/types';
 import { parsePageInfo } from '../../src/api/parse';
 import {
+	canonicalPath,
 	conflictPath,
 	isConflictFileName,
 	isSyncedPath,
+	ncTitleFor,
 	pathKey,
 	planLocalPaths,
 	sanitizeName,
@@ -52,6 +54,13 @@ function tree(id: number, name: string, pages: PageInfo[]): CollectiveTree {
 
 function targetPath(plan: PathPlan, id: number): string | undefined {
 	return plan.targets.get(asPageId(id))?.path;
+}
+
+/** Target path of a page that the test expects to be planned. */
+function pathOf(plan: PathPlan, id: number): string {
+	const path = targetPath(plan, id);
+	if (path === undefined) throw new Error(`no target path planned for page ${id}`);
+	return path;
 }
 
 function sortedIds(ids: PageId[]): number[] {
@@ -167,8 +176,8 @@ describe('planLocalPaths with the M0 pages fixture', () => {
 		expect(targetPath(plan, 114)).toBe('Handbuch/Onboarding/Erster Tag.md');
 	});
 
-	it('gives no ncTitle for the landing page, even though its title differs from the folder name', () => {
-		expect(plan.targets.get(asPageId(92))?.ncTitle).toBeNull();
+	it('gives no nc_title for the landing page, even though its title differs from the folder name', () => {
+		expect(ncTitleFor('Landing page', pathOf(plan, 92), true)).toBeNull();
 	});
 
 	it('reports no orphans for the complete fixture', () => {
@@ -177,28 +186,55 @@ describe('planLocalPaths with the M0 pages fixture', () => {
 });
 
 describe('planLocalPaths rules', () => {
-	it('sets ncTitle to the original title when the sanitized name differs', () => {
+	it('plans the sanitized file name, and the original title is recovered as nc_title from that name', () => {
 		const plan = planLocalPaths(
 			[tree(1, 'Coll', [startPage(1, 'Coll'), leaf(10, 'A#B', 1)])],
 			NO_KNOWN,
 		);
-		expect(plan.targets.get(asPageId(10))).toMatchObject({ path: 'Coll/A_B.md', ncTitle: 'A#B' });
+		expect(pathOf(plan, 10)).toBe('Coll/A_B.md');
+		expect(ncTitleFor('A#B', pathOf(plan, 10), false)).toBe('A#B');
 	});
 
-	it('sets ncTitle to null when the title equals the file base name', () => {
+	it('gives no nc_title when the title equals the planned file base name', () => {
 		const plan = planLocalPaths(
 			[tree(1, 'Coll', [startPage(1, 'Coll'), leaf(10, 'Plain', 1)])],
 			NO_KNOWN,
 		);
-		expect(plan.targets.get(asPageId(10))?.ncTitle).toBeNull();
+		expect(ncTitleFor('Plain', pathOf(plan, 10), false)).toBeNull();
 	});
 
-	it('gives a page with a collision suffix the original title as ncTitle', () => {
+	it('gives a page with a collision suffix the original title as nc_title', () => {
 		const plan = planLocalPaths(
 			[tree(1, 'Coll', [startPage(1, 'Coll'), leaf(10, 'X', 1), leaf(11, 'x', 1)])],
 			NO_KNOWN,
 		);
-		expect(plan.targets.get(asPageId(11))).toMatchObject({ path: 'Coll/x (2).md', ncTitle: 'x' });
+		expect(pathOf(plan, 11)).toBe('Coll/x (2).md');
+		expect(ncTitleFor('x', pathOf(plan, 11), false)).toBe('x');
+	});
+
+	it('appends an underscore to a page title that would look like a conflict file name', () => {
+		const plan = planLocalPaths(
+			[tree(1, 'Coll', [startPage(1, 'Coll'), leaf(10, 'Plan (Conflict 2026-01-01 1200)', 1)])],
+			NO_KNOWN,
+		);
+		const path = pathOf(plan, 10);
+		expect(path).toBe('Coll/Plan (Conflict 2026-01-01 1200)_.md');
+		expect(isConflictFileName(path)).toBe(false);
+		expect(ncTitleFor('Plan (Conflict 2026-01-01 1200)', path, false)).toBe('Plan (Conflict 2026-01-01 1200)');
+	});
+
+	it('appends the underscore before the collision suffix for two sibling titles that look like conflict names', () => {
+		const plan = planLocalPaths(
+			[tree(1, 'Coll', [startPage(1, 'Coll'), leaf(10, 'Plan (Konflikt 2026-01-01 1200)', 1), leaf(11, 'Plan (Konflikt 2026-01-01 1200)', 1)])],
+			NO_KNOWN,
+		);
+		expect(pathOf(plan, 10)).toBe('Coll/Plan (Konflikt 2026-01-01 1200)_.md');
+		expect(pathOf(plan, 11)).toBe('Coll/Plan (Konflikt 2026-01-01 1200)_ (2).md');
+	});
+
+	it('appends an underscore to a collective name that would look like a conflict file name', () => {
+		const plan = planLocalPaths([tree(1, 'Plan (Konflikt 2026-01-01 1200)', [startPage(1, 'Coll')])], NO_KNOWN);
+		expect(plan.collectiveFolders.get(asCollectiveId(1))).toBe('Plan (Konflikt 2026-01-01 1200)_');
 	});
 
 	it('gives the lower page id the plain name when two sibling titles differ only by case', () => {
@@ -353,5 +389,63 @@ describe('conflictPath', () => {
 	it('appends " (2)" before ".md" when the conflict name is taken', () => {
 		const taken = new Set([pathKey('A/B (Konflikt 2026-10-16 1430).md')]);
 		expect(conflictPath('A/B.md', 'Konflikt', date, taken)).toBe('A/B (Konflikt 2026-10-16 1430) (2).md');
+	});
+});
+
+describe('canonicalPath', () => {
+	it.each<{ name: string; path: string; existing: Map<string, string>; expected: string }>([
+		{ name: 'returns the path unchanged when no entry exists', path: 'Handbuch/Prozesse/X.md', existing: new Map(), expected: 'Handbuch/Prozesse/X.md' },
+		{
+			name: 'replaces a folder prefix with the spelling already on disk',
+			path: 'Handbuch/Prozesse/X.md',
+			existing: new Map([[pathKey('Handbuch'), 'handbuch']]),
+			expected: 'handbuch/Prozesse/X.md',
+		},
+		{
+			name: 'replaces every matching prefix of a nested path',
+			path: 'HANDBUCH/PROZESSE/X.md',
+			existing: new Map([[pathKey('Handbuch'), 'handbuch'], [pathKey('Handbuch/Prozesse'), 'handbuch/prozesse']]),
+			expected: 'handbuch/prozesse/X.md',
+		},
+		{
+			name: 'replaces the file name itself when the complete path exists',
+			path: 'coll/NEU.md',
+			existing: new Map([[pathKey('coll/NEU.md'), 'Coll/Neu.md']]),
+			expected: 'Coll/Neu.md',
+		},
+		{
+			name: 'leaves segments without an entry as they are',
+			path: 'Handbuch/Neu/X.md',
+			existing: new Map([[pathKey('Handbuch'), 'handbuch']]),
+			expected: 'handbuch/Neu/X.md',
+		},
+		{
+			name: 'does not match a folder whose name only starts with the same letters',
+			path: 'Coll2/X.md',
+			existing: new Map([[pathKey('Coll'), 'coll']]),
+			expected: 'Coll2/X.md',
+		},
+		{
+			name: 'matches a decomposed (NFD) path against a composed (NFC) entry',
+			path: 'Ärger/X.md',
+			existing: new Map([[pathKey('Ärger'), 'Ärger']]),
+			expected: 'Ärger/X.md',
+		},
+	])('$name', ({ path, existing, expected }) => {
+		expect(canonicalPath(path, existing)).toBe(expected);
+	});
+});
+
+describe('ncTitleFor', () => {
+	it.each<{ name: string; title: string; path: string; isLanding: boolean; expected: string | null }>([
+		{ name: 'gives null for the landing page, whatever its title', title: 'Landing page', path: 'Coll/Coll.md', isLanding: true, expected: null },
+		{ name: 'gives null when the title equals the file base name', title: 'Notiz', path: 'Coll/Notiz.md', isLanding: false, expected: null },
+		{ name: 'gives the title when the file name is its sanitized form', title: 'A#B', path: 'Coll/A_B.md', isLanding: false, expected: 'A#B' },
+		{ name: 'gives the title when it differs from the file name only in case', title: 'x', path: 'Coll/X.md', isLanding: false, expected: 'x' },
+		{ name: 'gives the title for a collision-suffixed file name', title: 'Notes', path: 'Coll/Notes (2).md', isLanding: false, expected: 'Notes' },
+		{ name: 'gives null for a folder note whose name equals the title', title: 'Prozesse', path: 'Handbuch/Prozesse/Prozesse.md', isLanding: false, expected: null },
+		{ name: 'uses only the last path segment as file base name', title: 'Umbenannt', path: 'Handbuch/Prozesse/Umbenannt.md', isLanding: false, expected: null },
+	])('$name', ({ title, path, isLanding, expected }) => {
+		expect(ncTitleFor(title, path, isLanding)).toBe(expected);
 	});
 });

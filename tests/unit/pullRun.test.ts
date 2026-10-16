@@ -13,6 +13,7 @@ import { runPull } from '../../src/sync/pullRun';
 import type { PullRunDeps } from '../../src/sync/pullRun';
 import { createTranslator } from '../../src/i18n';
 import { ConfigError } from '../../src/util/errors';
+import { metaHash } from '../../src/util/hash';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
 
@@ -150,6 +151,27 @@ function metaOf(id: number): NcMeta {
 	return { pageId: asPageId(id), collectiveId: asCollectiveId(1), title: null, emoji: null, tags: [] };
 }
 
+const ZERO_RESULT = { created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+
+/** Raw page entry as the Collectives API returns it, based on the fixture entry of page 102 (child of the landing page 92). */
+function rawPage(id: number, title: string, fileName: string, parentId: number): Record<string, unknown> {
+	const base = PAGES_FIXTURE.find((p) => p['id'] === 102);
+	if (base === undefined) throw new Error('fixture has no page 102');
+	return { ...base, id, slug: `seite-${id}`, title, fileName, parentId, filePath: '', timestamp: 1792138978, size: 20 };
+}
+
+/** The raw entry of a page the test has added or changed on the fake server. */
+function serverPage(server: FakeNextcloud, id: number): Record<string, unknown> {
+	const page = server.pages.find((p) => p['id'] === id);
+	if (page === undefined) throw new Error(`fake server has no page ${id}`);
+	return page;
+}
+
+/** State as the last run stored it, parsed from the fake state file. */
+function storedState(stateFile: FakeStateFile): SyncState {
+	return JSON.parse(stateFile.text ?? 'null') as SyncState;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -173,6 +195,14 @@ describe('runPull: first sync into an empty vault', () => {
 		}
 		const saved = JSON.parse(stateFile.text ?? 'null') as SyncState;
 		expect(Object.keys(saved.pages).map(Number).sort((a, b) => a - b)).toEqual([92, 97, 98, 101, 102, 114]);
+	});
+
+	it('stores the metadata hash of the remote title for the landing page, whose nc_title stays absent', async () => {
+		const stateFile = new FakeStateFile();
+
+		await runPull(makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile));
+
+		expect(storedState(stateFile).pages['92']?.metaHash).toBe(await metaHash('Landing page', null, []));
 	});
 
 	it('uses the Nextcloud user ID in every WebDAV path, not the login name', async () => {
@@ -208,10 +238,7 @@ describe('runPull: second run', () => {
 
 		const outcome = await runPull(deps);
 
-		expect(outcome).toMatchObject({
-			kind: 'done',
-			result: { created: 0, updated: 0, metaUpdated: 0, conflicts: 0 },
-		});
+		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
 		expect(vault.writes).toBe(vaultWrites);
 		expect(stateFile.writes).toBe(stateWrites);
 		expect(server.davRequests(callsBefore)).toEqual([]);
@@ -311,7 +338,7 @@ describe('runPull: refusals and errors', () => {
 		expect(stateFile.text).toBe(storedBefore);
 	});
 
-	it('returns serverMismatch and writes nothing when the stored state belongs to another account on the same server', async () => {
+	it('returns accountMismatch with the stored user and server and writes nothing when the state belongs to another account on the same server', async () => {
 		const vault = new MemoryVault();
 		const stateFile = new FakeStateFile();
 		await runPull(makeDeps(new FakeNextcloud(), vault, stateFile));
@@ -322,7 +349,7 @@ describe('runPull: refusals and errors', () => {
 
 		const outcome = await runPull(makeDeps(new FakeNextcloud(), vault, stateFile));
 
-		expect(outcome).toEqual({ kind: 'serverMismatch', stateServer: `bob-id @ ${BASE}` });
+		expect(outcome).toEqual({ kind: 'accountMismatch', stateUser: 'bob-id', stateServer: BASE });
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.text).toBe(storedBefore);
 	});
@@ -338,5 +365,88 @@ describe('runPull: refusals and errors', () => {
 		expect(err).toBeInstanceOf(ConfigError);
 		expect(err).toMatchObject({ field: 'appPassword' });
 		expect(server.calls).toEqual([]);
+	});
+});
+
+describe('runPull: several runs over colliding, renamed and sibling pages', () => {
+	it('keeps the nc_title of a remaining sibling whose sibling disappeared remotely, and writes nothing', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const stateFile = new FakeStateFile();
+		const deps = makeDeps(server, vault, stateFile);
+		server.pages.push(rawPage(200, 'Notes', 'Notes.md', 92), rawPage(201, 'Notes', 'Notes (2).md', 92));
+		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes A'), etag: '"etag-200"' });
+		server.davFiles.set('.Collectives/Handbuch/Notes (2).md', { content: remoteText('Notes B'), etag: '"etag-201"' });
+		await runPull(deps);
+		expect(await vault.read('Handbuch/Notes (2).md')).toContain('nc_title: "Notes"');
+
+		server.pages.splice(server.pages.findIndex((p) => p['id'] === 200), 1);
+		const writesBefore = vault.writes;
+
+		const outcome = await runPull(deps);
+
+		expect(outcome).toEqual({
+			kind: 'done',
+			result: ZERO_RESULT,
+			skips: [{ reason: 'remoteDeleted', pageId: 200, collectiveId: 1 }],
+		});
+		expect(vault.writes).toBe(writesBefore);
+		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
+	});
+
+	it('keeps the nc_page_id of a renamed page and gives a new page with its old title a suffixed name', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const deps = makeDeps(server, vault, new FakeStateFile());
+		server.pages.push(rawPage(200, 'Notes', 'Notes.md', 92));
+		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes'), etag: '"etag-200a"' });
+		await runPull(deps);
+
+		const renamed = serverPage(server, 200);
+		renamed['title'] = 'Neu';
+		renamed['fileName'] = 'Neu.md';
+		renamed['timestamp'] = 1792139000;
+		server.davFiles.set('.Collectives/Handbuch/Neu.md', { content: remoteText('Neu'), etag: '"etag-200b"' });
+		server.pages.push(rawPage(201, 'Notes', 'Notes.md', 92));
+		server.davFiles.set('.Collectives/Handbuch/Notes.md', { content: remoteText('Notes neu'), etag: '"etag-201"' });
+
+		const outcome = await runPull(deps);
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { created: 1, conflicts: 0, failed: 0 } });
+		expect(readPageId(await vault.read('Handbuch/Notes.md'))).toBe(200);
+		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
+		expect(vault.listFiles().some((file) => file.path.includes('Konflikt'))).toBe(false);
+	});
+
+	it('keeps a user file on a page path untouched across runs, and links it once the remote text equals it', async () => {
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		const stateFile = new FakeStateFile();
+		const deps = makeDeps(server, vault, stateFile);
+		const userText = 'Mein eigener Text\n';
+		vault.seed('Handbuch/Per WebDAV.md', userText);
+
+		const first = await runPull(deps);
+
+		expect(first).toMatchObject({ kind: 'done', result: { conflicts: 1, failed: 0 } });
+		expect(storedState(stateFile).pages['102']?.status).toBe('collision');
+		expect(vault.listFiles().filter((file) => file.path.startsWith('Handbuch/Per WebDAV (Konflikt'))).toHaveLength(1);
+		expect(await vault.read('Handbuch/Per WebDAV.md')).toBe(userText);
+
+		const writesBefore = vault.writes;
+		const stateWritesBefore = stateFile.writes;
+		const second = await runPull(deps);
+
+		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [] });
+		expect(vault.writes).toBe(writesBefore);
+		expect(stateFile.writes).toBe(stateWritesBefore);
+
+		serverPage(server, 102)['timestamp'] = 1792139000;
+		server.davFiles.set('.Collectives/Handbuch/Per WebDAV.md', { content: userText, etag: '"etag-102-v3"' });
+		const third = await runPull(deps);
+
+		expect(third).toMatchObject({ kind: 'done', result: { conflicts: 0, failed: 0 } });
+		expect(readPageId(await vault.read('Handbuch/Per WebDAV.md'))).toBe(102);
+		expect(storedState(stateFile).pages['102']?.status).toBe('synced');
 	});
 });

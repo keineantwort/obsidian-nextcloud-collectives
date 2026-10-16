@@ -126,6 +126,28 @@ describe('describePullOutcome', () => {
 		expect(spec.lines[0]).toContain('https://old.example.com');
 	});
 
+	it('shows an account mismatch as a sticky error that names the stored account (en)', () => {
+		const spec = describePullOutcome({ kind: 'accountMismatch', stateUser: 'bob-id', stateServer: 'https://cloud.example.com' }, en);
+
+		expect(spec).toEqual({
+			lines: [
+				'This vault is already synced with another Nextcloud account (bob-id) on this server. A vault is bound to one account – to use a different account, create a new vault. Nothing was changed.',
+			],
+			level: 'error',
+		});
+	});
+
+	it('shows an account mismatch as a sticky error that names the stored account (de)', () => {
+		const spec = describePullOutcome({ kind: 'accountMismatch', stateUser: 'bob-id', stateServer: 'https://cloud.example.com' }, de);
+
+		expect(spec).toEqual({
+			lines: [
+				'Dieser Vault wird bereits mit einem anderen Nextcloud-Konto (bob-id) auf diesem Server synchronisiert. Ein Vault ist fest an ein Konto gebunden – für ein anderes Konto bitte einen neuen Vault anlegen. Es wurde nichts geändert.',
+			],
+			level: 'error',
+		});
+	});
+
 	it('formats a finished run through formatPullResult', () => {
 		const spec = describePullOutcome({ kind: 'done', result: result({ created: 1 }), skips: [] }, en);
 

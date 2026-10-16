@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
-import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { canonicalRemote, pageIdFromFrontmatterValue, readPageId, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 
 function meta(over: Partial<NcMeta> = {}): NcMeta {
@@ -176,5 +176,108 @@ describe('readPageId', () => {
 
 	it('returns null when the value is not a number', () => {
 		expect(readPageId('---\nnc_page_id: abc\n---\nX')).toBeNull();
+	});
+
+	it.each([
+		{ name: 'a double-quoted key', text: '---\n"nc_page_id": 9\n---\nX' },
+		{ name: 'a single-quoted key with a space before the colon', text: "---\n'nc_page_id' : 9\n---\nX" },
+	])('reads nc_page_id written with $name', ({ text }) => {
+		expect(readPageId(text)).toBe(9);
+	});
+
+	it('takes the first nc_page_id line when the block contains two', () => {
+		expect(readPageId('---\nnc_page_id: 5\n"nc_page_id": 9\n---\nX')).toBe(5);
+	});
+});
+
+describe('CRLF texts', () => {
+	const CRLF_TEXT = '---\r\ntitle: Foo\r\n---\r\n\r\nText';
+
+	it('writes the nc fields and the user YAML with CRLF line endings and keeps the body bytes', () => {
+		expect(toLocal(CRLF_TEXT, meta())).toBe('---\r\nnc_page_id: 1\r\nnc_collective_id: 2\r\ntitle: Foo\r\n---\r\n\r\nText');
+	});
+
+	it('removes the nc lines of a CRLF local text and keeps the user YAML with CRLF', () => {
+		expect(toRemote('---\r\nnc_page_id: 1\r\nnc_collective_id: 2\r\ntitle: Foo\r\n---\r\n\r\nText')).toBe(CRLF_TEXT);
+	});
+
+	it('removes the whole CRLF block when only nc fields remain', () => {
+		expect(toRemote('---\r\nnc_page_id: 1\r\nnc_collective_id: 2\r\n---\r\n\r\nText')).toBe('Text');
+	});
+
+	it('adds the CRLF blank line after the user YAML and drops trailing CRLF line breaks', () => {
+		expect(canonicalRemote('---\r\ntitle: Foo\r\n---\r\nText\r\n')).toBe(CRLF_TEXT);
+	});
+
+	it.each([CRLF_TEXT, '---\r\ntitle: Foo\r\n---\r\nText\r\n'])('round-trips the CRLF sample %j to its canonical form', (remote) => {
+		const canonical = canonicalRemote(remote);
+		expect(toRemote(toLocal(remote, meta({ title: 'A#B', tags: ['x'] })))).toBe(canonical);
+		expect(canonicalRemote(canonical)).toBe(canonical);
+	});
+});
+
+describe('BOM at the start of a text', () => {
+	const BOM = '﻿';
+
+	it('keeps the BOM in front of a block that is written for a text without frontmatter', () => {
+		expect(toLocal(`${BOM}Hallo`, meta())).toBe(`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\n---\nHallo`);
+	});
+
+	it('finds the frontmatter block behind the BOM and keeps the BOM in front of it', () => {
+		expect(toLocal(`${BOM}---\ntitle: Foo\n---\n\nText`, meta())).toBe(
+			`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\ntitle: Foo\n---\n\nText`,
+		);
+	});
+
+	it('keeps the BOM when the nc fields are removed in toRemote', () => {
+		expect(toRemote(`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\ntitle: Foo\n---\n\nText`)).toBe(`${BOM}---\ntitle: Foo\n---\n\nText`);
+	});
+
+	it('round-trips a BOM text without nc fields to itself', () => {
+		expect(toRemote(toLocal(`${BOM}Hallo`, meta()))).toBe(`${BOM}Hallo`);
+	});
+
+	it('replaces the nc lines behind the BOM and keeps the BOM', () => {
+		expect(replaceNcMeta(`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\n---\nText`, meta({ tags: ['a'] }))).toBe(
+			`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\nnc_tags: ["a"]\n---\nText`,
+		);
+	});
+
+	it('reads nc_page_id behind the BOM', () => {
+		expect(readPageId(`${BOM}---\nnc_page_id: 97\n---\nX`)).toBe(97);
+	});
+});
+
+describe('quoted nc keys', () => {
+	it('removes a double-quoted nc key line and its value in toRemote', () => {
+		expect(toRemote('---\n"nc_page_id": 1\n"nc_collective_id": 2\ntitle: Foo\n---\n\nText')).toBe('---\ntitle: Foo\n---\n\nText');
+	});
+
+	it('replaces a quoted nc_emoji line in replaceNcMeta', () => {
+		const local = '---\nnc_page_id: 1\nnc_collective_id: 2\n"nc_emoji": "📘"\n---\nText';
+		expect(replaceNcMeta(local, meta())).toBe('---\nnc_page_id: 1\nnc_collective_id: 2\n---\nText');
+	});
+});
+
+describe('pageIdFromFrontmatterValue', () => {
+	it.each<{ name: string; value: unknown; expected: number | undefined }>([
+		{ name: 'maps an integer to its page id', value: 97, expected: 97 },
+		{ name: 'maps zero to page id 0', value: 0, expected: 0 },
+		{ name: 'maps a string of digits to its page id', value: '97', expected: 97 },
+		{ name: 'maps the string "0" to page id 0', value: '0', expected: 0 },
+		{ name: 'rejects a fraction', value: 1.5, expected: undefined },
+		{ name: 'rejects a negative number', value: -1, expected: undefined },
+		{ name: 'rejects NaN', value: Number.NaN, expected: undefined },
+		{ name: 'rejects a non-numeric string', value: 'abc', expected: undefined },
+		{ name: 'rejects an empty string', value: '', expected: undefined },
+		{ name: 'rejects a string with surrounding whitespace', value: ' 9', expected: undefined },
+		{ name: 'rejects a string with a trailing letter', value: '9x', expected: undefined },
+		{ name: 'rejects an exponent string', value: '1e3', expected: undefined },
+		{ name: 'rejects null', value: null, expected: undefined },
+		{ name: 'rejects a missing value', value: undefined, expected: undefined },
+		{ name: 'rejects a boolean', value: true, expected: undefined },
+		{ name: 'rejects an object', value: {}, expected: undefined },
+	])('$name', ({ value, expected }) => {
+		expect(pageIdFromFrontmatterValue(value)).toBe(expected);
 	});
 });

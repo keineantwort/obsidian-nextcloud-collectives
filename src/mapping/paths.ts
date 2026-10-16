@@ -30,6 +30,36 @@ export function withSuffix(base: string, taken: ReadonlySet<string>): string {
 	}
 }
 
+/**
+ * Replaces the longest prefix of `path` whose pathKey is in `existing` (pathKey → spelling on disk) by that spelling;
+ * the remaining segments are kept. Paths without a match are returned unchanged.
+ */
+export function canonicalPath(path: string, existing: ReadonlyMap<string, string>): string {
+	const segments = path.split('/');
+	let spelled: string | undefined;
+	let matched = 0;
+	for (let i = 1; i <= segments.length; i++) {
+		const entry = existing.get(pathKey(segments.slice(0, i).join('/')));
+		if (entry !== undefined) {
+			spelled = entry;
+			matched = i;
+		}
+	}
+	if (spelled === undefined) return path;
+	return [spelled, ...segments.slice(matched)].join('/');
+}
+
+/**
+ * The nc_title to store for a page written to `path`: the remote title if the file name does not show it (collision
+ * suffix, sanitized characters), else null. The landing page never gets one.
+ */
+export function ncTitleFor(title: string, path: string, isLanding: boolean): string | null {
+	if (isLanding) return null;
+	const file = path.slice(path.lastIndexOf('/') + 1);
+	const stem = file.endsWith('.md') ? file.slice(0, -'.md'.length) : file;
+	return title !== stem ? title : null;
+}
+
 export interface CollectiveTree {
 	collectiveId: CollectiveId;
 	name: string;
@@ -41,8 +71,6 @@ export interface LocalTarget {
 	collectiveId: CollectiveId;
 	/** Vault path of the Markdown file, e.g. 'Handbuch/Prozesse/Prozesse.md'. */
 	path: string;
-	/** Original title if it differs from the file base name (→ frontmatter nc_title), else null. Landing page: always null. */
-	ncTitle: string | null;
 }
 
 export interface PathPlan {
@@ -78,7 +106,7 @@ export function planLocalPaths(trees: CollectiveTree[], knownFolders: ReadonlyMa
 	const takenFolders = new Set<string>();
 	for (const folder of knownFolders.values()) takenFolders.add(pathKey(folder));
 	for (const tree of [...trees].sort((a, b) => Number(a.collectiveId) - Number(b.collectiveId))) {
-		const folder = knownFolders.get(tree.collectiveId) ?? claim(takenFolders, sanitizeName(tree.name)).name;
+		const folder = knownFolders.get(tree.collectiveId) ?? claim(takenFolders, safeName(sanitizeName(tree.name)));
 		plan.collectiveFolders.set(tree.collectiveId, folder);
 		planTree(tree, folder, plan);
 	}
@@ -97,7 +125,7 @@ function planTree(tree: CollectiveTree, folder: string, plan: PathPlan): void {
 	const start = pages.find((page) => page.parentId === 0);
 	if (start) {
 		walk.reached.add(start.id);
-		plan.targets.set(start.id, { pageId: start.id, collectiveId: tree.collectiveId, path: `${folder}/${folder}.md`, ncTitle: null });
+		plan.targets.set(start.id, { pageId: start.id, collectiveId: tree.collectiveId, path: `${folder}/${folder}.md` });
 		placeChildren(start.id, { folder, fileNames: new Set([pathKey(folder)]), folderNames: new Set() }, walk);
 	}
 	for (const page of pages) {
@@ -108,30 +136,33 @@ function planTree(tree: CollectiveTree, folder: string, plan: PathPlan): void {
 function placeChildren(parentId: number, container: Container, walk: Walk): void {
 	for (const page of walk.children.get(parentId) ?? []) {
 		walk.reached.add(page.id);
-		const base = sanitizeName(page.title);
+		const base = safeName(sanitizeName(page.title));
 		if (page.fileName === FOLDER_NOTE) {
-			const { name, suffixed } = claim(container.folderNames, base);
+			const name = claim(container.folderNames, base);
 			const ownFolder = `${container.folder}/${name}`;
-			addTarget(walk, page, `${ownFolder}/${name}.md`, base, suffixed);
+			addTarget(walk, page, `${ownFolder}/${name}.md`);
 			placeChildren(page.id, { folder: ownFolder, fileNames: new Set([pathKey(name)]), folderNames: new Set() }, walk);
 		} else {
-			const { name, suffixed } = claim(container.fileNames, base);
-			addTarget(walk, page, `${container.folder}/${name}.md`, base, suffixed);
+			const name = claim(container.fileNames, base);
+			addTarget(walk, page, `${container.folder}/${name}.md`);
 		}
 	}
 }
 
-function addTarget(walk: Walk, page: PageInfo, path: string, base: string, suffixed: boolean): void {
-	// A collision suffix makes the original title necessary to restore the page name.
-	const ncTitle = suffixed || page.title !== base ? page.title : null;
-	walk.plan.targets.set(page.id, { pageId: page.id, collectiveId: walk.collectiveId, path, ncTitle });
+function addTarget(walk: Walk, page: PageInfo, path: string): void {
+	walk.plan.targets.set(page.id, { pageId: page.id, collectiveId: walk.collectiveId, path });
 }
 
-/** Reserves the first free name for `base` in `taken` and reports whether a suffix was needed. */
-function claim(taken: Set<string>, base: string): { name: string; suffixed: boolean } {
+/** Reserves the first free name for `base` in `taken` and returns it. */
+function claim(taken: Set<string>, base: string): string {
 	const name = withSuffix(base, taken);
 	taken.add(pathKey(name));
-	return { name, suffixed: name !== base };
+	return name;
+}
+
+/** A name that would read as a conflict file name gets a trailing '_', so it is never taken for a conflict copy. */
+function safeName(name: string): string {
+	return isConflictFileName(`${name}.md`) ? `${name}_` : name;
 }
 
 /**
