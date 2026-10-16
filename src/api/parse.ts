@@ -1,5 +1,5 @@
 // Strict structure checks for Collectives API responses. Pure: no network, no Obsidian imports.
-import type { Attachment, Collective, PageInfo, Tag, TrashedPage } from './types';
+import { asAttachmentId, asCollectiveId, asPageId, asTagId, type Attachment, type Collective, type PageInfo, type Tag, type TrashedPage } from './types';
 import { ApiChangedError } from '../util/errors';
 import { isRecord } from '../util/isRecord';
 
@@ -56,7 +56,7 @@ function reader(entity: string, raw: unknown): FieldReader {
 export function parseCollective(raw: unknown): Collective {
 	const r = reader('Collective', raw);
 	return {
-		id: r.number('id'),
+		id: asCollectiveId(r.number('id')),
 		circleId: r.string('circleId'),
 		name: r.string('name'),
 		slug: r.string('slug'),
@@ -80,19 +80,19 @@ export function parseTrashedPage(raw: unknown): TrashedPage {
 
 function readPageFields(r: FieldReader): Omit<PageInfo, 'collectivePath'> {
 	return {
-		id: r.number('id'),
+		id: asPageId(r.number('id')),
 		slug: r.string('slug'),
 		title: r.string('title'),
 		emoji: r.stringOrNull('emoji'),
-		tags: r.numberArray('tags'),
+		tags: r.numberArray('tags').map(asTagId),
 		timestamp: r.number('timestamp'),
 		size: r.number('size'),
 		fileName: r.string('fileName'),
 		filePath: r.string('filePath'),
-		parentId: r.number('parentId'),
-		subpageOrder: r.numberArray('subpageOrder'),
+		parentId: asPageId(r.number('parentId')),
+		subpageOrder: r.numberArray('subpageOrder').map(asPageId),
 		lastUserId: r.stringOrNull('lastUserId'),
-		linkedPageIds: r.numberArray('linkedPageIds'),
+		linkedPageIds: r.numberArray('linkedPageIds').map(asPageId),
 		trashTimestamp: r.numberOrNull('trashTimestamp'),
 	};
 }
@@ -100,8 +100,8 @@ function readPageFields(r: FieldReader): Omit<PageInfo, 'collectivePath'> {
 export function parseTag(raw: unknown): Tag {
 	const r = reader('Tag', raw);
 	return {
-		id: r.number('id'),
-		collectiveId: r.number('collectiveId'),
+		id: asTagId(r.number('id')),
+		collectiveId: asCollectiveId(r.number('collectiveId')),
 		name: r.string('name'),
 		color: r.string('color'),
 	};
@@ -110,7 +110,7 @@ export function parseTag(raw: unknown): Tag {
 export function parseAttachment(raw: unknown): Attachment {
 	const r = reader('Attachment', raw);
 	return {
-		id: r.number('id'),
+		id: asAttachmentId(r.number('id')),
 		name: r.string('name'),
 		filesize: r.number('filesize'),
 		mimetype: r.string('mimetype'),

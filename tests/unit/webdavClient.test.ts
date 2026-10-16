@@ -193,6 +193,26 @@ describe('path encoding', () => {
 	);
 });
 
+describe('files root with a user ID', () => {
+	it('uses the Nextcloud user ID instead of the login name in the files root', async () => {
+		const fake = fakeDav(responseFromFixture(readFixture('dav-get-empty-page.json'), '# Onboarding\n'));
+		const webdav = createApiClients({ baseUrl: BASE_URL, username: USERNAME, appPassword: PASSWORD, request: fake.fn, retry: false }, 'user-id-42').webdav;
+
+		await webdav.get(PAGE_PATH);
+
+		expect(onlyCall(fake).url).toBe(`${BASE_URL}/remote.php/dav/files/user-id-42/.Collectives/Handbuch/Onboarding.md`);
+		expect(onlyCall(fake).headers['Authorization']).toBe(basicAuthHeader(USERNAME, PASSWORD));
+	});
+
+	it('falls back to the login name when no user ID is given', async () => {
+		const fake = fakeDav(responseFromFixture(readFixture('dav-get-empty-page.json'), '# Onboarding\n'));
+
+		await davClient(fake).get(PAGE_PATH);
+
+		expect(onlyCall(fake).url).toBe(BASE_URL + FILES_ROOT + '/.Collectives/Handbuch/Onboarding.md');
+	});
+});
+
 describe('put', () => {
 	it('sends the content as markdown with a quoted If-Match and no If-None-Match', async () => {
 		const fake = fakeDav(responseFromFixture(readFixture('dav-put-if-match-ok.json')));

@@ -4,6 +4,7 @@ import type { HttpClient, HttpMethod } from './http';
 
 export const OCS_COLLECTIVES_BASE = '/ocs/v2.php/apps/collectives/api/v1.0';
 export const OCS_CIRCLES_BASE = '/ocs/v2.php/apps/circles';
+export const OCS_CLOUD_USER = '/ocs/v2.php/cloud/user';
 
 /** Calls Nextcloud OCS endpoints and unwraps the `ocs.data` envelope. */
 export class OcsClient {
