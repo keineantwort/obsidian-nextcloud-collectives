@@ -12,21 +12,22 @@ const CONFIG_MESSAGE_KEYS: Partial<Record<string, MessageKey>> = {
 /**
  * Maps an error from testConnection() to a user-facing message in the given language.
  * Never includes the raw message of unknown errors: it may contain credentials.
+ * `unknownKey` is the text for unknown errors; the sync flow passes its own key.
  */
-export function describeConnectionError(err: unknown, t: Translator): string {
-	if (err instanceof ConfigError) return describeConfigError(err, t);
+export function describeConnectionError(err: unknown, t: Translator, unknownKey: MessageKey = 'connection.error.unknown'): string {
+	if (err instanceof ConfigError) return describeConfigError(err, t, unknownKey);
 	if (err instanceof AuthError) return t('connection.error.auth');
 	if (err instanceof ForbiddenError) return t('connection.error.forbidden');
 	if (err instanceof NotFoundError) return t('connection.error.notFound');
 	if (err instanceof NetworkError) return t('connection.error.network');
 	if (err instanceof ServerError) return t('connection.error.server', { status: err.status });
 	if (err instanceof ApiChangedError) return t('connection.error.apiChanged');
-	return t('connection.error.unknown');
+	return t(unknownKey);
 }
 
-function describeConfigError(err: ConfigError, t: Translator): string {
+function describeConfigError(err: ConfigError, t: Translator, unknownKey: MessageKey): string {
 	const key = CONFIG_MESSAGE_KEYS[`${err.field}/${err.problem}`];
-	return key ? t(key) : t('connection.error.unknown');
+	return key ? t(key) : t(unknownKey);
 }
 
 export function formatConnectionSuccess(result: ConnectionResult, t: Translator): string {

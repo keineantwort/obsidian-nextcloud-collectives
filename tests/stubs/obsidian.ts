@@ -22,7 +22,34 @@ export class Plugin {
 	addSettingTab(_tab: unknown): void {
 		// no-op: no settings UI in unit tests
 	}
+
+	addCommand(_command: unknown): void {
+		// no-op: no command palette in unit tests
+	}
+
+	addRibbonIcon(_icon: string, _title: string, _callback: unknown): HTMLElement {
+		// no-op: unit tests never use the returned element
+		return {} as HTMLElement;
+	}
 }
+
+export class Modal {
+	constructor(_app: unknown) {
+		// no-op: no modal UI in unit tests
+	}
+}
+
+export class Notice {
+	constructor(_message: unknown, _duration?: number) {
+		// no-op: no notice UI in unit tests
+	}
+
+	hide(): void {
+		// no-op
+	}
+}
+
+export class ButtonComponent {}
 
 export class PluginSettingTab {}
 

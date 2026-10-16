@@ -4,3 +4,15 @@
 .nc-connection-result.is-error { color: var(--text-error); }
 .nc-url-warning { margin: 0 0 var(--size-4-3); color: var(--text-warning); }
 .nc-url-warning:empty { display: none; }
+.nc-initial-sync-points { margin: 0 0 var(--size-4-3); padding-inline-start: var(--size-4-6); }
+.nc-initial-sync-points li { margin-bottom: var(--size-4-1); }
+.nc-initial-sync-recommendation {
+	margin: 0 0 var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-inline-start: 3px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+}
+.nc-initial-sync .modal-button-container { flex-wrap: wrap; gap: var(--size-4-2); }
+.is-mobile .nc-initial-sync .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }

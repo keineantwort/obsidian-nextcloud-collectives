@@ -70,6 +70,34 @@ describe('describeConnectionError', () => {
 	});
 });
 
+describe('describeConnectionError with a custom unknown key', () => {
+	it('uses the connection text for unknown errors when no key is given', () => {
+		expect(describeConnectionError(new Error('x'), t)).toBe('Unbekannter Fehler beim Verbindungstest.');
+	});
+
+	it('uses the given key for unknown errors', () => {
+		expect(describeConnectionError(new Error('x'), t, 'sync.error.unknown')).toBe('Unbekannter Fehler bei der Synchronisierung.');
+	});
+
+	it('uses the given key for a ConfigError without a dedicated text', () => {
+		expect(describeConnectionError(new ConfigError('appPassword', 'invalid'), t, 'sync.error.unknown')).toBe(
+			'Unbekannter Fehler bei der Synchronisierung.',
+		);
+	});
+
+	it('keeps the dedicated text for a ConfigError that has one, whatever the unknown key', () => {
+		expect(describeConnectionError(new ConfigError('username', 'missing'), t, 'sync.error.unknown')).toBe(
+			'Bitte den Benutzernamen angeben.',
+		);
+	});
+
+	it('does not use the unknown key for known error classes', () => {
+		expect(describeConnectionError(new NetworkError('x'), t, 'sync.error.unknown')).toBe(
+			'Der Server ist nicht erreichbar. Bitte Server-URL und Netzwerkverbindung prüfen.',
+		);
+	});
+});
+
 describe('formatConnectionSuccess', () => {
 	it.each([
 		[0, 'Verbindung erfolgreich. Es wurden noch keine Collectives gefunden.'],
