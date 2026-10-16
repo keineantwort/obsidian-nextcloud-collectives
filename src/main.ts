@@ -4,13 +4,26 @@ import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
 import { DEFAULT_SETTINGS, NcSettings } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
-import { buildSecretId, isOwnSecretId } from './settings/secretId';
+import { CredentialsStore } from './settings/credentialsStore';
+import { isRecord } from './util/isRecord';
 
 export default class NextcloudCollectivesPlugin extends Plugin {
 	settings: NcSettings = { ...DEFAULT_SETTINGS };
 	t: Translator = createTranslator('en');
-	/** Last password write; testConnection waits for it so a just-entered password is used. Never rejects. */
-	private pendingPasswordWrite: Promise<void> = Promise.resolve();
+	/** Password storage; all reads and writes of the app password go through it. */
+	private readonly credentials = new CredentialsStore(
+		{
+			setSecret: (id, value) => this.app.secretStorage.setSecret(id, value),
+			getSecret: (id) => this.app.secretStorage.getSecret(id),
+		},
+		{
+			getSecretId: () => this.settings.appPasswordSecretId,
+			setSecretId: async (id) => {
+				this.settings.appPasswordSecretId = id;
+				await this.saveSettings();
+			},
+		},
+	);
 
 	async onload(): Promise<void> {
 		// Obsidian requires a restart after a language change, so the language is resolved once here.
@@ -42,27 +55,12 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	 * (e.g. one chosen earlier in the Obsidian UI or planted in data.json) is replaced by a new one.
 	 */
 	storeAppPassword(password: string): Promise<void> {
-		const write = this.writeAppPassword(password);
-		this.pendingPasswordWrite = write.catch(() => undefined);
-		return write;
-	}
-
-	private async writeAppPassword(password: string): Promise<void> {
-		if (password === '') return;
-		if (!isOwnSecretId(this.settings.appPasswordSecretId)) {
-			this.settings.appPasswordSecretId = buildSecretId(crypto.getRandomValues(new Uint8Array(8)));
-			// Persist the ID before the secret is written, so the secret is never stored under an unknown ID.
-			await this.saveSettings();
-		}
-		this.app.secretStorage.setSecret(this.settings.appPasswordSecretId, password);
+		return this.credentials.store(password);
 	}
 
 	/** True if a non-empty app password is stored for the current secret ID. */
 	hasStoredAppPassword(): boolean {
-		const id = this.settings.appPasswordSecretId;
-		if (!isOwnSecretId(id)) return false;
-		const stored = this.app.secretStorage.getSecret(id);
-		return stored !== null && stored !== '';
+		return this.credentials.hasPassword();
 	}
 
 	/**
@@ -71,15 +69,10 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	 * generated: a foreign ID in data.json is treated as missing, so no foreign secret is ever sent.
 	 */
 	async testConnection(): Promise<ConnectionResult> {
-		await this.pendingPasswordWrite;
-		const { serverUrl, username, appPasswordSecretId } = this.settings;
-		const appPassword = isOwnSecretId(appPasswordSecretId) ? this.app.secretStorage.getSecret(appPasswordSecretId) : null;
+		const appPassword = await this.credentials.read();
+		const { serverUrl, username } = this.settings;
 		// `?? ''` is intentional: a missing secret becomes ConfigError('appPassword', 'missing') in testConnection,
 		// which is shown to the user. It is not a silent fallback.
 		return testConnection({ serverUrl, username, appPassword: appPassword ?? '' }, obsidianRequest);
 	}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

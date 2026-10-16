@@ -109,7 +109,7 @@ Startseite: `title` = „Landing page“ (lokalisiert), `slug` = `""`. Per WebDA
 | Zweck | Aufruf |
 |---|---|
 | Inhalt lesen | `GET` → Body + `ETag`-Header |
-| Inhalt schreiben | `PUT` mit `If-Match: <etag>` → `412` bedeutet Konflikt (M0 ✔); Antwort enthält neuen `ETag`. Neue Dateien mit `If-None-Match: *` |
+| Inhalt schreiben | `PUT` mit `If-Match: <etag>` → `412` bedeutet Konflikt (M0 ✔); Antwort enthält neuen `ETag`. Neue Dateien mit `If-None-Match: *`. **ETags haben Sekundenauflösung**: Innerhalb derselben Sekunde greift `If-Match` nicht (M2, `docs/api-notes.md` §10a) |
 | ETags mehrerer Dateien | `PROPFIND` Depth 1 mit `getetag`, `getlastmodified`, `oc:fileid` |
 | Anhang laden | `GET` auf `.attachments.{id}/{name}` |
 
@@ -125,6 +125,7 @@ src/
     settingsTab.ts        UI
     connectionMessages.ts Fehler/Erfolg des Verbindungstests → lokalisierte Meldung (M1)
     secretId.ts           Secret-IDs des Plugins erzeugen/prüfen (M1, ADR 0014)
+    credentialsStore.ts   App-Passwort im Secret Storage speichern/lesen (M2)
   i18n/
     index.ts              Locale-Auswahl (getLanguage), Translator, Platzhalter (M1, ADR 0013)
     en.ts, de.ts          Texte; en.ts definiert die Schlüssel, de.ts muss vollständig sein
@@ -136,8 +137,10 @@ src/
     ocsClient.ts          OCS-Aufrufe, Entpacken von ocs.data
     webdavClient.ts       GET/PUT/PROPFIND/MKCOL/DELETE, XML-Parsing via DOMParser
     collectivesApi.ts     typisierte Fachmethoden (listPages, createPage, …)
+    clients.ts            verdrahtet HttpClient, OcsClient, WebdavClient, CollectivesApi (M2)
+    parse.ts              strikte Strukturprüfung der Antworten → ApiChanged (M2)
     loginFlow.ts          Nextcloud Login Flow v2
-    types.ts              Collective, PageInfo, Tag, Attachment
+    types.ts              Collective, PageInfo, TrashedPage, Tag, Attachment
   sync/
     state.ts              persistenter Sync-Zustand (siehe 6.3)
     localScanner.ts       erfasst lokale Dateien + Hashes
@@ -158,10 +161,11 @@ src/
     collectivePicker.ts
     confirmModal.ts
   util/
-    hash.ts, logger.ts, errors.ts, timeout.ts
+    hash.ts, logger.ts, errors.ts, timeout.ts, isRecord.ts
 tests/
   unit/                   planner, paths, links, frontmatter, http-Fehler
   stubs/obsidian.ts       Laufzeit-Stub für `obsidian` in Unit-Tests (das npm-Paket enthält nur Typen)
+  setup/domParser.ts      DOMParser aus jsdom für Unit- und Integrationstests (Node hat keinen)
   fixtures/               aufgezeichnete API-Antworten aus M0
   integration/            gegen Docker-Nextcloud
 scripts/
@@ -397,7 +401,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 
 ## 12. Fehlerbehandlung und Logging
 
-- Fehlerklassen: `AuthError` (401/403 → Sync pausieren, Notice), `NotFound`, `Conflict` (412), `Network` (Retry mit Backoff 1/2/4 s, max. 3), `ServerError` (5xx, Retry), `ApiChanged` (unerwartete Antwortstruktur → Sync stoppen, klare Meldung).
+- Fehlerklassen (Abbildung zentral in `src/api/http.ts`, ADR 0015): `AuthError` (401 → Sync pausieren, Notice), `ForbiddenError` (403 → keine Rechte an dieser Ressource; nur die Operation scheitert, Hinweis), `NotFound` (404), `Conflict` (412), `Network` (Retry mit Backoff 1/2/4 s, max. 3), `ServerError` (5xx und sonstige Nicht-2xx; Retry nur bei 5xx), `ApiChanged` (unerwartete Antwortstruktur → Sync stoppen, klare Meldung). Retry nur für lesende Requests (`GET`, `PROPFIND`); Schreibzugriffe wiederholt erst der nächste Lauf.
 - Beim Start Versions-Check: Nextcloud-Version aus `/ocs/v2.php/cloud/capabilities` gegen getestete Versionen prüfen; bei Abweichung Warnung. Die Collectives-Version ist für normale Nutzer nicht abfragbar (nicht in den Capabilities, App-API nur für Admins, M0). Kompatibilität sichert daher die Strukturprüfung der Antworten (`ApiChanged`).
 - Logger mit Ringpuffer (letzte 500 Einträge), anzeigbar im Modal, kopierbar; `debugLogging` schaltet Request-Details (ohne Auth-Header) zu.
 
@@ -439,14 +443,25 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Remote-Scanner, Pfad-Mapping, Frontmatter, Datei-Anlage und -Update, State, Erstsync-Dialog.
 - Akzeptanz: Alle Collectives des Servers erscheinen als Ordner auf oberster Ebene mit korrekter Hierarchie; zweiter Lauf ohne Änderungen erzeugt keine Schreibzugriffe.
 - Hinweis aus dem M1-Review: ESLint-`no-restricted-imports` für `src/sync/planner.ts` und `src/mapping/**` (kein `obsidian`, keine API-Module), weil der Vitest-Stub fehlende Reinheit sonst verdeckt.
+- Hinweise aus dem M2-Review (vor/zu Beginn von M3):
+  - WebDAV-Pfade brauchen die Nextcloud-**User-ID**, nicht den Login-Namen (bei Anmeldung per E-Mail/LDAP verschieden; der Login Flow liefert nur `loginName`). User-ID per `GET /ocs/v2.php/cloud/user` (`id`) ermitteln, speichern und `WebdavClient` getrennt übergeben. Bis dahin nimmt `WebdavClient` den Login-Namen.
+  - Vor `state.ts` entscheiden, ob Collective-/Seiten-/Tag-/Anhang-IDs eigene (branded) Typen bekommen; heute sind alle `number` und vertauschbar.
+  - Strikte Prüfung in `parse.ts` auf die Felder beschränken, die der Sync wirklich braucht (z. B. `subpageOrder`, Anhang-`hasPreview`/`internalPath` prüfen), damit Formatänderungen an ungenutzten Feldern nicht den ganzen Sync stoppen.
+  - Retry pro Aufruf abschaltbar machen und einen Lauf nach dauerhaftem `NetworkError` beenden statt pro Seite bis ~2 min zu warten.
+  - Reine Hilfsfunktion für den WebDAV-Pfad einer Seite (`collectivePath` + `filePath` + `fileName`, nur für `PageInfo`, nicht `TrashedPage`).
+  - Fehlerdetails aus dem Antwort-Body (OCS `meta.message`, Sabre-Exception) credential-frei an `ServerError` hängen (auch für M6/M10).
 
 ### M4 – Push Inhalt und Konflikte
 - Lokaler Scanner, Dirty-Queue, Planner (7.3), PUT mit ETag, Konfliktdatei, Konflikt-Dialog, Statusleiste.
 - Akzeptanz: Lokale Änderung landet in Collectives; gleichzeitige Änderung erzeugt Konflikt statt Datenverlust; keine Ping-Pong-Schreibvorgänge.
+- Hinweis aus M2: ETags haben Sekundenauflösung, ein veraltetes `If-Match` in derselben Sekunde wird angenommen (204 statt 412, `docs/api-notes.md` §10a). Konflikterkennung muss das abfangen, z. B. `PUT`-Antwort mit unverändertem ETag als unsicher werten und nach > 1 s neu lesen.
+- Hinweis aus M2: Weiterleitungen von `requestUrl` (Authorization-Header an fremde Hosts?) sind ungeprüft, manuell in Obsidian prüfen (spätestens M9).
+- Hinweise aus dem M2-Review: Auch der Gegenfall der ETag-Sekundenauflösung ist abzudecken (Browser schreibt in derselben Sekunde *nach* dem Plugin-`PUT` → gleicher ETag, Änderung unsichtbar): ETags aus der Schreib-Sekunde als unbestätigt behandeln und im nächsten Lauf per GET und Hash prüfen; dafür ggf. `lastModified`/`Date` in `DavFile`/`DavWriteResult` und einen `sameEtag`-Vergleich ergänzen. Fehlt der ETag in einer erfolgreichen `PUT`-Antwort, nicht den Sync stoppen, sondern per Depth-0-`PROPFIND` nachholen.
 
 ### M5 – Struktur: Anlegen, Umbenennen, Verschieben, Löschen
 - Alle Fälle aus 7.4 inklusive Blatt→Elternseite und Collective-übergreifendem Verschieben.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
+- Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
 ### M6 – Tags und Emojis
 - Abgleich laut 7.5, Tag-Anlage, `tagsProperty`-Option.
@@ -460,10 +475,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Pull/Push/Löschen laut 9.4, Größenlimit.
 - Akzeptanz: Bild in Obsidian eingefügt erscheint in Collectives und umgekehrt; unveränderte Anhänge werden nicht erneut übertragen.
 - Hinweis aus dem M1-Review: Transport (`http.ts`) für Binärdaten erweitern (`ArrayBuffer`-Body, Antwort als `arrayBuffer`).
+- Hinweis aus dem M2-Review: `WebdavClient.put` setzt fest `text/markdown`; für Anhänge Content-Type übergeben und den Timeout (30 s) für große Dateien pro Request konfigurierbar machen.
 
 ### M9 – Automatik, Mobile, Login Flow
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
 - Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
+- Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 
 ### M10 – Härtung und Release
 - Versions-Check, Log-Modal, README (Installation, Risiken, Backup-Hinweis), `manifest.json`, `versions.json`, Release-Build; Installation per BRAT.
@@ -490,6 +507,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | Gleichzeitige Bearbeitung im Browser (Text-Session) | Plugin-PUT beendet die Browser-Sitzung („Bearbeitungssitzung abgelaufen“); danach Getipptes geht verloren (M0, ADR 0012) | `If-Match` schützt Browser-Speicherungen (412 → Konfliktdatei), Debounce vor Push, Hinweis in README |
 | Link-Konvertierung nicht verlustfrei | Inhaltsänderungen, Ping-Pong | Rundlauf-Tests, Hash auf Remote-Format, unbekannte Links unverändert lassen |
 | Falsch erkannte Löschungen | Datenverlust | Löschen nur nach Bestätigung, immer in den Collectives-Papierkorb (wiederherstellbar); lokale Wiederherstellung stellt auch remote wieder her. Sicherung: Löscht ein Lauf > 20 % der Seiten eines Collectives, wird der Lauf angehalten und gesondert nachgefragt |
+| ETag-Sekundenauflösung | Schreibzugriff eines anderen Clients in derselben Sekunde wird trotz `If-Match` überschrieben (M2 nachgewiesen) | Gegenmaßnahme in M4 (unveränderter ETag nach `PUT` = unsicher, neu lesen); Debounce senkt die Wahrscheinlichkeit |
 | Credential-Leak | Zugriff auf Nextcloud | App-Passwort nur im Secret Storage |
 | Mobile ohne Hintergrundausführung | verspäteter Sync | Sync beim Öffnen/Foreground, Statusanzeige |
 
@@ -498,8 +516,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | Meilenstein | Status |
 |---|---|
 | M0 | umgesetzt inkl. manueller Browser-Prüfung, gemergt (PR #12) |
-| M1 | umgesetzt (ONC-2), PR offen |
-| M2 | offen |
+| M1 | umgesetzt (ONC-2), gemergt (PR #13) |
+| M2 | umgesetzt (ONC-3), PR offen |
 | M3 | offen |
 | M4 | offen |
 | M5 | offen |

@@ -9,8 +9,10 @@ export class NcError extends Error {
 		if (options && 'cause' in options) this.cause = options.cause;
 	}
 }
-/** 401/403: credentials rejected. */
+/** 401: credentials rejected. */
 export class AuthError extends NcError { constructor(readonly status: number, message = `Authentication failed (HTTP ${status})`) { super(message); } }
+/** 403: authenticated, but not allowed to access this resource (e.g. deleting a collective as a plain member). */
+export class ForbiddenError extends NcError { constructor(message = 'Access denied (HTTP 403)') { super(message); } }
 /** 404: endpoint or resource not found. */
 export class NotFoundError extends NcError {}
 /** 412: precondition failed (ETag mismatch). */
