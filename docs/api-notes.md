@@ -132,6 +132,13 @@ Durchgeführt in der Collectives-Oberfläche des Testservers (Pretty-URLs aktiv)
 - **ETags pflanzen sich nach oben fort**: Eine Inhaltsänderung in `Handbuch/Onboarding/Erster Tag.md` ändert die ETags von `Onboarding/`, `Handbuch/` und `.Collectives/`. Ein `PROPFIND` mit `Depth: 0` auf `.Collectives/` taugt daher als günstiger Leerlauf-Check für Inhalte. **Achtung:** Emoji, Tags und Seitenreihenfolge liegen nur in der Datenbank und ändern keinen ETag. Die Seitenliste muss trotzdem regelmäßig geladen werden (z. B. bei jedem Intervall-Lauf, der Root-ETag-Check spart nur die Inhalts-GETs).
 - Die OCS-Seitenliste liefert **keinen `ETag`-Header**, bedingte GETs (304) sind dort nicht möglich.
 
+## 10a. Befunde aus M2 (API-Clients, ONC-3)
+
+- **ETags haben Sekundenauflösung – `If-Match` schützt nicht innerhalb derselben Sekunde.** Nextcloud bildet den ETag aus der mtime in ganzen Sekunden. Zwei Schreibzugriffe in derselben Sekunde liefern denselben ETag. Nachgestellt am Testserver (2026-10-16, Roh-WebDAV ohne Plugin-Code): `PUT` neu (201, ETag A) → `PUT` mit `If-Match: A` (204, ETag **A**) → `PUT` mit dem jetzt veralteten `If-Match: A` (204 statt 412). Der zweite Inhalt war damit kommentarlos überschrieben. Folge für M4: Eine `PUT`-Antwort, deren ETag dem gesendeten `If-Match` entspricht, beweist nicht, dass seitdem niemand geschrieben hat. Gegenmaßnahme wird in M4 entschieden (z. B. solche Antworten als unsicher werten und nach > 1 s neu lesen und vergleichen). Der Integrationstest wartet deshalb vor dem ersten Schreibzugriff über die Sekundengrenze.
+- **Seiten-Papierkorb ohne `collectivePath`**: `GET …/pages/trash` liefert `collectivePath: null` (Fixture `pages-trash-list.json`), alle übrigen PageInfo-Felder wie gewohnt. Der Client gibt dort den Typ `TrashedPage` zurück (`collectivePath: string | null`), `PageInfo` bleibt strikt. Nach dem Restore (`PATCH …/pages/trash/{id}`) ist `collectivePath` wieder gesetzt.
+- **Weiterleitungen und `Authorization`-Header: nicht verifiziert.** Die Obsidian-Typen dokumentieren das Redirect-Verhalten von `requestUrl` nicht, und der Integrationstest läuft mit Node-`fetch` statt `requestUrl`. Ob ein Redirect auf einen fremden Host den Basic-Auth-Header mitnimmt (Desktop: Electron/Chromium, Mobile: native HTTP-Stacks), ist nur in Obsidian selbst prüfbar. Offen für die manuelle Prüfung (spätestens M9, `docs/manual-test.md`). Bis dahin gilt: Die Server-URL wird normalisiert, und der Client sendet nur an `baseUrl + Pfad`, Pfade mit `://` lehnt er ab.
+- Unerwartete Statuscodes: `MKCOL` auf einen existierenden Ordner → 405 (`ServerError`), Mitglied löscht Collective → 403 (`ForbiddenError`, ADR 0015).
+
 ## 11. Referenzprojekte (PLAN §18)
 
 Gesichtet nur lesend, ohne Build oder Ausführung.

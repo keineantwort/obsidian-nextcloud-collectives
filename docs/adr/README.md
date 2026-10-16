@@ -18,3 +18,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0012](0012-gleichzeitige-bearbeitung-im-browser.md) | Gleichzeitige Bearbeitung im Browser: ETag-Schutz, kein Session-Handling | akzeptiert |
 | [0013](0013-lokalisierung-de-en.md) | Benutzer-Texte auf Deutsch und Englisch nach Obsidian-Sprache | akzeptiert |
 | [0014](0014-app-passwort-eingabe-ohne-secretcomponent.md) | App-Passwort über ein Passwortfeld, Secret-ID vergibt das Plugin | akzeptiert |
+| [0015](0015-http-fehlerabbildung-und-retry.md) | HTTP-Fehlerabbildung zentral, 403 ≠ `AuthError`, Retry nur für lesende Requests | akzeptiert |
