@@ -15,44 +15,51 @@ function result(partial: Partial<SyncResult>): SyncResult {
 
 describe('formatSyncResult', () => {
 	it('says that no pages were found when every counter is 0', () => {
-		const spec = formatSyncResult(EMPTY, en);
+		const spec = formatSyncResult(EMPTY, 0, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. No pages found in your collectives.'], level: 'info' });
 	});
 
 	it('says the page is up to date for a single unchanged page', () => {
-		const spec = formatSyncResult(result({ unchanged: 1 }), en);
+		const spec = formatSyncResult(result({ unchanged: 1 }), 1, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. The page is up to date.'], level: 'info' });
 	});
 
 	it('says how many pages are up to date', () => {
-		const spec = formatSyncResult(result({ unchanged: 12 }), en);
+		const spec = formatSyncResult(result({ unchanged: 12 }), 12, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. All 12 pages are up to date.'], level: 'info' });
 	});
 
+	it('reports the linked pages on an idle run where every counter is 0', () => {
+		const spec = formatSyncResult(EMPTY, 12, en);
+
+		expect(spec).toEqual({ lines: ['Sync complete. All 12 pages are up to date.'], level: 'info' });
+		expect(spec.lines.join('\n')).not.toContain('No pages found');
+	});
+
 	it('lists the non-zero counters on one line', () => {
-		const spec = formatSyncResult(result({ created: 3, unchanged: 12 }), en);
+		const spec = formatSyncResult(result({ created: 3, unchanged: 12 }), 0, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. New: 3 · Unchanged: 12'], level: 'info' });
 	});
 
 	it('omits counters that are 0', () => {
-		const spec = formatSyncResult(result({ created: 1, updated: 0, metaUpdated: 0, unchanged: 0 }), en);
+		const spec = formatSyncResult(result({ created: 1, updated: 0, metaUpdated: 0, unchanged: 0 }), 0, en);
 
 		expect(spec.lines[0]).toBe('Sync complete. New: 1');
 		expect(spec.lines.join('\n')).not.toContain('Updated: 0');
 	});
 
 	it('lists updated and metadata-only counters in German', () => {
-		const spec = formatSyncResult(result({ updated: 2, metaUpdated: 1 }), de);
+		const spec = formatSyncResult(result({ updated: 2, metaUpdated: 1 }), 0, de);
 
 		expect(spec.lines[0]).toBe('Synchronisierung abgeschlossen. Aktualisiert: 2 · Nur Metadaten: 1');
 	});
 
 	it('puts a single conflict on its own line, with the conflict label, as a warning', () => {
-		const spec = formatSyncResult(result({ conflicts: 1 }), en);
+		const spec = formatSyncResult(result({ conflicts: 1 }), 0, en);
 
 		expect(spec.lines).toHaveLength(3);
 		expect(spec.lines[1]).toContain('Conflict');
@@ -63,59 +70,59 @@ describe('formatSyncResult', () => {
 	});
 
 	it('adds the hint to the command for deciding conflicts right after the conflict line', () => {
-		const spec = formatSyncResult(result({ conflicts: 1 }), en);
+		const spec = formatSyncResult(result({ conflicts: 1 }), 0, en);
 
 		expect(spec.lines[2]).toBe('Use the command “Show conflicts” to decide which version to keep.');
 	});
 
 	it('adds the same hint in German after the conflict line', () => {
-		const spec = formatSyncResult(result({ conflicts: 2 }), de);
+		const spec = formatSyncResult(result({ conflicts: 2 }), 0, de);
 
 		expect(spec.lines[2]).toBe('Mit dem Befehl „Konflikte anzeigen“ entscheidest du, welche Fassung bleibt.');
 	});
 
 	it('shows no conflict hint when there are no conflicts', () => {
-		const spec = formatSyncResult(result({ created: 1, failed: 1 }), en);
+		const spec = formatSyncResult(result({ created: 1, failed: 1 }), 0, en);
 
 		expect(spec.lines.join('\n')).not.toContain('Show conflicts');
 	});
 
 	it('uses the German conflict label in German', () => {
-		const spec = formatSyncResult(result({ conflicts: 1 }), de);
+		const spec = formatSyncResult(result({ conflicts: 1 }), 0, de);
 
 		expect(spec.lines[1]).toContain('Konflikt');
 		expect(spec.lines[1]).toContain('„Konflikt“');
 	});
 
 	it('pluralises several conflicts', () => {
-		const spec = formatSyncResult(result({ conflicts: 2 }), en);
+		const spec = formatSyncResult(result({ conflicts: 2 }), 0, en);
 
 		expect(spec.lines[1]).toContain('2 conflicts');
 		expect(spec.level).toBe('warning');
 	});
 
 	it('states only the completion in the first line when there are only conflicts', () => {
-		const spec = formatSyncResult(result({ conflicts: 1 }), en);
+		const spec = formatSyncResult(result({ conflicts: 1 }), 0, en);
 
 		expect(spec.lines[0]).toBe('Sync complete.');
 	});
 
 	it('reports a single failed page as a warning', () => {
-		const spec = formatSyncResult(result({ failed: 1 }), en);
+		const spec = formatSyncResult(result({ failed: 1 }), 0, en);
 
 		expect(spec.lines[1]).toBe('1 page could not be synced. It will be retried on the next sync.');
 		expect(spec.level).toBe('warning');
 	});
 
 	it('reports several failed pages as a warning', () => {
-		const spec = formatSyncResult(result({ failed: 3 }), de);
+		const spec = formatSyncResult(result({ failed: 3 }), 0, de);
 
 		expect(spec.lines[1]).toBe('3 Seiten konnten nicht synchronisiert werden. Sie werden bei der nächsten Synchronisierung erneut versucht.');
 		expect(spec.level).toBe('warning');
 	});
 
 	it('keeps conflicts and failures on separate lines with the summary first', () => {
-		const spec = formatSyncResult(result({ created: 1, conflicts: 1, failed: 2 }), en);
+		const spec = formatSyncResult(result({ created: 1, conflicts: 1, failed: 2 }), 0, en);
 
 		expect(spec.lines).toHaveLength(4);
 		expect(spec.lines[0]).toBe('Sync complete. New: 1');
@@ -126,7 +133,7 @@ describe('formatSyncResult', () => {
 	});
 
 	it('uses the info level when nothing went wrong', () => {
-		expect(formatSyncResult(result({ created: 2, updated: 1 }), en).level).toBe('info');
+		expect(formatSyncResult(result({ created: 2, updated: 1 }), 0, en).level).toBe('info');
 	});
 });
 
@@ -168,7 +175,7 @@ describe('describeSyncOutcome', () => {
 	});
 
 	it('formats a finished run through formatSyncResult', () => {
-		const spec = describeSyncOutcome({ kind: 'done', result: result({ created: 1 }), skips: [] }, en);
+		const spec = describeSyncOutcome({ kind: 'done', result: result({ created: 1 }), skips: [], openConflicts: 0, pages: 1 }, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. New: 1'], level: 'info' });
 	});
@@ -226,26 +233,26 @@ describe('alreadyRunningNotice', () => {
 
 describe('formatSyncResult: uploads', () => {
 	it('reports pushed pages as their own detail in English', () => {
-		const spec = formatSyncResult(result({ pushed: 2 }), en);
+		const spec = formatSyncResult(result({ pushed: 2 }), 0, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. Uploaded: 2'], level: 'info' });
 	});
 
 	it('reports pushed pages as their own detail in German', () => {
-		const spec = formatSyncResult(result({ pushed: 2 }), de);
+		const spec = formatSyncResult(result({ pushed: 2 }), 0, de);
 
 		expect(spec.lines[0]).toBe('Synchronisierung abgeschlossen. Hochgeladen: 2');
 	});
 
 	it('counts a pushed page as a change, so the run is not reported as up to date', () => {
-		const spec = formatSyncResult(result({ pushed: 1, unchanged: 12 }), en);
+		const spec = formatSyncResult(result({ pushed: 1, unchanged: 12 }), 0, en);
 
 		expect(spec.lines[0]).toContain('Uploaded: 1');
 		expect(spec.lines[0]).not.toContain('up to date');
 	});
 
 	it('shows the upload of a finished run through describeSyncOutcome', () => {
-		const spec = describeSyncOutcome({ kind: 'done', result: result({ pushed: 1 }), skips: [], openConflicts: 0 }, en);
+		const spec = describeSyncOutcome({ kind: 'done', result: result({ pushed: 1 }), skips: [], openConflicts: 0, pages: 1 }, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. Uploaded: 1'], level: 'info' });
 	});

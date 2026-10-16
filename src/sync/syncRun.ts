@@ -100,7 +100,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 		log: deps.log,
 		occupied: local.occupied,
 	});
-	return { kind: 'done', result, skips: plan.skips, openConflicts: countConflicts(state) };
+	return { kind: 'done', result, skips: plan.skips, openConflicts: countConflicts(state), pages: Object.keys(state.pages).length };
 }
 
 function toTree(rc: RemoteCollective): CollectiveTree {

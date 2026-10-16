@@ -1,4 +1,4 @@
-// Conflict list: per page a diff, the consequences of each choice and the three actions (PLAN §9).
+// Conflict list: per page a short reason, the diff and the three actions (PLAN §9). Consequences are tooltips and descriptions.
 // The only UI file for conflicts that imports 'obsidian'; all texts come from the translator, all DOM is built with createEl.
 import { ButtonComponent, Modal } from 'obsidian';
 import type { App } from 'obsidian';
@@ -24,7 +24,6 @@ type DiffState = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; lin
 interface EntryView {
 	details: HTMLDetailsElement;
 	diff: HTMLElement;
-	trash: HTMLElement | null;
 }
 
 const TITLE_ID = 'nc-conflicts-title';
@@ -103,7 +102,6 @@ class ConflictModal extends Modal {
 		const p = this.idPrefix;
 		const key = entryKey(entry);
 		const description = describeConflict(entry, t);
-		const hasCopy = description.trashNote !== null;
 
 		const item = list.createEl('li', { cls: 'nc-conflict' });
 		const heading = item.createEl('h3', {
@@ -122,34 +120,34 @@ class ConflictModal extends Modal {
 		details.addEventListener('toggle', () => {
 			if (details.open) this.ensureDiff(entry);
 		});
-
-		const effects = item.createEl('ul', { cls: 'nc-conflict-effects' });
-		effects.createEl('li', { text: description.keepLocalEffect, attr: { id: `${p}-${index}-keep` } });
-		effects.createEl('li', { text: description.takeRemoteEffect, attr: { id: `${p}-${index}-remote` } });
-		const trash = hasCopy
-			? effects.createEl('li', { text: description.trashNote ?? '', attr: { id: `${p}-${index}-trash` } })
-			: null;
-		effects.createEl('li', { text: description.laterEffect, attr: { id: `${p}-${index}-later` } });
-		this.views.set(key, { details, diff, trash });
+		this.views.set(key, { details, diff });
 
 		const buttons = item.createDiv({ cls: 'nc-conflict-actions' });
-		const trashRef = hasCopy ? ` ${p}-${index}-trash` : '';
-		const keepLocal = new ButtonComponent(buttons)
-			.setButtonText(t('conflicts.keepLocal'))
-			.setDisabled(this.busy)
-			.onClick(() => { void this.choose(index, 'keepLocal'); });
-		keepLocal.buttonEl.setAttribute('aria-describedby', `${p}-${index}-keep${trashRef}`);
-		const takeRemote = new ButtonComponent(buttons)
-			.setButtonText(t('conflicts.takeRemote'))
-			.setDisabled(this.busy)
-			.onClick(() => { void this.choose(index, 'takeRemote'); });
-		takeRemote.buttonEl.setAttribute('aria-describedby', `${p}-${index}-remote${trashRef}`);
-		const later = new ButtonComponent(buttons)
-			.setButtonText(t('conflicts.later'))
-			.setDisabled(this.busy)
-			.onClick(() => { this.later(index); });
-		later.buttonEl.setAttribute('aria-describedby', `${p}-${index}-later`);
+		const keepLocalId = `${p}-${index}-keep`;
+		const takeRemoteId = `${p}-${index}-remote`;
+		const laterId = `${p}-${index}-later`;
+		const keepLocal = this.createAction(buttons, t('conflicts.keepLocal'), description.keepLocalHint, keepLocalId,
+			() => { void this.choose(index, 'keepLocal'); });
+		const takeRemote = this.createAction(buttons, t('conflicts.takeRemote'), description.takeRemoteHint, takeRemoteId,
+			() => { void this.choose(index, 'takeRemote'); });
+		const later = this.createAction(buttons, t('conflicts.later'), description.laterHint, laterId,
+			() => { this.later(index); });
+		// Hidden copies of the hints, referenced by aria-describedby.
+		item.createSpan({ cls: 'nc-visually-hidden', text: description.keepLocalHint, attr: { id: keepLocalId } });
+		item.createSpan({ cls: 'nc-visually-hidden', text: description.takeRemoteHint, attr: { id: takeRemoteId } });
+		item.createSpan({ cls: 'nc-visually-hidden', text: description.laterHint, attr: { id: laterId } });
 		this.actions[index] = { keepLocal, takeRemote, later };
+	}
+
+	/** One action button; its consequence is the tooltip and, through aria-describedby, the accessible description. */
+	private createAction(buttons: HTMLElement, label: string, hint: string, hintId: string, onClick: () => void): ButtonComponent {
+		const button = new ButtonComponent(buttons)
+			.setButtonText(label)
+			.setDisabled(this.busy)
+			.setTooltip(hint)
+			.onClick(onClick);
+		button.buttonEl.setAttribute('aria-describedby', hintId);
+		return button;
 	}
 
 	/** Done view: shown when no conflict is open; the modal stays open until the user closes it. */
@@ -215,7 +213,6 @@ class ConflictModal extends Modal {
 		}
 		if (state.remoteMissing) {
 			container.createEl('p', { cls: 'nc-diff-message', text: remoteUnavailableMessage(entry, t) });
-			view.trash?.hide();
 			return;
 		}
 		if (state.lines === null) {

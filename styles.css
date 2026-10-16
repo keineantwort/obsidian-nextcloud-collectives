@@ -81,8 +81,6 @@
 .nc-diff-marker { flex: none; width: 1ch; font-weight: var(--font-bold); user-select: none; }
 .nc-diff-text { flex: 1 1 auto; min-width: 0; }
 .nc-diff-message { margin: var(--size-4-2) 0; color: var(--text-normal); }
-.nc-conflict-effects { margin: 0 0 var(--size-4-2); padding-inline-start: var(--size-4-6); font-size: var(--font-ui-small); }
-.nc-conflict-effects li { margin-bottom: var(--size-4-1); }
 .nc-conflict-actions { display: flex; flex-wrap: wrap; gap: var(--size-4-2); }
 .is-mobile .nc-conflict-actions { flex-direction: column; align-items: stretch; }
 .is-mobile .nc-conflict-actions button,

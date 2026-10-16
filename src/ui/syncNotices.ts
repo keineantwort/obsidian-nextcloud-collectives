@@ -11,11 +11,11 @@ export interface SyncNoticeSpec { lines: string[]; level: NoticeLevel; }
 const DETAIL_SEPARATOR = ' · ';
 
 /** Notice text for a finished sync. Conflicts and failures get their own sentence on a separate line. */
-export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeSpec {
+export function formatSyncResult(result: SyncResult, pages: number, t: Translator): SyncNoticeSpec {
 	const changed = result.created + result.updated + result.pushed + result.metaUpdated + result.conflicts + result.failed;
 	const lines: string[] = [];
 	if (changed === 0) {
-		lines.push(upToDate(result.unchanged, t));
+		lines.push(upToDate(pages, t));
 	} else {
 		const details: string[] = [];
 		if (result.created > 0) details.push(t('sync.result.created', { count: result.created }));
@@ -43,7 +43,7 @@ export function formatSyncResult(result: SyncResult, t: Translator): SyncNoticeS
 /** Notice for every non-throwing outcome of runSync(). */
 export function describeSyncOutcome(outcome: SyncRunOutcome, t: Translator): SyncNoticeSpec {
 	switch (outcome.kind) {
-		case 'done': return formatSyncResult(outcome.result, t);
+		case 'done': return formatSyncResult(outcome.result, outcome.pages, t);
 		case 'cancelled': return { lines: [t('sync.cancelled')], level: 'info' };
 		case 'serverMismatch': return { lines: [t('sync.serverMismatch', { server: outcome.stateServer })], level: 'error' };
 		case 'accountMismatch': return { lines: [t('sync.accountMismatch', { user: outcome.stateUser })], level: 'error' };
@@ -62,6 +62,7 @@ export function alreadyRunningNotice(t: Translator): SyncNoticeSpec {
 	return { lines: [t('sync.alreadyRunning')], level: 'info' };
 }
 
+/** Idle run: every page in the state is up to date, so the count is the number of linked pages, not the unchanged counter. */
 function upToDate(count: number, t: Translator): string {
 	if (count === 0) return t('sync.result.upToDate.none');
 	return count === 1 ? t('sync.result.upToDate.one') : t('sync.result.upToDate.other', { count });

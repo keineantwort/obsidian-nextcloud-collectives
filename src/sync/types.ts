@@ -17,7 +17,8 @@ export interface Skip { reason: SkipReason; pageId?: PageId; collectiveId?: Coll
 export interface SyncResult { created: number; updated: number; pushed: number; metaUpdated: number; conflicts: number; unchanged: number; failed: number; }
 
 export type SyncRunOutcome =
-	| { kind: 'done'; result: SyncResult; skips: Skip[]; openConflicts: number }
+	/** pages: pages linked to the vault after the run (state size), so an idle run can still report them. */
+	| { kind: 'done'; result: SyncResult; skips: Skip[]; openConflicts: number; pages: number }
 	| { kind: 'cancelled' }
 	| { kind: 'serverMismatch'; stateServer: string }
 	/** The state belongs to another Nextcloud account on the same server. Nothing was changed. */

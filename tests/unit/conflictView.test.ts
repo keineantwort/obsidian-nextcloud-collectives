@@ -128,65 +128,54 @@ describe('hasChanges', () => {
 });
 
 describe('describeConflict', () => {
-	it('names the page and explains the kept local file and the conflict copy', () => {
+	it('names the page and gives the reason for a conflict', () => {
 		const description = describeConflict(entry(), en);
 
 		expect(description.name).toBe('Page');
 		expect(description.path).toBe('Coll/Sub/Page.md');
-		expect(description.explanation).toContain('“Page (Conflict 2026-10-16 0950).md”');
-		expect(description.keepLocalEffect).toBe('“Keep local” uploads your file and overwrites the version on the server.');
-		expect(description.takeRemoteEffect).toBe('“Take remote” replaces the content of your file with the server version.');
-		expect(description.trashNote).toBe('In both cases, “Page (Conflict 2026-10-16 0950).md” is moved to the trash.');
-		expect(description.laterEffect).toBe('“Later” leaves everything as it is. The page is not uploaded until you decide.');
+		expect(description.explanation).toBe('Changed here and on the server.');
 	});
 
-	it('uses the no-copy explanation and no trash note without a conflict copy', () => {
-		const description = describeConflict(entry({ conflictPath: null }), en);
-
-		expect(description.explanation).toBe('This page was changed here and on the server since the last sync. Your file was kept.');
-		expect(description.trashNote).toBeNull();
-	});
-
-	it('uses the collision texts and the linking effects for a collision with a copy', () => {
+	it('gives the reason for a collision', () => {
 		const description = describeConflict(entry({ status: 'collision' }), en);
 
-		expect(description.explanation).toContain('the server page was saved next to it as “Page (Conflict 2026-10-16 0950).md”');
-		expect(description.keepLocalEffect).toBe(
-			'“Keep local” links your file to this server page, uploads it and overwrites the page on the server.',
-		);
-		expect(description.takeRemoteEffect).toBe(
-			'“Take remote” links your file to this server page and replaces its content with the server version.',
-		);
-		expect(description.trashNote).not.toBeNull();
+		expect(description.explanation).toBe('A file with this name already existed in your vault.');
 	});
 
-	it('uses the collision text without a copy', () => {
-		const description = describeConflict(entry({ status: 'collision', conflictPath: null }), en);
+	it('gives the same hints for a conflict and a collision', () => {
+		const conflict = describeConflict(entry(), en);
+		const collision = describeConflict(entry({ status: 'collision' }), en);
 
-		expect(description.explanation).toBe(
-			'A file with this name already existed in your vault when this page was downloaded from the server. Your file was kept.',
-		);
-		expect(description.trashNote).toBeNull();
+		expect(conflict.keepLocalHint).toBe('Uploads your file and overwrites the server version.');
+		expect(conflict.takeRemoteHint).toBe('Replaces your file with the server version.');
+		expect(conflict.laterHint).toBe('Leaves the conflict open.');
+		expect(collision.keepLocalHint).toBe(conflict.keepLocalHint);
+		expect(collision.takeRemoteHint).toBe(conflict.takeRemoteHint);
+		expect(collision.laterHint).toBe(conflict.laterHint);
 	});
 
-	it('uses German quotes in German', () => {
+	it('does not depend on the conflict copy', () => {
+		const withCopy = describeConflict(entry(), en);
+		const withoutCopy = describeConflict(entry({ conflictPath: null }), en);
+
+		expect(withoutCopy).toEqual(withCopy);
+	});
+
+	it('uses German texts in German', () => {
 		const description = describeConflict(entry(), de);
 
-		expect(description.explanation).toContain('„Page (Conflict 2026-10-16 0950).md“');
+		expect(description.explanation).toBe('Hier und auf dem Server geändert.');
+		expect(description.keepLocalHint).toBe('Lädt deine Datei hoch und überschreibt die Server-Fassung.');
 	});
 });
 
 describe('remoteUnavailableMessage', () => {
-	it('names the missing conflict copy when there is one', () => {
-		expect(remoteUnavailableMessage(entry(), en)).toBe(
-			'The server version “Page (Conflict 2026-10-16 0950).md” is no longer in your vault, so it cannot be compared. “Take remote” downloads the server version again.',
-		);
+	it('explains that the server version is not available when the copy is missing', () => {
+		expect(remoteUnavailableMessage(entry(), en)).toBe('Server version not available for comparison.');
 	});
 
-	it('explains that no server version was saved when there is no copy', () => {
-		expect(remoteUnavailableMessage(entry({ conflictPath: null }), en)).toBe(
-			'No server version was saved in your vault, so it cannot be compared. “Take remote” downloads the server version.',
-		);
+	it('uses the same text when there is no conflict copy', () => {
+		expect(remoteUnavailableMessage(entry({ conflictPath: null }), en)).toBe('Server version not available for comparison.');
 	});
 });
 

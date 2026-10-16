@@ -10,6 +10,7 @@ import type { StateFile } from '../../src/sync/stateStore';
 import { emptyState, serializeSyncState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 import { runSync } from '../../src/sync/syncRun';
+import { describeSyncOutcome } from '../../src/ui/syncNotices';
 import type { SyncRunDeps } from '../../src/sync/syncRun';
 import { createTranslator } from '../../src/i18n';
 import { ConfigError } from '../../src/util/errors';
@@ -265,10 +266,22 @@ describe('runSync: second run', () => {
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0 });
+		expect(outcome).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0, pages: 6 });
 		expect(vault.writes).toBe(vaultWrites);
 		expect(stateFile.writes).toBe(stateWrites);
 		expect(server.davRequests(callsBefore)).toEqual([]);
+	});
+
+	it('reports the linked pages on an idle run, so the notice does not claim that no pages were found', async () => {
+		const stateFile = new FakeStateFile();
+		const deps = makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile);
+		await runSync(deps);
+
+		const outcome = await runSync(deps);
+
+		if (outcome.kind !== 'done') throw new Error(`expected a finished run, got ${outcome.kind}`);
+		expect(outcome.pages).toBe(Object.keys(storedState(stateFile).pages).length);
+		expect(describeSyncOutcome(outcome, createTranslator('en')).lines).toEqual([`Sync complete. All ${outcome.pages} pages are up to date.`]);
 	});
 
 	it('updates only the one file whose remote content changed between the runs', async () => {
@@ -417,6 +430,7 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 			result: ZERO_RESULT,
 			skips: [{ reason: 'remoteDeleted', pageId: 200, collectiveId: 1 }],
 			openConflicts: 0,
+			pages: 8,
 		});
 		expect(vault.writes).toBe(writesBefore);
 		expect(readPageId(await vault.read('Handbuch/Notes (2).md'))).toBe(201);
@@ -465,7 +479,7 @@ describe('runSync: several runs over colliding, renamed and sibling pages', () =
 		const stateWritesBefore = stateFile.writes;
 		const second = await runSync(deps);
 
-		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 1 });
+		expect(second).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 1, pages: 6 });
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.writes).toBe(stateWritesBefore);
 
@@ -505,7 +519,7 @@ describe('runSync: pushing local edits', () => {
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0 });
+		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0, pages: 6 });
 		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
 	});
 
@@ -538,7 +552,7 @@ describe('runSync: pushing local edits', () => {
 		const third = await runSync(deps);
 
 		expect(server.davRequests(callsBeforeThird)).toEqual([]);
-		expect(third).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0 });
+		expect(third).toEqual({ kind: 'done', result: ZERO_RESULT, skips: [], openConflicts: 0, pages: 6 });
 	});
 
 	it('pushes the local text when both sides changed and conflictStrategy is preferLocal', async () => {
@@ -553,7 +567,7 @@ describe('runSync: pushing local edits', () => {
 
 		const outcome = await runSync(deps);
 
-		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0 });
+		expect(outcome).toEqual({ kind: 'done', result: { ...ZERO_RESULT, pushed: 1 }, skips: [], openConflicts: 0, pages: 6 });
 		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(toRemote(localText));
 		expect(await vault.read(PAGE_102_LOCAL)).toBe(localText);
 		expect(vault.listFiles().some((file) => file.path.includes('Konflikt'))).toBe(false);

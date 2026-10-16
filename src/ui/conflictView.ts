@@ -1,4 +1,4 @@
-// Pure helpers for the conflict modal: texts, diff collapsing and focus rules. No 'obsidian' import.
+// Pure helpers for the conflict modal: short texts, diff collapsing and focus rules. No 'obsidian' import.
 import type { Translator } from '../i18n';
 import type { ConflictEntry } from '../sync/conflicts';
 import type { DiffLine } from '../util/diff';
@@ -10,12 +10,12 @@ export interface ConflictDescription {
 	name: string;
 	/** Full localPath, shown muted. */
 	path: string;
+	/** One short reason line. */
 	explanation: string;
-	keepLocalEffect: string;
-	takeRemoteEffect: string;
-	/** Trash note, or null when there is no conflict copy. */
-	trashNote: string | null;
-	laterEffect: string;
+	/** Consequence of each button; the same for both statuses. Shown as tooltip and accessible description. */
+	keepLocalHint: string;
+	takeRemoteHint: string;
+	laterHint: string;
 }
 
 /** Unchanged lines shown next to each change. */
@@ -35,29 +35,19 @@ export function splitPath(path: string): { folder: string; file: string } {
 
 export function describeConflict(e: ConflictEntry, t: Translator): ConflictDescription {
 	const name = splitPath(e.localPath).file.replace(/\.md$/, '');
-	const copy = e.conflictPath === null ? '' : splitPath(e.conflictPath).file;
-	const collision = e.status === 'collision';
-	let explanation: string;
-	if (collision) {
-		explanation = copy === '' ? t('conflicts.explain.collisionNoCopy') : t('conflicts.explain.collision', { copy });
-	} else {
-		explanation = copy === '' ? t('conflicts.explain.conflictNoCopy') : t('conflicts.explain.conflict', { copy });
-	}
 	return {
 		name,
 		path: e.localPath,
-		explanation,
-		keepLocalEffect: collision ? t('conflicts.effect.keepLocalCollision') : t('conflicts.effect.keepLocal'),
-		takeRemoteEffect: collision ? t('conflicts.effect.takeRemoteCollision') : t('conflicts.effect.takeRemote'),
-		trashNote: copy === '' ? null : t('conflicts.effect.trash', { copy }),
-		laterEffect: t('conflicts.effect.later'),
+		explanation: e.status === 'collision' ? t('conflicts.reason.collision') : t('conflicts.reason.conflict'),
+		keepLocalHint: t('conflicts.hint.keepLocal'),
+		takeRemoteHint: t('conflicts.hint.takeRemote'),
+		laterHint: t('conflicts.hint.later'),
 	};
 }
 
 /** Shown in place of the diff when the conflict copy is missing from the vault (or there is none). */
 export function remoteUnavailableMessage(e: ConflictEntry, t: Translator): string {
-	if (e.conflictPath === null) return t('conflicts.diff.noCopy');
-	return t('conflicts.diff.remoteMissing', { copy: splitPath(e.conflictPath).file });
+	return e.conflictPath === null ? t('conflicts.diff.noCopy') : t('conflicts.diff.remoteMissing');
 }
 
 export function hasChanges(lines: readonly DiffLine[]): boolean {
