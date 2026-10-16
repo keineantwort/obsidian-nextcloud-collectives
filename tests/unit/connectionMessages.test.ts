@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeConnectionError, formatConnectionSuccess } from '../../src/settings/connectionMessages';
 import { createTranslator } from '../../src/i18n';
-import { ApiChangedError, AuthError, ConfigError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+import { ApiChangedError, AuthError, ConfigError, ForbiddenError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
 
 const t = createTranslator('de');
 
@@ -30,6 +30,11 @@ describe('describeConnectionError', () => {
 			new NetworkError('x'),
 			'Der Server ist nicht erreichbar. Bitte Server-URL und Netzwerkverbindung prüfen.',
 		],
+		[
+			'access denied (403)',
+			new ForbiddenError(),
+			'Zugriff verweigert (HTTP 403). Bitte prüfen, ob die App Collectives für dein Konto freigegeben ist.',
+		],
 		['server error 503', new ServerError(503), 'Der Server hat mit einem Fehler geantwortet (HTTP 503).'],
 		[
 			'unexpected response shape',
@@ -43,6 +48,13 @@ describe('describeConnectionError', () => {
 		const message = describeConnectionError(err, t);
 
 		expect(message).toBe(expected);
+	});
+
+	it('gives 403 (access denied) a different text than 401 (rejected credentials)', () => {
+		const forbidden = describeConnectionError(new ForbiddenError(), t);
+		const auth = describeConnectionError(new AuthError(401), t);
+
+		expect(forbidden).not.toBe(auth);
 	});
 
 	it('reports the actual status code of a ServerError, not a fixed one', () => {

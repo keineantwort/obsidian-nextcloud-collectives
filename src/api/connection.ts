@@ -1,10 +1,11 @@
-import { ApiChangedError, AuthError, ConfigError, NcError, NetworkError, NotFoundError, ServerError } from '../util/errors';
-import { basicAuthHeader, type HttpResponse, type RequestFn } from './http';
+import { ConfigError } from '../util/errors';
+import { createApiClients } from './clients';
+import type { RequestFn } from './http';
+
+export { OCS_COLLECTIVES_BASE as COLLECTIVES_OCS_BASE } from './ocsClient';
 
 export interface ConnectionCredentials { serverUrl: string; username: string; appPassword: string; }
 export interface ConnectionResult { collectiveCount: number; }
-
-export const COLLECTIVES_OCS_BASE = '/ocs/v2.php/apps/collectives/api/v1.0';
 
 const INDEX_PHP_SUFFIX = '/index.php';
 
@@ -64,6 +65,7 @@ function stripTrailingSlashes(path: string): string {
 /**
  * Checks that the server answers the Collectives OCS API with the given credentials.
  * Input is validated before any request is sent. Resolves with the number of collectives.
+ * Retries are disabled: the user waits for this result, so failures are reported at once.
  */
 export async function testConnection(creds: ConnectionCredentials, request: RequestFn): Promise<ConnectionResult> {
 	const baseUrl = normalizeServerUrl(creds.serverUrl);
@@ -72,45 +74,7 @@ export async function testConnection(creds: ConnectionCredentials, request: Requ
 	// The app password is not trimmed: it is used exactly as the user entered it.
 	if (creds.appPassword === '') throw new ConfigError('appPassword', 'missing');
 
-	let res: HttpResponse;
-	try {
-		res = await request({
-			method: 'GET',
-			url: baseUrl + COLLECTIVES_OCS_BASE + '/collectives',
-			headers: {
-				'OCS-APIRequest': 'true',
-				'Accept': 'application/json',
-				'Authorization': basicAuthHeader(username, creds.appPassword),
-			},
-		});
-	} catch (err) {
-		if (err instanceof NcError) throw err;
-		throw new NetworkError('Request failed', { cause: err });
-	}
-
-	if (res.status === 401 || res.status === 403) throw new AuthError(res.status);
-	if (res.status === 404) throw new NotFoundError('Collectives API not found (HTTP 404)');
-	if (res.status < 200 || res.status >= 300) throw new ServerError(res.status);
-
-	return { collectiveCount: countCollectives(res.text) };
-}
-
-/** Parses a 2xx body of the collectives list. Anything not matching the expected shape is ApiChangedError. */
-function countCollectives(text: string): number {
-	let body: unknown;
-	try {
-		body = JSON.parse(text);
-	} catch (err) {
-		throw new ApiChangedError('Response body is not JSON', { cause: err });
-	}
-	if (!isRecord(body) || !isRecord(body['ocs']) || !isRecord(body['ocs']['data'])) {
-		throw new ApiChangedError('Response has no ocs.data object');
-	}
-	const collectives = body['ocs']['data']['collectives'];
-	if (!Array.isArray(collectives)) throw new ApiChangedError('Response has no ocs.data.collectives array');
-	return collectives.length;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null;
+	const clients = createApiClients({ baseUrl, username, appPassword: creds.appPassword, request, retry: false });
+	const collectives = await clients.collectives.listCollectives();
+	return { collectiveCount: collectives.length };
 }

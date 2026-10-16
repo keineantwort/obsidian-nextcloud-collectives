@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { isInsecureRemoteUrl, normalizeServerUrl, testConnection } from '../../src/api/connection';
 import { basicAuthHeader, type HttpRequest, type HttpResponse, type RequestFn } from '../../src/api/http';
-import { ApiChangedError, AuthError, ConfigError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+import { ApiChangedError, AuthError, ConfigError, ForbiddenError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
 
 const COLLECTIVES_URL_SUFFIX = '/ocs/v2.php/apps/collectives/api/v1.0/collectives';
 
@@ -27,7 +27,16 @@ function response(status: number, text: string): HttpResponse {
 }
 
 function okOcsBody(collectiveCount: number): string {
-	const collectives = Array.from({ length: collectiveCount }, (_, i) => ({ id: i + 1, name: `C${i + 1}` }));
+	const collectives = Array.from({ length: collectiveCount }, (_, i) => ({
+		id: i + 1,
+		circleId: `CIRCLE_ID_${i + 1}`,
+		name: `C${i + 1}`,
+		slug: `c${i + 1}`,
+		emoji: null,
+		level: 9,
+		canEdit: true,
+		trashTimestamp: null,
+	}));
 	return JSON.stringify({
 		ocs: { meta: { status: 'ok', statuscode: 200, message: 'OK' }, data: { collectives } },
 	});
@@ -176,13 +185,22 @@ describe('testConnection', () => {
 	});
 
 	describe('HTTP status mapping', () => {
-		it.each([401, 403])('maps HTTP %i to AuthError carrying the status', async (status) => {
-			const fake = fakeRequest(response(status, ''));
+		it('maps HTTP 401 to AuthError carrying the status 401', async () => {
+			const fake = fakeRequest(response(401, ''));
 
 			const err = await captureError(testConnection(validCreds, fake.fn));
 
 			expect(err).toBeInstanceOf(AuthError);
-			expect((err as AuthError).status).toBe(status);
+			expect((err as AuthError).status).toBe(401);
+		});
+
+		it('maps HTTP 403 to ForbiddenError, not AuthError', async () => {
+			const fake = fakeRequest(response(403, ''));
+
+			const err = await captureError(testConnection(validCreds, fake.fn));
+
+			expect(err).toBeInstanceOf(ForbiddenError);
+			expect(err).not.toBeInstanceOf(AuthError);
 		});
 
 		it('maps HTTP 404 to NotFoundError', async () => {
@@ -215,6 +233,31 @@ describe('testConnection', () => {
 			const err = await captureError(testConnection(validCreds, fake.fn));
 
 			expect(err).toBeInstanceOf(ApiChangedError);
+		});
+
+		it('maps a 200 whose collectives entry lacks circleId to ApiChangedError', async () => {
+			const body = JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200, message: 'OK' },
+					data: { collectives: [{ id: 1, name: 'C1', slug: 'c1', emoji: null, level: 9, canEdit: true, trashTimestamp: null }] },
+				},
+			});
+			const fake = fakeRequest(response(200, body));
+
+			const err = await captureError(testConnection(validCreds, fake.fn));
+
+			expect(err).toBeInstanceOf(ApiChangedError);
+		});
+	});
+
+	describe('retries', () => {
+		it('does not retry: a 503 is answered with exactly one request', async () => {
+			const fake = fakeRequest(response(503, ''));
+
+			const err = await captureError(testConnection(validCreds, fake.fn));
+
+			expect(err).toBeInstanceOf(ServerError);
+			expect(fake.calls).toHaveLength(1);
 		});
 	});
 

@@ -23,6 +23,7 @@ export const en = {
 	'connection.error.usernameMissing': 'Please enter the username.',
 	'connection.error.appPasswordMissing': 'Please enter an app password.',
 	'connection.error.auth': 'Login failed. Please check username and app password.',
+	'connection.error.forbidden': 'Access denied (HTTP 403). Please check that the Collectives app is enabled for your account.',
 	'connection.error.notFound': 'The Collectives API was not found. Please check the server URL and make sure the Collectives app is enabled on the server.',
 	'connection.error.network': 'The server cannot be reached. Please check the server URL and your network connection.',
 	'connection.error.server': 'The server responded with an error (HTTP {status}).',

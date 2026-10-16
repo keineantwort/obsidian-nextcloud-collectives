@@ -25,6 +25,7 @@ export const de: Record<MessageKey, string> = {
 	'connection.error.usernameMissing': 'Bitte den Benutzernamen angeben.',
 	'connection.error.appPasswordMissing': 'Bitte ein App-Passwort hinterlegen.',
 	'connection.error.auth': 'Anmeldung fehlgeschlagen. Bitte Benutzername und App-Passwort prüfen.',
+	'connection.error.forbidden': 'Zugriff verweigert (HTTP 403). Bitte prüfen, ob die App Collectives für dein Konto freigegeben ist.',
 	'connection.error.notFound': 'Die Collectives-API wurde nicht gefunden. Bitte die Server-URL prüfen und sicherstellen, dass die App Collectives auf dem Server aktiviert ist.',
 	'connection.error.network': 'Der Server ist nicht erreichbar. Bitte Server-URL und Netzwerkverbindung prüfen.',
 	'connection.error.server': 'Der Server hat mit einem Fehler geantwortet (HTTP {status}).',

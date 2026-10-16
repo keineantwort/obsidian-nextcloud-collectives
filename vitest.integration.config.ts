@@ -1,2 +1,2 @@
 import { defineConfig } from 'vitest/config';
-export default defineConfig({ test: { include: ['tests/integration/**/*.test.ts'], environment: 'node', testTimeout: 30000 } });
+export default defineConfig({ test: { include: ['tests/integration/**/*.test.ts'], environment: 'node', setupFiles: ['tests/setup/domParser.ts'], testTimeout: 30000 } });

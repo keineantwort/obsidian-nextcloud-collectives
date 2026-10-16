@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeConnectionError, formatConnectionSuccess } from '../../src/settings/connectionMessages';
 import { createTranslator } from '../../src/i18n';
-import { ApiChangedError, AuthError, ConfigError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+import { ApiChangedError, AuthError, ConfigError, ForbiddenError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
 
 const t = createTranslator('en');
 
@@ -19,6 +19,11 @@ describe('describeConnectionError in English', () => {
 			'rejected credentials (401)',
 			new AuthError(401),
 			'Login failed. Please check username and app password.',
+		],
+		[
+			'access denied (403)',
+			new ForbiddenError(),
+			'Access denied (HTTP 403). Please check that the Collectives app is enabled for your account.',
 		],
 		[
 			'endpoint not found',
@@ -42,6 +47,13 @@ describe('describeConnectionError in English', () => {
 		const message = describeConnectionError(err, t);
 
 		expect(message).toBe(expected);
+	});
+
+	it('gives 403 (access denied) a different text than 401 (rejected credentials)', () => {
+		const forbidden = describeConnectionError(new ForbiddenError(), t);
+		const auth = describeConnectionError(new AuthError(401), t);
+
+		expect(forbidden).not.toBe(auth);
 	});
 
 	it('reports the HTTP status of a ServerError in the English text', () => {
