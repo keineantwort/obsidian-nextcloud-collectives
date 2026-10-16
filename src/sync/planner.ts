@@ -1,4 +1,4 @@
-// Pull planner (PLAN §6, M3). Pure: no Obsidian, no network. Decides which operations the executor runs.
+// Sync planner (PLAN §6, M3/M4). Pure: no Obsidian, no network. Decides which operations the executor runs.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
 import { canonicalPath, pathKey } from '../mapping/paths';
@@ -18,6 +18,8 @@ export interface PlannerInput {
 	/** Precomputed by the runner: metaHash for each remote page (remote title, emoji, tag names). */
 	remoteMeta: Map<PageId, { meta: NcMeta; hash: string }>;
 	paths: PathPlan;
+	/** pathKeys of the vault files changed since the last run (DirtyQueue.drain()). */
+	dirty: ReadonlySet<string>;
 }
 
 type TagEntry = SyncState['tags'][string][number];
@@ -30,7 +32,7 @@ interface PageOpBase {
 	metaHash: string;
 }
 
-export type PullOp =
+export type SyncOp =
 	| { kind: 'ensureFolder'; path: string }
 	| { kind: 'saveCollective'; collective: CollectiveState }
 	| { kind: 'saveTags'; collectiveId: CollectiveId; tags: SyncState['tags'][string] }
@@ -43,15 +45,17 @@ export type PullOp =
 	| ({ kind: 'adopt' } & PageOpBase)
 	/** Known page, remote mtime or size changed: fetch and compare. metaChanged = metaHash differs from the state. */
 	| ({ kind: 'update'; metaChanged: boolean } & PageOpBase)
+	/** Known page, remote unchanged since the state, local file changed: upload without fetching. */
+	| ({ kind: 'push'; metaChanged: boolean } & PageOpBase)
 	/** Known page, only metadata changed remotely. */
 	| ({ kind: 'updateMeta' } & PageOpBase);
 
-export interface PullPlan {
-	ops: PullOp[];
+export interface SyncPlan {
+	ops: SyncOp[];
 	skips: Skip[];
 }
 
-type PageOp = Extract<PullOp, { page: PageInfo }>;
+type PageOp = Extract<SyncOp, { page: PageInfo }>;
 
 /** Shared state while planning one run. */
 interface Context {
@@ -67,10 +71,10 @@ interface Context {
 }
 
 /**
- * Plans one pull run (PLAN §6.3). Operations are ordered: folders (parents first), collective saves, tag saves,
+ * Plans one sync run (PLAN §6.3). Operations are ordered: folders (parents first), collective saves, tag saves,
  * then page operations by target depth and path. An unchanged remote yields no operations and no skips.
  */
-export function planPull(input: PlannerInput): PullPlan {
+export function planSync(input: PlannerInput): SyncPlan {
 	const { state, remote, local, paths } = input;
 	const skips: Skip[] = [];
 	const scanned = new Set<CollectiveId>(remote.collectives.map((rc) => rc.collective.id));
@@ -102,11 +106,11 @@ export function planPull(input: PlannerInput): PullPlan {
 	};
 
 	const folderPaths = new Set<string>();
-	const collectiveSaves: PullOp[] = [];
-	const tagSaves: PullOp[] = [];
+	const collectiveSaves: SyncOp[] = [];
+	const tagSaves: SyncOp[] = [];
 	for (const rc of remote.collectives) {
 		const planned = paths.collectiveFolders.get(rc.collective.id);
-		if (planned === undefined) throw new Error(`planPull: no local folder planned for collective ${rc.collective.id}`);
+		if (planned === undefined) throw new Error(`planSync: no local folder planned for collective ${rc.collective.id}`);
 		const folder = canonicalPath(planned, local.paths);
 		const known = state.collectives[String(rc.collective.id)];
 		if (known === undefined) {
@@ -142,7 +146,7 @@ export function planPull(input: PlannerInput): PullPlan {
 	}
 
 	const pageOps = [...ctx.pageOps].sort((a, b) => depth(a.path) - depth(b.path) || comparePaths(a.path, b.path));
-	const ops: PullOp[] = [
+	const ops: SyncOp[] = [
 		...ensureFolderOps(folderPaths, pageOps, local.occupied),
 		...collectiveSaves,
 		...tagSaves,
@@ -158,7 +162,7 @@ function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context
 		return;
 	}
 	const remoteMeta = ctx.input.remoteMeta.get(page.id);
-	if (remoteMeta === undefined) throw new Error(`planPull: no metadata planned for page ${page.id}`);
+	if (remoteMeta === undefined) throw new Error(`planSync: no metadata planned for page ${page.id}`);
 	const known = ctx.input.state.pages[String(page.id)];
 	if (known === undefined) {
 		planNewPage(page, remoteMeta, ctx);
@@ -180,7 +184,7 @@ function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string },
 		return;
 	}
 	const target = ctx.input.paths.targets.get(page.id);
-	if (target === undefined) throw new Error(`planPull: no target path planned for page ${page.id}`);
+	if (target === undefined) throw new Error(`planSync: no target path planned for page ${page.id}`);
 	const { local } = ctx.input;
 	const path = canonicalPath(target.path, local.paths);
 	const key = pathKey(path);
@@ -206,7 +210,10 @@ function freePath(path: string, taken: (key: string) => boolean): string {
 	}
 }
 
-/** Page known to the state: skip if its local file is gone or moved; otherwise update or updateMeta. */
+/**
+ * Page known to the state: skip if its local file is gone or moved. A changed remote leads to an update (fetch and
+ * compare); otherwise a changed local file leads to a push; otherwise changed metadata leads to updateMeta.
+ */
 function planKnownPage(page: PageInfo, known: PageState, remoteMeta: { meta: NcMeta; hash: string }, ctx: Context): void {
 	const file = findKnownFile(known, ctx);
 	if (file === undefined) {
@@ -217,9 +224,16 @@ function planKnownPage(page: PageInfo, known: PageState, remoteMeta: { meta: NcM
 		ctx.skips.push({ reason: 'remoteMoved', pageId: page.id, collectiveId: known.collectiveId, path: file.path });
 	}
 	const base = { page, path: file.path, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
-	if (page.timestamp !== known.remoteMtime || page.size !== known.remoteSize) {
-		ctx.pageOps.push({ kind: 'update', ...base, metaChanged: remoteMeta.hash !== known.metaHash });
-	} else if (remoteMeta.hash !== known.metaHash) {
+	const metaChanged = remoteMeta.hash !== known.metaHash;
+	const remoteCandidate = page.timestamp !== known.remoteMtime || page.size !== known.remoteSize;
+	// A collision page is never pushed: its file is the user's own until the conflict is resolved.
+	const localCandidate =
+		known.status === 'synced' && (file.mtime !== known.localMtime || ctx.input.dirty.has(pathKey(file.path)));
+	if (remoteCandidate) {
+		ctx.pageOps.push({ kind: 'update', ...base, metaChanged });
+	} else if (localCandidate) {
+		ctx.pageOps.push({ kind: 'push', ...base, metaChanged });
+	} else if (metaChanged) {
 		ctx.pageOps.push({ kind: 'updateMeta', ...base });
 	}
 }
@@ -237,7 +251,7 @@ function findKnownFile(known: PageState, ctx: Context): LocalFile | undefined {
 }
 
 /** Folder operations: new collective folders and the parent folders of created files, minus those already in the vault. */
-function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): PullOp[] {
+function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): SyncOp[] {
 	const folders = new Set(folderPaths);
 	for (const op of pageOps) {
 		if (op.kind !== 'create') continue;
@@ -249,7 +263,7 @@ function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: 
 	return [...folders]
 		.filter((path) => !occupied.has(pathKey(path)))
 		.sort((a, b) => depth(a) - depth(b) || comparePaths(a, b))
-		.map((path): PullOp => ({ kind: 'ensureFolder', path }));
+		.map((path): SyncOp => ({ kind: 'ensureFolder', path }));
 }
 
 function groupByPageId(files: LocalFile[]): Map<PageId, LocalFile[]> {

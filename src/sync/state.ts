@@ -5,27 +5,39 @@ import { isRecord } from '../util/isRecord';
 
 export const STATE_SCHEMA_VERSION = 1;
 
+/** remoteMtime value meaning "remote version not confirmed": the next run must GET the page and compare hashes. */
+export const UNCONFIRMED_REMOTE_MTIME = -1;
+/** localMtime value meaning "local file not checked": the next run must hash the local file. */
+export const UNCHECKED_LOCAL_MTIME = -1;
+
 /**
- * synced: linked page, its file carries its nc_page_id. conflict: linked page with a conflict copy (baseHash may be '' after an
- * adopt conflict). collision: the target path was held by a user file without nc_page_id; that file is not linked.
+ * synced: linked page, its file carries its nc_page_id. conflict: linked page with a conflict copy. collision: the target
+ * path was held by a user file without nc_page_id; that file is not linked.
  */
 export type PageStatus = 'synced' | 'conflict' | 'collision';
 
 export interface PageState {
 	pageId: PageId;
 	collectiveId: CollectiveId;
-	/** Vault path at last sync. For status 'collision': the actual spelling of the user file at the occupied path. */
+	/**
+	 * Path where the plugin last placed or linked the file. NOT updated by content sync after a local rename (the
+	 * baseline for rename detection in M5); the current file is found by nc_page_id. For status 'collision': the actual
+	 * spelling of the user file at the occupied path.
+	 */
 	localPath: string;
-	/** file.stat.mtime of the local file right after our last write/check (ms). */
+	/** file.stat.mtime of the local file right after our last write/check (ms). -1 = UNCHECKED_LOCAL_MTIME: the next run hashes the file. */
 	localMtime: number;
 	remoteFilePath: string;
 	remoteFileName: string;
 	parentId: PageId;
 	remoteEtag: string;
-	/** PageInfo.timestamp (s). */
+	/** PageInfo.timestamp (s). -1 = UNCONFIRMED_REMOTE_MTIME: the next run GETs the page. */
 	remoteMtime: number;
 	remoteSize: number;
-	/** sha256Hex(canonical remote format) at last sync. '' = no known base (collision, or adopt conflict). */
+	/**
+	 * sha256Hex(canonical remote format) at last sync. For status conflict/collision: hash of the remote text at the last
+	 * conflict copy; '' only in states written before M4 (no known base) and for collisions that never had a copy.
+	 */
 	baseHash: string;
 	/** metaHash(title-for-frontmatter, emoji, tag names) at last sync. */
 	metaHash: string;

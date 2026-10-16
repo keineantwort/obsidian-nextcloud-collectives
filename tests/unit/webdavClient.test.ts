@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createApiClients, type ApiClients } from '../../src/api/clients';
 import { basicAuthHeader, type HttpRequest, type HttpResponse, type RequestFn } from '../../src/api/http';
-import { parsePropfind, quoteEtag, type DavEntry } from '../../src/api/webdavClient';
+import { isEtagConfirmed, parsePropfind, quoteEtag, type DavEntry } from '../../src/api/webdavClient';
 import { ApiChangedError, ConflictError, NotFoundError, ServerError } from '../../src/util/errors';
 
 const BASE_URL = 'https://cloud.example.com';
@@ -119,7 +119,12 @@ describe('get', () => {
 
 		const file = await davClient(fake).get(PAGE_PATH);
 
-		expect(file).toEqual({ content: '# Onboarding\n', etag: '"9f5fe63ab652040a5c861cf2b414ee3e"' });
+		expect(file).toEqual({
+			content: '# Onboarding\n',
+			etag: '"9f5fe63ab652040a5c861cf2b414ee3e"',
+			lastModified: 'Fri, 16 Oct 2026 08:22:57 GMT',
+			date: null,
+		});
 	});
 
 	it('finds the ETag header even when its key is upper-case', async () => {
@@ -144,6 +149,118 @@ describe('get', () => {
 		const err = await captureError(davClient(fake).get(PAGE_PATH));
 
 		expect(err).toBeInstanceOf(NotFoundError);
+	});
+});
+
+describe('get: Last-Modified and Date headers', () => {
+	it('resolves with the raw Last-Modified and Date headers, whatever the case of their names', async () => {
+		const fake = fakeDav({
+			status: 200,
+			headers: { ETag: '"abc123"', 'LAST-MODIFIED': 'Fri, 16 Oct 2026 08:22:57 GMT', date: 'Fri, 16 Oct 2026 08:22:58 GMT' },
+			text: 'x',
+		});
+
+		const file = await davClient(fake).get(PAGE_PATH);
+
+		expect(file).toEqual({
+			content: 'x',
+			etag: '"abc123"',
+			lastModified: 'Fri, 16 Oct 2026 08:22:57 GMT',
+			date: 'Fri, 16 Oct 2026 08:22:58 GMT',
+		});
+	});
+
+	it('resolves with null for Last-Modified and Date when the response has neither header', async () => {
+		const fake = fakeDav({ status: 200, headers: { ETag: '"abc123"' }, text: 'x' });
+
+		const file = await davClient(fake).get(PAGE_PATH);
+
+		expect(file.lastModified).toBeNull();
+		expect(file.date).toBeNull();
+	});
+});
+
+describe('isEtagConfirmed', () => {
+	it('confirms an ETag when the file was last written in an earlier second than the response Date', () => {
+		expect(isEtagConfirmed({
+			lastModified: 'Fri, 16 Oct 2026 08:22:57 GMT',
+			date: 'Fri, 16 Oct 2026 08:22:58 GMT',
+		})).toBe(true);
+	});
+
+	it('does not confirm an ETag when the file was written in the same second as the response Date', () => {
+		expect(isEtagConfirmed({
+			lastModified: 'Fri, 16 Oct 2026 08:22:58 GMT',
+			date: 'Fri, 16 Oct 2026 08:22:58 GMT',
+		})).toBe(false);
+	});
+
+	it('does not confirm an ETag when Last-Modified is later than Date', () => {
+		expect(isEtagConfirmed({
+			lastModified: 'Fri, 16 Oct 2026 08:22:59 GMT',
+			date: 'Fri, 16 Oct 2026 08:22:58 GMT',
+		})).toBe(false);
+	});
+
+	it.each([
+		['Last-Modified is missing', { lastModified: null, date: 'Fri, 16 Oct 2026 08:22:58 GMT' }],
+		['Date is missing', { lastModified: 'Fri, 16 Oct 2026 08:22:57 GMT', date: null }],
+		['both are missing', { lastModified: null, date: null }],
+	])('does not confirm an ETag when %s', (_label, file) => {
+		expect(isEtagConfirmed(file)).toBe(false);
+	});
+
+	it('does not confirm an ETag when a header cannot be parsed', () => {
+		expect(isEtagConfirmed({ lastModified: 'not a date', date: 'Fri, 16 Oct 2026 08:22:58 GMT' })).toBe(false);
+	});
+});
+
+/** RequestFn that answers each request with the response chosen by `route`; records every request. */
+function routedDav(route: (req: HttpRequest) => HttpResponse): FakeDav {
+	const calls: HttpRequest[] = [];
+	const fn: RequestFn = async (req) => {
+		calls.push(req);
+		return route(req);
+	};
+	return { fn, calls };
+}
+
+/** A 207 multistatus with one entry; `etagXml` is the inner XML of getetag, or null to omit the property. */
+function multistatusForOneFile(href: string, etagXml: string | null): string {
+	const etag = etagXml === null ? '' : `<d:getetag>${etagXml}</d:getetag>`;
+	return '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
+		+ `<d:response><d:href>${href}</d:href><d:propstat><d:prop>${etag}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
+		+ '</d:multistatus>';
+}
+
+describe('put without ETag in the response', () => {
+	it('sends a PROPFIND with Depth 0 to the same path and resolves with the ETag found there', async () => {
+		const fake = routedDav((req) => (req.method === 'PUT'
+			? { status: 204, headers: {}, text: '' }
+			: { status: 207, headers: {}, text: multistatusForOneFile(FILES_ROOT + '/.Collectives/Handbuch/Onboarding.md', '"etag-after-put"') }));
+
+		const result = await davClient(fake).put(PAGE_PATH, 'Neu\n', { ifMatch: '9f5f' });
+
+		expect(result).toEqual({ etag: '"etag-after-put"' });
+		expect(fake.calls.map((call) => call.method)).toEqual(['PUT', 'PROPFIND']);
+		expect(fake.calls[1]).toMatchObject({
+			method: 'PROPFIND',
+			url: BASE_URL + FILES_ROOT + '/.Collectives/Handbuch/Onboarding.md',
+			headers: { Depth: '0' },
+		});
+	});
+
+	it.each([
+		['the PROPFIND entry has no ETag', (href: string) => multistatusForOneFile(href, null)],
+		['the PROPFIND answer has no entry for the file', () => '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"/>'],
+	])('rejects with ApiChangedError when %s', async (_label, propfindXml) => {
+		const fake = routedDav((req) => (req.method === 'PUT'
+			? { status: 204, headers: {}, text: '' }
+			: { status: 207, headers: {}, text: propfindXml(FILES_ROOT + '/.Collectives/Handbuch/Onboarding.md') }));
+
+		const err = await captureError(davClient(fake).put(PAGE_PATH, 'Neu', { ifMatch: '9f5f' }));
+
+		expect(err).toBeInstanceOf(ApiChangedError);
 	});
 });
 
@@ -258,7 +375,7 @@ describe('put', () => {
 		expect(err).toBeInstanceOf(ConflictError);
 	});
 
-	it('rejects with ApiChangedError when a successful PUT response carries no ETag', async () => {
+	it('rejects with ApiChangedError when the PUT response carries no ETag and the PROPFIND fallback is not answered with 207', async () => {
 		const fake = fakeDav({ status: 204, headers: {}, text: '' });
 
 		const err = await captureError(davClient(fake).put(PAGE_PATH, 'Neu', { ifMatch: '9f5f' }));

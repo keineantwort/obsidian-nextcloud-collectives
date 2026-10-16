@@ -5,10 +5,11 @@ import type { NcMeta } from '../../src/mapping/frontmatter';
 import { pathKey, planLocalPaths } from '../../src/mapping/paths';
 import type { CollectiveTree, PathPlan } from '../../src/mapping/paths';
 import type { LocalFile, LocalSnapshot } from '../../src/sync/localScanner';
-import { planPull } from '../../src/sync/planner';
-import type { PlannerInput, PullOp, PullPlan } from '../../src/sync/planner';
+import { planSync } from '../../src/sync/planner';
+import type { PlannerInput, SyncOp, SyncPlan } from '../../src/sync/planner';
 import type { RemoteCollective, RemoteSnapshot } from '../../src/sync/remoteScanner';
 import type { CollectiveState, PageState, SyncState } from '../../src/sync/state';
+import { UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME } from '../../src/sync/state';
 
 const SERVER = 'https://cloud.example.com';
 
@@ -146,6 +147,8 @@ interface Parts {
 	remote?: RemoteSnapshot;
 	state?: SyncState;
 	files?: LocalFile[];
+	/** pathKeys of the paths the vault reported as changed since the last run. */
+	dirty?: ReadonlySet<string>;
 }
 
 /** Builds the planner input the way the runner does: planLocalPaths over the remote trees, state folders as known folders. */
@@ -175,28 +178,28 @@ function inputFor(parts: Parts = {}): PlannerInput {
 			remoteMeta.set(p.id, { meta, hash: `m${p.id}` });
 		}
 	}
-	return { state, remote: remoteSnap, local: localSnapshot(files), remoteMeta, paths };
+	return { state, remote: remoteSnap, local: localSnapshot(files), remoteMeta, paths, dirty: parts.dirty ?? new Set<string>() };
 }
 
-function planFor(parts: Parts = {}): PullPlan {
-	return planPull(inputFor(parts));
+function planFor(parts: Parts = {}): SyncPlan {
+	return planSync(inputFor(parts));
 }
 
-function opsOf<K extends PullOp['kind']>(plan: PullPlan, kind: K): Extract<PullOp, { kind: K }>[] {
-	return plan.ops.filter((op): op is Extract<PullOp, { kind: K }> => op.kind === kind);
+function opsOf<K extends SyncOp['kind']>(plan: SyncPlan, kind: K): Extract<SyncOp, { kind: K }>[] {
+	return plan.ops.filter((op): op is Extract<SyncOp, { kind: K }> => op.kind === kind);
 }
 
-function skipReasons(plan: PullPlan): string[] {
+function skipReasons(plan: SyncPlan): string[] {
 	return plan.skips.map((s) => s.reason);
 }
 
-function findSkip(plan: PullPlan, reason: string): PullPlan['skips'][number] | undefined {
+function findSkip(plan: SyncPlan, reason: string): SyncPlan['skips'][number] | undefined {
 	return plan.skips.find((s) => s.reason === reason);
 }
 
 // ---------------------------------------------------------------------------
 
-describe('planPull: new and known pages', () => {
+describe('planSync: new and known pages', () => {
 	it('creates a new remote page at its free target path', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage(), page(11, { title: 'Neu', parentId: asPageId(1) })])]),
@@ -236,13 +239,69 @@ describe('planPull: new and known pages', () => {
 		expect(opsOf(plan, 'update')[0]).not.toHaveProperty('localChanged');
 	});
 
-	it('updates a known page whose local mtime differs from the state, with no localChanged field in the op', () => {
+	it('pushes a known page whose local mtime differs from the state while its remote is unchanged, with no localChanged field in the op', () => {
+		const plan = planFor({
+			files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)],
+		});
+		expect(opsOf(plan, 'push')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md', metaChanged: false })]);
+		expect(opsOf(plan, 'update')).toEqual([]);
+		expect(plan.ops[0]).not.toHaveProperty('localChanged');
+	});
+
+	it('emits exactly one push op and no skips when only the local mtime of a synced page moved', () => {
+		const plan = planFor({ files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)] });
+		expect(plan.ops).toHaveLength(1);
+		expect(plan.ops[0]).toMatchObject({ kind: 'push', path: 'Coll/Seite.md', metaChanged: false });
+		expect(plan.skips).toEqual([]);
+	});
+
+	it('pushes a page whose path is in the dirty set, even though its local mtime is unchanged', () => {
+		const plan = planFor({ dirty: new Set([pathKey('COLL/seite.md')]) });
+		expect(plan.ops).toHaveLength(1);
+		expect(plan.ops[0]).toMatchObject({ kind: 'push', path: 'Coll/Seite.md', metaChanged: false });
+	});
+
+	it('updates instead of pushing when the local mtime and the remote timestamp both changed', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ timestamp: 2 })])]),
 			files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)],
 		});
-		expect(opsOf(plan, 'update')).toEqual([expect.objectContaining({ path: 'Coll/Seite.md' })]);
-		expect(opsOf(plan, 'update')[0]).not.toHaveProperty('localChanged');
+		expect(plan.ops).toEqual([expect.objectContaining({ kind: 'update', path: 'Coll/Seite.md', metaChanged: false })]);
+	});
+
+	it('pushes with metaChanged true and emits no separate updateMeta op when local mtime and remote metadata both changed', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, metaHash: 'alt' };
+		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)] });
+		expect(plan.ops).toEqual([expect.objectContaining({ kind: 'push', path: 'Coll/Seite.md', metaChanged: true })]);
+	});
+
+	it('plans no operation for a page in status conflict whose local mtime changed', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'conflict', conflictPath: 'Coll/Seite (Konflikt 2026-10-16 1430).md' };
+		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', 10, 600)] });
+		expect(plan.ops).toEqual([]);
+	});
+
+	it('plans no operation for a collision page whose user file changed its mtime', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '' };
+		const plan = planFor({ state, files: [localFile('Coll/Coll.md', 1), localFile('Coll/Seite.md', null, 600)] });
+		expect(plan.ops).toEqual([]);
+	});
+
+	it('updates a known page whose stored remote mtime is UNCONFIRMED_REMOTE_MTIME, even when nothing else changed', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, remoteMtime: UNCONFIRMED_REMOTE_MTIME };
+		const plan = planFor({ state });
+		expect(plan.ops).toEqual([expect.objectContaining({ kind: 'update', path: 'Coll/Seite.md' })]);
+	});
+
+	it('pushes a known page whose stored local mtime is UNCHECKED_LOCAL_MTIME', () => {
+		const state = baseState();
+		state.pages['10'] = { ...state.pages['10']!, localMtime: UNCHECKED_LOCAL_MTIME };
+		const plan = planFor({ state });
+		expect(plan.ops).toEqual([expect.objectContaining({ kind: 'push', path: 'Coll/Seite.md', metaChanged: false })]);
 	});
 
 	it('updates a known page when only the remote size changed', () => {
@@ -266,7 +325,7 @@ describe('planPull: new and known pages', () => {
 	});
 });
 
-describe('planPull: skips for moved, deleted and inconsistent pages', () => {
+describe('planSync: skips for moved, deleted and inconsistent pages', () => {
 	it('skips remoteMoved and still updates the page at its current local path', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage({ fileName: 'Anders.md', timestamp: 2 })])]),
@@ -340,7 +399,7 @@ describe('planPull: skips for moved, deleted and inconsistent pages', () => {
 	});
 });
 
-describe('planPull: collisions, case and foreign files', () => {
+describe('planSync: collisions, case and foreign files', () => {
 	it('finds a collision page by its localPath case-insensitively when the file carries no nc_page_id', () => {
 		const state = baseState();
 		state.pages['10'] = { ...state.pages['10']!, status: 'collision', baseHash: '', localPath: 'Coll/Seite.md' };
@@ -428,7 +487,7 @@ describe('planPull: collisions, case and foreign files', () => {
 	});
 });
 
-describe('planPull: collectives', () => {
+describe('planSync: collectives', () => {
 	it('emits ensureFolder and saveCollective before any page operation for a new collective', () => {
 		const plan = planFor({
 			remote: remote([
@@ -494,7 +553,7 @@ describe('planPull: collectives', () => {
 	});
 });
 
-describe('planPull: order of operations', () => {
+describe('planSync: order of operations', () => {
 	/** New collective-1 folder page "A" (id 3) with leaf "C" (id 4) below it, plus flat leaf "Flach" (id 5). */
 	function nestedRemote(): RemoteSnapshot {
 		const folder = page(3, { title: 'A', fileName: 'Readme.md', parentId: asPageId(1) });

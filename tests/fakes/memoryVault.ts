@@ -122,11 +122,27 @@ export class MemoryVault implements VaultReader, VaultWriter {
 		if (!this.folders.has(key)) this.folders.set(key, path);
 	}
 
+	/** Simulates moving a file to the trash: it disappears. Counted as a write, like the plugin's own trash call. */
+	async remove(path: string): Promise<void> {
+		const key = this.keyOf(path);
+		if (!this.files.has(key)) throw new Error(`File does not exist: ${path}`);
+		this.files.delete(key);
+		this.writes++;
+	}
+
 	/** Simulates the user editing an existing file: new text, new mtime, not counted as a sync write. */
 	userEdit(path: string, content: string): void {
 		const entry = this.require(path);
 		entry.content = content;
 		entry.mtime = this.tick();
+	}
+
+	/**
+	 * Simulates an edit that keeps the file's mtime (same millisecond as the last write, or a tool that restores it):
+	 * the text changes, the mtime does not. Not counted as a sync write.
+	 */
+	userEditSameMtime(path: string, content: string): void {
+		this.require(path).content = content;
 	}
 
 	private keyOf(path: string): string {

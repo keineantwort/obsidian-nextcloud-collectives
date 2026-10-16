@@ -29,11 +29,24 @@ export default defineConfig(
 	},
 	// planner and mapping are pure (AGENTS rule 3): no Obsidian, no network modules; the vitest stub would hide a violation.
 	{
-		files: ['src/sync/planner.ts', 'src/mapping/**/*.ts'],
+		files: ['src/sync/planner.ts', 'src/sync/decide.ts', 'src/mapping/**/*.ts'],
 		rules: {
 			'no-restricted-imports': ['error', {
 				paths: [{ name: 'obsidian', message: 'planner and mapping must stay free of Obsidian imports.' }],
 				patterns: [{ group: ['**/api/http', '**/api/ocsClient', '**/api/webdavClient', '**/api/collectivesApi', '**/api/clients', '**/api/obsidianRequest', '**/api/connection'], message: 'planner and mapping must stay free of network modules; only ../api/types is allowed.' }],
+			}],
+		},
+	},
+	// Sync core, its state and the pure UI helpers are testable without Obsidian: no 'obsidian' import (the rest of src/ may import it).
+	{
+		files: [
+			'src/sync/conflicts.ts', 'src/sync/dirtyQueue.ts', 'src/sync/executor.ts', 'src/sync/syncRun.ts', 'src/sync/localScanner.ts',
+			'src/sync/remoteScanner.ts', 'src/sync/state.ts', 'src/sync/stateStore.ts', 'src/sync/types.ts', 'src/ui/conflictView.ts',
+			'src/ui/statusBar.ts', 'src/ui/syncNotices.ts', 'src/util/diff.ts',
+		],
+		rules: {
+			'no-restricted-imports': ['error', {
+				paths: [{ name: 'obsidian', message: 'sync core and its pure helpers must not import Obsidian; go through the injected interfaces.' }],
 			}],
 		},
 	},

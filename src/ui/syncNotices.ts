@@ -1,5 +1,5 @@
 import type { Translator } from '../i18n';
-import type { PullResult, PullRunOutcome } from '../sync/types';
+import type { SyncResult, SyncRunOutcome } from '../sync/types';
 import { describeConnectionError } from '../settings/connectionMessages';
 import { ApiChangedError, AuthError, ConfigError } from '../util/errors';
 
@@ -10,16 +10,17 @@ export interface SyncNoticeSpec { lines: string[]; level: NoticeLevel; }
 
 const DETAIL_SEPARATOR = ' · ';
 
-/** Notice text for a finished pull. Conflicts and failures get their own sentence on a separate line. */
-export function formatPullResult(result: PullResult, t: Translator): SyncNoticeSpec {
-	const changed = result.created + result.updated + result.metaUpdated + result.conflicts + result.failed;
+/** Notice text for a finished sync. Conflicts and failures get their own sentence on a separate line. */
+export function formatSyncResult(result: SyncResult, pages: number, t: Translator): SyncNoticeSpec {
+	const changed = result.created + result.updated + result.pushed + result.metaUpdated + result.conflicts + result.failed;
 	const lines: string[] = [];
 	if (changed === 0) {
-		lines.push(upToDate(result.unchanged, t));
+		lines.push(upToDate(pages, t));
 	} else {
 		const details: string[] = [];
 		if (result.created > 0) details.push(t('sync.result.created', { count: result.created }));
 		if (result.updated > 0) details.push(t('sync.result.updated', { count: result.updated }));
+		if (result.pushed > 0) details.push(t('sync.result.pushed', { count: result.pushed }));
 		if (result.metaUpdated > 0) details.push(t('sync.result.metaUpdated', { count: result.metaUpdated }));
 		if (result.unchanged > 0) details.push(t('sync.result.unchanged', { count: result.unchanged }));
 		// Only conflicts/failures changed: the first line still confirms completion, without a trailing empty detail list.
@@ -30,6 +31,7 @@ export function formatPullResult(result: PullResult, t: Translator): SyncNoticeS
 		lines.push(result.conflicts === 1
 			? t('sync.result.conflicts.one', { label })
 			: t('sync.result.conflicts.other', { count: result.conflicts, label }));
+		lines.push(t('sync.result.conflicts.hint'));
 	}
 	if (result.failed > 0) {
 		lines.push(result.failed === 1 ? t('sync.result.failed.one') : t('sync.result.failed.other', { count: result.failed }));
@@ -38,17 +40,17 @@ export function formatPullResult(result: PullResult, t: Translator): SyncNoticeS
 	return { lines, level };
 }
 
-/** Notice for every non-throwing outcome of runPull(). */
-export function describePullOutcome(outcome: PullRunOutcome, t: Translator): SyncNoticeSpec {
+/** Notice for every non-throwing outcome of runSync(). */
+export function describeSyncOutcome(outcome: SyncRunOutcome, t: Translator): SyncNoticeSpec {
 	switch (outcome.kind) {
-		case 'done': return formatPullResult(outcome.result, t);
+		case 'done': return formatSyncResult(outcome.result, outcome.pages, t);
 		case 'cancelled': return { lines: [t('sync.cancelled')], level: 'info' };
 		case 'serverMismatch': return { lines: [t('sync.serverMismatch', { server: outcome.stateServer })], level: 'error' };
 		case 'accountMismatch': return { lines: [t('sync.accountMismatch', { user: outcome.stateUser })], level: 'error' };
 	}
 }
 
-/** Notice for an error thrown by runPull(). Never includes raw error messages (they may contain credentials). */
+/** Notice for an error thrown by runSync(). Never includes raw error messages (they may contain credentials). */
 export function describeSyncError(err: unknown, t: Translator): SyncNoticeSpec {
 	const reason = err instanceof ApiChangedError ? t('sync.error.apiChanged') : describeConnectionError(err, t, 'sync.error.unknown');
 	const lines = [t('sync.error.stopped', { reason })];
@@ -60,6 +62,7 @@ export function alreadyRunningNotice(t: Translator): SyncNoticeSpec {
 	return { lines: [t('sync.alreadyRunning')], level: 'info' };
 }
 
+/** Idle run: every page in the state is up to date, so the count is the number of linked pages, not the unchanged counter. */
 function upToDate(count: number, t: Translator): string {
 	if (count === 0) return t('sync.result.upToDate.none');
 	return count === 1 ? t('sync.result.upToDate.one') : t('sync.result.upToDate.other', { count });

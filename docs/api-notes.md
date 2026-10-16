@@ -146,6 +146,13 @@ Durchgeführt in der Collectives-Oberfläche des Testservers (Pretty-URLs aktiv)
 - **Elternseiten** erkennt der Pull an `fileName === 'Readme.md'` (mit `parentId ≠ 0`), nicht an vorhandenen Kindern. Bei Elternseiten enthält `filePath` den eigenen Ordner, bei Blattseiten den Elternordner (Fixture `pages-list-final.json`).
 - **Offen für die manuelle Prüfung in Obsidian**: ob `file.stat.mtime` direkt nach `vault.create`/`vault.process` den neuen Wert trägt (Basis für `localMtime`), ob Obsidian-Modals selbst `role="dialog"` setzen, ob der Startfokus ohne `requestAnimationFrame` auf „Abbrechen“ bleibt und ob Notices von VoiceOver angesagt werden.
 
+## 10c. Befunde aus M4 (Push, ONC-5)
+
+- **ETag bestätigt oder nicht**: `GET` liefert neben dem `ETag` auch `Last-Modified` (Sekunden) und `Date`. Liegt die Sekunde von `Last-Modified` vor der von `Date`, hat jeder spätere Schreibzugriff zwangsläufig einen anderen ETag. Dann schützt `If-Match`. Liegen beide in derselben Sekunde, gilt der ETag als unbestätigt: Der State speichert `remoteMtime = -1`, ein geplanter Push wartet 1,1 s und liest erneut (ADR 0017).
+- **Nach eigenem `PUT`** ist der Stand immer unbestätigt. Der nächste Lauf macht genau ein `GET` auf die Seite und vergleicht Hashes, ohne zu schreiben. Erst der Lauf danach ist für die Seite ein Leerlauf. Der Integrationstest `tests/integration/push.test.ts` prüft das.
+- **Fremder Schreibzugriff direkt nach dem Listing**: Der `PUT` mit dem ETag aus dem State scheitert mit `412`. Der Executor liest neu, entscheidet erneut und legt bei verschiedenem Inhalt eine Konfliktkopie an. Die Remote-Fassung bleibt unangetastet.
+- **Offen für die manuelle Prüfung in Obsidian**: Reihenfolge und Anzahl der `modify`-Events nach `vault.process` (die Unterdrückung gilt 5 s), Anzeige der Statusleiste und des Konflikt-Dialogs auf Desktop und Mobile, `fileManager.trashFile` für die Konfliktkopie.
+
 ## 11. Referenzprojekte (PLAN §18)
 
 Gesichtet nur lesend, ohne Build oder Ausführung.

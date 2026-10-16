@@ -1,4 +1,4 @@
-// Pull runner (spec §8): config checks, scans, planning and execution in one run. Obsidian-free; all I/O is injected.
+// Sync runner (spec M4 §10): config checks, scans, planning and execution in one run. Obsidian-free; all I/O is injected.
 import { createApiClients } from '../api/clients';
 import { normalizeServerUrl } from '../api/connection';
 import type { RequestFn } from '../api/http';
@@ -10,36 +10,44 @@ import type { Translator } from '../i18n';
 import { ConfigError } from '../util/errors';
 import { metaHash } from '../util/hash';
 import type { Logger } from '../util/logger';
-import { executePull } from './executor';
+import { countConflicts } from './conflicts';
+import type { ConflictStrategy } from './decide';
+import { executeSync } from './executor';
 import type { VaultWriter } from './executor';
 import { scanLocal } from './localScanner';
 import type { VaultReader } from './localScanner';
-import { planPull } from './planner';
+import { planSync } from './planner';
 import type { PlannerInput } from './planner';
 import { scanRemote } from './remoteScanner';
 import type { RemoteCollective } from './remoteScanner';
 import { emptyState } from './state';
 import type { SyncState } from './state';
 import type { StateStore } from './stateStore';
-import type { PullRunOutcome, Skip } from './types';
+import type { SyncRunOutcome, Skip } from './types';
 
-export type { PullRunOutcome } from './types';
+export type { SyncRunOutcome } from './types';
 
-export interface PullRunDeps {
-	settings: { serverUrl: string; username: string };
+export interface SyncRunDeps {
+	settings: { serverUrl: string; username: string; conflictStrategy: ConflictStrategy };
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
 	vault: VaultReader & VaultWriter;
 	stateStore: StateStore;
 	/** Called only when the state has no pages yet and local.nonEmpty; resolves true = merge, false = cancel. */
 	confirmInitialSync: () => Promise<boolean>;
+	/** pathKeys of the files changed since the last run; called once per run, after the scans (DirtyQueue.drain()). */
+	dirty: () => ReadonlySet<string>;
 	t: Translator;
 	log: Logger;
 	now?: () => Date;
+	/** Waits before a second GET of an unconfirmed page. Default: window.setTimeout. */
+	sleep?: (ms: number) => Promise<void>;
 }
 
-/** Runs one pull. Nothing is written before the config checks and the initial-sync confirmation have passed. */
-export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
+const defaultSleep = (ms: number): Promise<void> => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+/** Runs one sync. Nothing is written before the config checks and the initial-sync confirmation have passed. */
+export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	const serverUrl = normalizeServerUrl(deps.settings.serverUrl);
 	const username = deps.settings.username.trim();
 	if (username === '') throw new ConfigError('username', 'missing');
@@ -64,6 +72,7 @@ export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
 
 	const remote = await scanRemote(clients.collectives);
 	const local = await scanLocal(deps.vault);
+	const dirty = deps.dirty();
 
 	if (!hasPages && local.nonEmpty) {
 		if (!(await deps.confirmInitialSync())) return { kind: 'cancelled' };
@@ -73,11 +82,11 @@ export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
 	const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
 	const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 
-	const input: PlannerInput = { state, remote, local, remoteMeta, paths };
-	const plan = planPull(input);
+	const input: PlannerInput = { state, remote, local, remoteMeta, paths, dirty };
+	const plan = planSync(input);
 	for (const skip of plan.skips) logSkip(skip, deps.log);
 
-	const result = await executePull(plan, {
+	const result = await executeSync(plan, {
 		vault: deps.vault,
 		webdav: clients.webdav,
 		state,
@@ -86,10 +95,12 @@ export async function runPull(deps: PullRunDeps): Promise<PullRunOutcome> {
 		},
 		now: deps.now ?? (() => new Date()),
 		conflictLabel: deps.t('sync.conflictFileLabel'),
+		strategy: deps.settings.conflictStrategy,
+		sleep: deps.sleep ?? defaultSleep,
 		log: deps.log,
 		occupied: local.occupied,
 	});
-	return { kind: 'done', result, skips: plan.skips };
+	return { kind: 'done', result, skips: plan.skips, openConflicts: countConflicts(state), pages: Object.keys(state.pages).length };
 }
 
 function toTree(rc: RemoteCollective): CollectiveTree {

@@ -1,4 +1,6 @@
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
+import { de } from '../i18n/de';
+import { en } from '../i18n/en';
 
 /** Remote file name of a folder page (its folder note); every other page is a leaf file. */
 const FOLDER_NOTE = 'Readme.md';
@@ -177,9 +179,19 @@ export function isSyncedPath(path: string, configDir: string): boolean {
 	return !isConflictFileName(path);
 }
 
-const CONFLICT_NAME = / \((?:Konflikt|Conflict) \d{4}-\d{2}-\d{2} \d{4}\)(?: \(\d+\))?\.md$/;
+const locales = { en, de };
 
-/** True for '... (Konflikt 2026-10-16 1430).md' and '... (Conflict 2026-10-16 1430).md'. */
+/** Escapes regex metacharacters so that a translated label matches literally. */
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Conflict file name pattern, built once from the conflict label of every locale table. */
+const CONFLICT_NAME = new RegExp(
+	` \\((?:${[...new Set(Object.values(locales).map((table) => escapeRegExp(table['sync.conflictFileLabel'])))].join('|')}) \\d{4}-\\d{2}-\\d{2} \\d{4}\\)(?: \\(\\d+\\))?\\.md$`,
+);
+
+/** True for a conflict copy name built from any locale's sync.conflictFileLabel, e.g. '... (Konflikt 2026-10-16 1430).md'. */
 export function isConflictFileName(path: string): boolean {
 	return CONFLICT_NAME.test(path);
 }

@@ -6,8 +6,8 @@ import type { Collective, PageInfo } from '../../src/api/types';
 import { createTranslator } from '../../src/i18n';
 import { readPageId, toRemote } from '../../src/mapping/frontmatter';
 import { remotePagePath, sanitizeName } from '../../src/mapping/paths';
-import { runPull, type PullRunDeps, type PullRunOutcome } from '../../src/sync/pullRun';
-import type { PullResult } from '../../src/sync/types';
+import { runSync, type SyncRunDeps, type SyncRunOutcome } from '../../src/sync/syncRun';
+import type { SyncResult } from '../../src/sync/types';
 import { StateStore, type StateFile } from '../../src/sync/stateStore';
 import { Logger } from '../../src/util/logger';
 import { MemoryVault } from '../fakes/memoryVault';
@@ -94,9 +94,9 @@ const recordingRequest: RequestFn = async (req: HttpRequest) => {
 	return fetchRequest(req);
 };
 
-function makeDeps(): PullRunDeps {
+function makeDeps(): SyncRunDeps {
 	return {
-		settings: { serverUrl: env.baseUrl, username: env.user },
+		settings: { serverUrl: env.baseUrl, username: env.user, conflictStrategy: 'conflictFile' },
 		readPassword: async () => env.password,
 		request: recordingRequest,
 		vault,
@@ -104,14 +104,15 @@ function makeDeps(): PullRunDeps {
 		confirmInitialSync: async () => {
 			throw new Error('confirmInitialSync must not be called: the vault is empty in the first run');
 		},
+		dirty: () => new Set(),
 		t: createTranslator('en'),
 		log: new Logger(),
 	};
 }
 
 /** Runs one pull and returns its counters; fails if the run did not end with kind 'done'. */
-async function pull(): Promise<PullResult> {
-	const outcome: PullRunOutcome = await runPull(makeDeps());
+async function pull(): Promise<SyncResult> {
+	const outcome: SyncRunOutcome = await runSync(makeDeps());
 	if (outcome.kind !== 'done') throw new Error(`Pull ended with "${outcome.kind}" instead of "done"`);
 	return outcome.result;
 }
@@ -161,6 +162,8 @@ beforeAll(async () => {
 	const current = await clients.webdav.get(notePath);
 	await waitPastSecondBoundary();
 	await clients.webdav.put(notePath, NOTE_CONTENT, { ifMatch: current.etag });
+	// The first pull must see the write as confirmed (its Last-Modified is in an earlier second than the response Date).
+	await waitPastSecondBoundary();
 
 	fixture = { name, landing, chapter, section, note };
 });
@@ -217,7 +220,7 @@ describe('Pull against the local Docker Nextcloud with an in-memory vault', () =
 
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.writes).toBe(stateWritesBefore);
-		expect(result).toEqual({ created: 0, updated: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 });
+		expect(result).toEqual({ created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 });
 		expect(davGetsSince(requestsBefore)).toEqual([]);
 		expect(readPageId(await readLocal(`${f.name}/Notiz.md`))).toBe(f.note.id);
 	});
@@ -231,6 +234,7 @@ describe('Pull against the local Docker Nextcloud with an in-memory vault', () =
 		await waitPastSecondBoundary();
 		const current = await clients.webdav.get(notePath);
 		await clients.webdav.put(notePath, NOTE_CONTENT_CHANGED, { ifMatch: current.etag });
+		await waitPastSecondBoundary();
 
 		const result = await pull();
 
