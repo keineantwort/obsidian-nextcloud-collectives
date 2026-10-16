@@ -2,3 +2,5 @@
 .nc-connection-result:empty { display: none; }
 .nc-connection-result.is-success { color: var(--text-success); }
 .nc-connection-result.is-error { color: var(--text-error); }
+.nc-url-warning { margin: 0 0 var(--size-4-3); color: var(--text-warning); }
+.nc-url-warning:empty { display: none; }

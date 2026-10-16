@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { HttpRequest, HttpResponse, RequestFn } from '../../src/api/connection';
+import type { HttpRequest, HttpResponse, RequestFn } from '../../src/api/http';
 
 export interface TestServerEnv {
 	baseUrl: string;

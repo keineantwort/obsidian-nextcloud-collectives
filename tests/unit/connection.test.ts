@@ -1,13 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import {
-	basicAuthHeader,
-	normalizeServerUrl,
-	testConnection,
-	type HttpRequest,
-	type HttpResponse,
-	type RequestFn,
-} from '../../src/api/connection';
+import { isInsecureRemoteUrl, normalizeServerUrl, testConnection } from '../../src/api/connection';
+import { basicAuthHeader, type HttpRequest, type HttpResponse, type RequestFn } from '../../src/api/http';
 import { ApiChangedError, AuthError, ConfigError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
 
 const COLLECTIVES_URL_SUFFIX = '/ocs/v2.php/apps/collectives/api/v1.0/collectives';
@@ -255,3 +249,26 @@ function captureSync(fn: () => unknown): unknown {
 	}
 	throw new Error('expected the function to throw, but it returned');
 }
+
+describe('isInsecureRemoteUrl', () => {
+	it.each([
+		['https to a remote host', 'https://cloud.example.com'],
+		['http to localhost with port', 'http://localhost:8080'],
+		['http to a *.localhost subdomain', 'http://dev.localhost'],
+		['http to 127.0.0.1', 'http://127.0.0.1'],
+		['http to another 127.x.y.z address', 'http://127.1.2.3:8080'],
+		['http to IPv6 loopback', 'http://[::1]:8080'],
+		['unparsable input', 'not a url'],
+	])('is false for %s (%j)', (_label, url) => {
+		expect(isInsecureRemoteUrl(url)).toBe(false);
+	});
+
+	it.each([
+		['http to a remote host', 'http://cloud.example.com'],
+		['http to a private LAN address', 'http://192.168.1.10'],
+		['http to a host starting with localhost', 'http://localhost.example.com'],
+		['http to 128.0.0.1 (outside 127/8)', 'http://128.0.0.1'],
+	])('is true for %s (%j)', (_label, url) => {
+		expect(isInsecureRemoteUrl(url)).toBe(true);
+	});
+});

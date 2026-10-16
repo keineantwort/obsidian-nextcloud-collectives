@@ -1,10 +1,5 @@
 import { ApiChangedError, AuthError, ConfigError, NcError, NetworkError, NotFoundError, ServerError } from '../util/errors';
-
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'PROPFIND' | 'MKCOL' | 'MOVE';
-export interface HttpRequest { url: string; method: HttpMethod; headers: Record<string, string>; body?: string; }
-export interface HttpResponse { status: number; headers: Record<string, string>; text: string; }
-/** Performs one HTTP request. Must resolve for every HTTP status (incl. 4xx/5xx); rejects only if no response was received. */
-export type RequestFn = (req: HttpRequest) => Promise<HttpResponse>;
+import { basicAuthHeader, type HttpResponse, type RequestFn } from './http';
 
 export interface ConnectionCredentials { serverUrl: string; username: string; appPassword: string; }
 export interface ConnectionResult { collectiveCount: number; }
@@ -44,16 +39,26 @@ export function normalizeServerUrl(input: string): string {
 	return url.origin + path;
 }
 
-function stripTrailingSlashes(path: string): string {
-	return path.replace(/\/+$/, '');
+/**
+ * True if the URL uses plain http to a host other than the local machine (localhost, *.localhost, 127.0.0.0/8, [::1]); then credentials would travel unencrypted. Expects a normalized URL (see normalizeServerUrl).
+ */
+export function isInsecureRemoteUrl(normalizedUrl: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(normalizedUrl);
+	} catch {
+		return false;
+	}
+	if (url.protocol !== 'http:') return false;
+	const host = url.hostname;
+	if (host === 'localhost' || host.endsWith('.localhost')) return false;
+	if (/^127\.\d+\.\d+\.\d+$/.test(host)) return false;
+	if (host === '[::1]') return false;
+	return true;
 }
 
-/** Builds an HTTP Basic Authorization header value. Encodes UTF-8 bytes with web APIs only, so it works on mobile. */
-export function basicAuthHeader(username: string, password: string): string {
-	const bytes = new TextEncoder().encode(`${username}:${password}`);
-	let binary = '';
-	for (const byte of bytes) binary += String.fromCharCode(byte);
-	return 'Basic ' + btoa(binary);
+function stripTrailingSlashes(path: string): string {
+	return path.replace(/\/+$/, '');
 }
 
 /**

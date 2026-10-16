@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
+import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 
 export class NcSettingTab extends PluginSettingTab {
@@ -23,11 +24,25 @@ export class NcSettingTab extends PluginSettingTab {
 					.setValue(settings.serverUrl)
 					.onChange(async (value) => {
 						settings.serverUrl = value.trim();
+						updateUrlWarning(value);
 						await plugin.saveSettings();
 					});
 				applyPlainInputAttributes(text.inputEl);
 				text.inputEl.type = 'url';
 			});
+
+		const urlWarningEl = containerEl.createDiv({ cls: 'nc-url-warning', attr: { role: 'status', 'aria-live': 'polite' } });
+		/** Warns about plain http to a remote host. Invalid URLs show nothing here; the connection test reports them. */
+		function updateUrlWarning(raw: string): void {
+			let insecure = false;
+			try {
+				insecure = isInsecureRemoteUrl(normalizeServerUrl(raw));
+			} catch {
+				insecure = false;
+			}
+			urlWarningEl.setText(insecure ? t('settings.serverUrl.insecureWarning') : '');
+		}
+		updateUrlWarning(settings.serverUrl);
 
 		new Setting(containerEl)
 			.setName(t('settings.username.name'))

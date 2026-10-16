@@ -1,6 +1,6 @@
 import { requestUrl } from 'obsidian';
 import { withTimeout } from '../util/timeout';
-import type { RequestFn } from './connection';
+import type { RequestFn } from './http';
 
 export const REQUEST_TIMEOUT_MS = 30_000;
 

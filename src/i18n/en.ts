@@ -3,6 +3,7 @@ export const en = {
 	'settings.heading.connection': 'Connection',
 	'settings.serverUrl.name': 'Server URL',
 	'settings.serverUrl.desc': 'Address of your Nextcloud server. A vault is bound to one server – to use a different server, create a new vault.',
+	'settings.serverUrl.insecureWarning': 'Warning: with http:// the app password is sent unencrypted. Use https:// for servers outside this device.',
 	'settings.username.name': 'Username',
 	'settings.appPassword.name': 'App password',
 	'settings.appPassword.desc': 'Create an app password in Nextcloud under “Personal settings › Security”. It is kept in Obsidian’s secure storage, not in the plugin settings.',

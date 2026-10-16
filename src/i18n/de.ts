@@ -5,6 +5,7 @@ export const de: Record<MessageKey, string> = {
 	'settings.heading.connection': 'Verbindung',
 	'settings.serverUrl.name': 'Server-URL',
 	'settings.serverUrl.desc': 'Adresse deines Nextcloud-Servers. Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen.',
+	'settings.serverUrl.insecureWarning': 'Achtung: Bei http:// wird das App-Passwort unverschlüsselt übertragen. Für Server außerhalb dieses Geräts bitte https:// verwenden.',
 	'settings.username.name': 'Benutzername',
 	'settings.appPassword.name': 'App-Passwort',
 	'settings.appPassword.desc': 'In Nextcloud unter „Persönliche Einstellungen › Sicherheit“ ein App-Passwort erstellen. Es wird im sicheren Speicher von Obsidian abgelegt, nicht in den Plugin-Einstellungen.',

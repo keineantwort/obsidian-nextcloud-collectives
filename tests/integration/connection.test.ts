@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { testConnection, type HttpRequest, type RequestFn } from '../../src/api/connection';
+import { testConnection } from '../../src/api/connection';
+import type { HttpRequest, RequestFn } from '../../src/api/http';
 import { AuthError, NetworkError, NotFoundError } from '../../src/util/errors';
 import { fetchRequest, loadTestServerEnv, type TestServerEnv } from './helpers';
 
@@ -34,6 +35,23 @@ beforeAll(async () => {
 		installed = false;
 	}
 	if (!installed) throw new Error('Testserver läuft nicht: npm run nc:up ausführen');
+
+	// A freshly reset server has no collectives for the test user; create one so the count guard below holds.
+	if ((await rawCollectiveCount(env.baseUrl)) === 0) {
+		const res = await fetch(env.baseUrl + COLLECTIVES_PATH, {
+			method: 'POST',
+			headers: {
+				'OCS-APIRequest': 'true',
+				'Accept': 'application/json',
+				'Content-Type': 'application/json',
+				'Authorization': 'Basic ' + Buffer.from(`${env.user}:${env.password}`, 'utf8').toString('base64'),
+			},
+			body: JSON.stringify({ name: 'ONC Integrationstest' }),
+		});
+		if (res.status < 200 || res.status >= 300) {
+			throw new Error('Test-Collective konnte nicht angelegt werden: HTTP ' + res.status);
+		}
+	}
 });
 
 describe('testConnection against the local Docker Nextcloud', () => {
