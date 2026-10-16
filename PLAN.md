@@ -44,6 +44,7 @@ Obsidian wird das primäre Frontend für Nextcloud Collectives. Ein Obsidian-Com
 | Dateizugriff | nur Obsidian Vault-API (`app.vault`, `app.fileManager`), kein `fs` |
 | Tests | Vitest für reine Logik; Integrationstests gegen Nextcloud in Docker |
 | Lint | ESLint mit `eslint-plugin-obsidianmd` (Regeln für Community-Plugins) |
+| Lokalisierung | Benutzer-Texte Englisch und Deutsch über `src/i18n/`, Auswahl nach `getLanguage()` (ADR 0013) |
 | Mindestversion | Obsidian ≥ 1.11.4 wegen Secret Storage (`app.secretStorage` `@since 1.11.4`, M0 ✔); ≥ 1.13.0, falls die deklarative Settings-API genutzt wird (v1: nicht genutzt) |
 | Server | Nextcloud mit Collectives-App, OCS-API `v1.0`. Getestet: Nextcloud 33.0.10, Collectives 4.7.1, Circles 33.0.0, Text 7.0.1 |
 
@@ -350,7 +351,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 
 - Variante A (M1): Server-URL, Benutzername, App-Passwort; Button „Verbindung testen“ (`GET /collectives`).
 - Variante B (M9): Nextcloud Login Flow v2 – `POST /index.php/login/v2`, Login-URL im Browser öffnen, Endpunkt pollen, App-Passwort übernehmen.
-- Speicherung: App-Passwort im Secret Storage von Obsidian, nie im Klartext in `data.json` (Vorbild: Nextcloud Sync, siehe 18).
+- Speicherung: App-Passwort im Secret Storage von Obsidian, nie im Klartext in `data.json` (Vorbild: Nextcloud Sync, siehe 18). Eingabe über ein normales Passwortfeld; die Secret-ID vergibt das Plugin selbst und speichert nur sie in `data.json` (ADR 0014).
 - Keine Credentials in Logs.
 
 ### 10.2 Settings
