@@ -1,0 +1,9 @@
+{
+	"id": "nextcloud-collectives",
+	"name": "Nextcloud Collectives Sync",
+	"version": "0.1.0",
+	"minAppVersion": "1.11.4",
+	"description": "Synchronize all Nextcloud Collectives of a server bidirectionally with your vault.",
+	"author": "Martin Schumacher",
+	"isDesktopOnly": false
+}

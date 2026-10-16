@@ -25,7 +25,6 @@ npm run nc:up        # Docker-Testserver starten (scripts/dev-nextcloud)
 npm run nc:down
 ```
 
-Diese Skripte werden in M1 angelegt; bis dahin existieren sie nicht.
 
 ## Harte Regeln
 
@@ -50,5 +49,5 @@ Diese Skripte werden in M1 angelegt; bis dahin existieren sie nicht.
 
 - Dateien und Module wie in `PLAN.md` §5.
 - Kleine, reine Funktionen; Seiteneffekte im `executor` und in `main.ts` bündeln.
-- Benutzer-Texte (Notices, Settings) auf Deutsch, Code und Kommentare auf Englisch.
+- Benutzer-Texte (Notices, Settings, Modals) nur über `src/i18n/` in Englisch (`en.ts`) und Deutsch (`de.ts`), siehe ADR 0013. Code und Kommentare auf Englisch.
 - Fehler über die Klassen in `src/util/errors.ts`, nicht über rohe Strings.

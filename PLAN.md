@@ -44,6 +44,7 @@ Obsidian wird das primäre Frontend für Nextcloud Collectives. Ein Obsidian-Com
 | Dateizugriff | nur Obsidian Vault-API (`app.vault`, `app.fileManager`), kein `fs` |
 | Tests | Vitest für reine Logik; Integrationstests gegen Nextcloud in Docker |
 | Lint | ESLint mit `eslint-plugin-obsidianmd` (Regeln für Community-Plugins) |
+| Lokalisierung | Benutzer-Texte Englisch und Deutsch über `src/i18n/`, Auswahl nach `getLanguage()` (ADR 0013) |
 | Mindestversion | Obsidian ≥ 1.11.4 wegen Secret Storage (`app.secretStorage` `@since 1.11.4`, M0 ✔); ≥ 1.13.0, falls die deklarative Settings-API genutzt wird (v1: nicht genutzt) |
 | Server | Nextcloud mit Collectives-App, OCS-API `v1.0`. Getestet: Nextcloud 33.0.10, Collectives 4.7.1, Circles 33.0.0, Text 7.0.1 |
 
@@ -122,8 +123,16 @@ src/
   settings/
     types.ts              Settings-Interface, Defaults
     settingsTab.ts        UI
+    connectionMessages.ts Fehler/Erfolg des Verbindungstests → lokalisierte Meldung (M1)
+    secretId.ts           Secret-IDs des Plugins erzeugen/prüfen (M1, ADR 0014)
+  i18n/
+    index.ts              Locale-Auswahl (getLanguage), Translator, Platzhalter (M1, ADR 0013)
+    en.ts, de.ts          Texte; en.ts definiert die Schlüssel, de.ts muss vollständig sein
   api/
-    http.ts               requestUrl-Wrapper: Auth, Timeouts, Retry, Fehlerklassen
+    http.ts               Transport-Vertrag (RequestFn, HttpRequest/-Response, Basic-Auth, M1);
+                          ab M2 requestUrl-Wrapper: Auth, Timeouts, Retry, Fehlerklassen
+    obsidianRequest.ts    RequestFn auf Basis von requestUrl, mit Timeout (M1)
+    connection.ts         Server-URL normalisieren, Verbindungstest (M1)
     ocsClient.ts          OCS-Aufrufe, Entpacken von ocs.data
     webdavClient.ts       GET/PUT/PROPFIND/MKCOL/DELETE, XML-Parsing via DOMParser
     collectivesApi.ts     typisierte Fachmethoden (listPages, createPage, …)
@@ -149,9 +158,10 @@ src/
     collectivePicker.ts
     confirmModal.ts
   util/
-    hash.ts, logger.ts, errors.ts
+    hash.ts, logger.ts, errors.ts, timeout.ts
 tests/
   unit/                   planner, paths, links, frontmatter, http-Fehler
+  stubs/obsidian.ts       Laufzeit-Stub für `obsidian` in Unit-Tests (das npm-Paket enthält nur Typen)
   fixtures/               aufgezeichnete API-Antworten aus M0
   integration/            gegen Docker-Nextcloud
 scripts/
@@ -350,7 +360,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 
 - Variante A (M1): Server-URL, Benutzername, App-Passwort; Button „Verbindung testen“ (`GET /collectives`).
 - Variante B (M9): Nextcloud Login Flow v2 – `POST /index.php/login/v2`, Login-URL im Browser öffnen, Endpunkt pollen, App-Passwort übernehmen.
-- Speicherung: App-Passwort im Secret Storage von Obsidian, nie im Klartext in `data.json` (Vorbild: Nextcloud Sync, siehe 18).
+- Speicherung: App-Passwort im Secret Storage von Obsidian, nie im Klartext in `data.json` (Vorbild: Nextcloud Sync, siehe 18). Eingabe über ein normales Passwortfeld; die Secret-ID vergibt das Plugin selbst und speichert nur sie in `data.json` (ADR 0014).
 - Keine Credentials in Logs.
 
 ### 10.2 Settings
@@ -423,10 +433,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M2 – API-Clients
 - `http.ts`, `ocsClient.ts`, `webdavClient.ts`, `collectivesApi.ts` mit Typen und Fehlerklassen.
 - Akzeptanz: Unit-Tests gegen Fixtures; Integrationstest listet Collectives/Seiten, liest und schreibt eine Seite.
+- Hinweise aus dem M1-Review: Statusabbildung zentral in `http.ts`, dabei 403 nicht pauschal als `AuthError` (403 heißt auch „keine Rechte an dieser Ressource“, z. B. Collective löschen als Mitglied) – §12 und ADR anpassen. `testConnection` auf `ocsClient`/`collectivesApi.listCollectives()` umstellen; Passwort-Logik aus `main.ts` in einen kleinen Credentials-Store ziehen (auch für den Login Flow in M9); `isRecord`-Hilfsfunktion zusammenführen. Weiterleitungen: prüfen, ob `requestUrl` den `Authorization`-Header an fremde Hosts weitergibt.
 
 ### M3 – Pull (nur lesen)
 - Remote-Scanner, Pfad-Mapping, Frontmatter, Datei-Anlage und -Update, State, Erstsync-Dialog.
 - Akzeptanz: Alle Collectives des Servers erscheinen als Ordner auf oberster Ebene mit korrekter Hierarchie; zweiter Lauf ohne Änderungen erzeugt keine Schreibzugriffe.
+- Hinweis aus dem M1-Review: ESLint-`no-restricted-imports` für `src/sync/planner.ts` und `src/mapping/**` (kein `obsidian`, keine API-Module), weil der Vitest-Stub fehlende Reinheit sonst verdeckt.
 
 ### M4 – Push Inhalt und Konflikte
 - Lokaler Scanner, Dirty-Queue, Planner (7.3), PUT mit ETag, Konfliktdatei, Konflikt-Dialog, Statusleiste.
@@ -447,6 +459,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M8 – Anhänge
 - Pull/Push/Löschen laut 9.4, Größenlimit.
 - Akzeptanz: Bild in Obsidian eingefügt erscheint in Collectives und umgekehrt; unveränderte Anhänge werden nicht erneut übertragen.
+- Hinweis aus dem M1-Review: Transport (`http.ts`) für Binärdaten erweitern (`ArrayBuffer`-Body, Antwort als `arrayBuffer`).
 
 ### M9 – Automatik, Mobile, Login Flow
 - Scheduler (Intervall, Debounce, Foreground), Mutex, Login Flow v2, Performance (≥ 500 Seiten: Leerlauf-Sync < 5 s bei LAN).
@@ -484,8 +497,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 | Meilenstein | Status |
 |---|---|
-| M0 | umgesetzt inkl. manueller Browser-Prüfung, PR offen |
-| M1 | offen |
+| M0 | umgesetzt inkl. manueller Browser-Prüfung, gemergt (PR #12) |
+| M1 | umgesetzt (ONC-2), PR offen |
 | M2 | offen |
 | M3 | offen |
 | M4 | offen |
