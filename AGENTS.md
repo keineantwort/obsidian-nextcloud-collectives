@@ -25,7 +25,6 @@ npm run nc:up        # Docker-Testserver starten (scripts/dev-nextcloud)
 npm run nc:down
 ```
 
-Diese Skripte werden in M1 angelegt; bis dahin existieren sie nicht.
 
 ## Harte Regeln
 

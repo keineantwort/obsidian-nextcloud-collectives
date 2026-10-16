@@ -484,8 +484,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 | Meilenstein | Status |
 |---|---|
-| M0 | umgesetzt inkl. manueller Browser-Prüfung, PR offen |
-| M1 | offen |
+| M0 | umgesetzt inkl. manueller Browser-Prüfung, gemergt (PR #12) |
+| M1 | umgesetzt (ONC-2), PR offen |
 | M2 | offen |
 | M3 | offen |
 | M4 | offen |
