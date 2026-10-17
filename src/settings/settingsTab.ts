@@ -185,6 +185,39 @@ export class NcSettingTab extends PluginSettingTab {
 					});
 				dd.selectEl.setAttribute('aria-label', t('settings.remoteDelete.name'));
 			});
+
+		new Setting(containerEl)
+			.setName(t('settings.hideProperties.name'))
+			.setDesc(t('settings.hideProperties.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.hidePluginProperties).onChange(async (value) => {
+					settings.hidePluginProperties = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.folderNoteFirst.name'))
+			.setDesc(t('settings.folderNoteFirst.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.folderNoteFirst).onChange(async (value) => {
+					settings.folderNoteFirst = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.emojiTitles.name'))
+			.setDesc(t('settings.emojiTitles.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.showEmojiInTitles).onChange(async (value) => {
+					settings.showEmojiInTitles = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
 	}
 }
 

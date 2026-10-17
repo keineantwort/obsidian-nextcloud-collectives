@@ -76,13 +76,24 @@ export function countConflicts(state: SyncState): number {
 	return Object.values(state.pages).filter((page) => openStatus(page) !== null).length;
 }
 
-/** Pure state transition for a resolved conflict. `localHash` = sha256Hex(toRemote(current local text)). */
+/**
+ * Pure state transition for a resolved conflict. `localHash` = sha256Hex(toRemote(current local text)).
+ * "Take remote" also forgets the base of the metadata (metaHash ''): the next run takes the server's emoji and tags like it
+ * takes the server's text.
+ */
 export function resolveConflict(prev: PageState, choice: ConflictChoice, localHash: string): PageState {
 	if (choice === 'keepLocal') {
 		// The base stays: it is the hash of the remote text the conflict was recorded against (see state.ts).
 		return { ...prev, status: 'synced', conflictPath: null, localMtime: UNCHECKED_LOCAL_MTIME };
 	}
-	return { ...prev, status: 'synced', conflictPath: null, baseHash: localHash, remoteMtime: UNCONFIRMED_REMOTE_MTIME };
+	return {
+		...prev,
+		status: 'synced',
+		conflictPath: null,
+		baseHash: localHash,
+		remoteMtime: UNCONFIRMED_REMOTE_MTIME,
+		metaHash: '',
+	};
 }
 
 /** Options of applyResolution; both are optional. */

@@ -26,6 +26,7 @@ export type StructureApi = Pick<
 	CollectivesApi,
 	| 'createPage' | 'getPage' | 'updatePage' | 'movePageToCollective' | 'trashPage' | 'restorePage' | 'listPages'
 	| 'createCollective' | 'renameCollective' | 'trashCollective'
+	| 'setPageEmoji' | 'addPageTag' | 'removePageTag' | 'listTags' | 'createTag'
 >;
 
 export interface ExecutorDeps {

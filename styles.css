@@ -104,3 +104,39 @@
 .nc-confirm-label { font-weight: var(--font-semibold); }
 .nc-confirm-warning { color: var(--text-error); margin-top: var(--size-4-1); }
 .nc-confirm-detail { color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: var(--size-4-1); }
+
+/* Page emoji in front of note titles (display only, src/ui/emojiTitles.ts). */
+.nav-file-title-content[data-nc-emoji]::before,
+.nav-folder-title-content[data-nc-emoji]::before,
+.inline-title[data-nc-emoji]::before,
+.view-header-title[data-nc-emoji]::before { content: attr(data-nc-emoji) ' '; }
+
+/* Readable names for the plugin's properties (src/ui/propertyLabels.ts): the key input is hidden, a label stands in its place.
+   The value stays editable. */
+.nc-property-labelled .metadata-property-key-input { display: none; }
+.nc-property-label { flex: 1 1 auto; align-self: stretch; display: flex; align-items: center; min-width: 0; padding-inline: var(--size-4-1); color: var(--text-muted); font-size: var(--font-ui-small); line-height: var(--line-height-tight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-property-label::before { content: none; }
+
+/* Emoji picker (src/ui/emojiModal.ts). */
+.nc-emoji-row { display: flex; align-items: center; gap: var(--size-4-3); margin-bottom: var(--size-4-2); }
+.nc-emoji-input { flex: 1 1 auto; min-width: 0; font-size: var(--font-ui-large); }
+.nc-emoji-input.is-invalid { border-color: var(--text-error); }
+.nc-emoji-message { min-height: 1.5em; margin-bottom: var(--size-4-2); color: var(--text-error); font-size: var(--font-ui-small); }
+.nc-emoji-grid { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-bottom: var(--size-4-2); }
+.nc-emoji-choice { width: 2.4em; height: 2.4em; padding: 0; font-size: var(--font-ui-large); line-height: 1; }
+.is-mobile .nc-emoji-choice { width: 44px; height: 44px; }
+.is-mobile .nc-emoji-modal .modal-button-container button { min-height: 44px; }
+
+/* Hide the plugin's properties (setting hidePluginProperties; class set on the body by main.ts). */
+.nc-hide-properties .metadata-property[data-property-key^='nc_'] { display: none; }
+
+/* Rename prompt (src/ui/renameModal.ts). */
+.nc-rename-row { display: flex; align-items: center; gap: var(--size-4-3); margin-bottom: var(--size-4-2); }
+.nc-rename-input { flex: 1 1 auto; min-width: 0; }
+.nc-rename-input.is-invalid { border-color: var(--text-error); }
+.nc-rename-message { min-height: 1.5em; margin-bottom: var(--size-4-2); color: var(--text-error); font-size: var(--font-ui-small); }
+.is-mobile .nc-rename-modal .modal-button-container button { min-height: 44px; }
+
+/* The note of a folder first in its folder (display only; the flag comes from src/ui/emojiTitles.ts). */
+.nav-folder-children:has(> .nav-file[data-nc-folder-note]) { display: flex; flex-direction: column; }
+.nav-folder-children > .nav-file[data-nc-folder-note] { order: -1; }

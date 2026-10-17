@@ -274,7 +274,7 @@ describe('resolveConflict', () => {
 		expect(next).toMatchObject({ remoteEtag: '"remote-etag"', remoteMtime: 1792138978, remoteSize: 99 });
 	});
 
-	it('takeRemote sets the base to the given local hash, marks the remote mtime unconfirmed and keeps the local mtime', () => {
+	it('takeRemote sets the base to the given local hash, forgets the metadata base, marks the remote mtime unconfirmed and keeps the local mtime', () => {
 		const prev = pageState(10, { status: 'conflict', conflictPath: NOTE_CONFLICT, baseHash: '', localMtime: 1700 });
 
 		expect(resolveConflict(prev, 'takeRemote', 'local-hash')).toEqual({
@@ -284,6 +284,7 @@ describe('resolveConflict', () => {
 			baseHash: 'local-hash',
 			remoteMtime: -1,
 			localMtime: 1700,
+			metaHash: '',
 		});
 	});
 

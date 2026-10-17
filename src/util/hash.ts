@@ -6,7 +6,11 @@ export async function sha256Hex(text: string): Promise<string> {
 	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** Hash of title, emoji and tag names (sorted) – PLAN §6.3 metaHash. Deterministic: sha256Hex(JSON.stringify([title, emoji, [...tags].sort()])). */
-export async function metaHash(title: string | null, emoji: string | null, tags: readonly string[]): Promise<string> {
-	return sha256Hex(JSON.stringify([title, emoji, [...tags].sort()]));
+/**
+ * Hash of emoji and tag names (sorted) – PLAN §6.3 metaHash. Deterministic: sha256Hex(JSON.stringify([emoji, [...tags].sort()])).
+ * The title is not part of it: only the fields the user can edit in the note are compared (M6, ADR 0019); a renamed
+ * page is a structure change.
+ */
+export async function metaHash(emoji: string | null, tags: readonly string[]): Promise<string> {
+	return sha256Hex(JSON.stringify([emoji, [...tags].sort()]));
 }

@@ -6,6 +6,10 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 
 ## Hilfe
 
+### Emoji und Tags
+
+Emoji (`nc_emoji`) und Tags (Obsidians Eigenschaft `tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, verhält es sich wie bei einer Textänderung auf beiden Seiten: Je nach Einstellung „Konfliktstrategie“ entsteht eine Konfliktkopie (die Notiz bleibt wie sie ist, die Werte des Servers stehen in der Kopie) oder die lokale bzw. die Server-Fassung gewinnt. Die Eigenschaften des Plugins (`nc_…`) sind standardmäßig ausgeblendet (Einstellung „Eigenschaften des Plugins ausblenden“). Im Kontextmenü einer Notiz oder eines Ordners (und im Editor-Menü) findest du „Seiten-Emoji setzen“ und „Seite umbenennen“; letzteres benennt bei einer Seite mit Unterseiten die Notiz und ihren Ordner zusammen um. Das Emoji setzt du am einfachsten mit dem Befehl „Seiten-Emoji setzen“ (Auswahl und Prüfung); legst du in der Notiz selbst eine Eigenschaft `Emoji` an, öffnet sich dieselbe Auswahl. Erlaubt ist genau ein Emoji, anderes wird nicht gesendet und beim Sync gemeldet. Die Tags sind Obsidians Eigenschaft `tags`; auch `#Tags` im Text zählen und werden hinzugefügt (entfernst du ein `#Tag` aus dem Text, bleibt es bestehen, bis du es aus der Eigenschaft löschst). Ein Leerzeichen im Tag-Namen auf dem Server erscheint in Obsidian als `-`; ein `-` bleibt ein `-`, auch wenn du es in Obsidian neu tippst. Die Tags erscheinen in Collectives als Tags, nicht als Text. In der Dateiliste zeigt ein Ordner das Emoji seiner Seite, und die Seite des Ordners steht zuerst im Ordner (nur die Anzeige, abschaltbar).
+
 ### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
 
 Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective ist ein Ordner auf oberster Ebene des Vaults. Eine Seite mit Unterseiten ist ein Ordner mit einer gleichnamigen Notiz darin (`Handbuch/Prozesse/Prozesse.md`).
@@ -13,7 +17,7 @@ Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective is
 | Du machst im Vault … | … das passiert auf dem Server |
 |---|---|
 | eine neue Notiz anlegen | Sie wird als neue Seite hochgeladen, ihre `nc_page_id` steht danach im Frontmatter. Die Seite hängt unter der Seite, der ihr Ordner gehört; liegt sie in einem Ordner ohne Notiz, legt das Plugin dafür eine Ordnerseite an. |
-| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben, Tags gehen dabei verloren). |
+| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben; die Tags der Notiz werden im neuen Collective neu zugewiesen). |
 | den Ordner einer Seite mit Unterseiten umbenennen, oder nur die Notiz darin | Die Seite heißt danach wie der Ordner bzw. die Notiz; Ordner und Notiz bekommen denselben Namen. |
 | einen neuen Ordner auf oberster Ebene mit Notizen anlegen | Ein neues Collective entsteht (einstellbar: „Neue Ordner auf oberster Ebene“). Die Notiz, die wie der Ordner heißt, wird die Startseite. |
 | den Ordner eines Collectives umbenennen | Das Collective wird umbenannt. Das dürfen nur Admins und Eigentümer; sonst wird der Ordner zurückbenannt. |

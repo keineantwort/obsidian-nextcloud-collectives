@@ -15,6 +15,12 @@ export interface NcSettings {
 	localDeleteBehaviour: PlannerBehaviour['localDelete'];
 	/** What happens to the local file of a page deleted on the server (PLAN §7.4). */
 	remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
+	/** Show the page emoji in front of note titles (display only). */
+	showEmojiInTitles: boolean;
+	/** Hide the nc_* properties in the properties view of a note (display only). */
+	hidePluginProperties: boolean;
+	/** Show the note of a folder first in its folder in the file list (display only). */
+	folderNoteFirst: boolean;
 }
 
 export const DEFAULT_SETTINGS: NcSettings = {
@@ -25,6 +31,9 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	newFolderBehaviour: 'createCollective',
 	localDeleteBehaviour: 'ask',
 	remoteDeleteBehaviour: 'obsidianTrash',
+	showEmojiInTitles: true,
+	hidePluginProperties: true,
+	folderNoteFirst: true,
 };
 
 export const CONFLICT_STRATEGIES = ['conflictFile', 'preferLocal', 'preferRemote'] as const;

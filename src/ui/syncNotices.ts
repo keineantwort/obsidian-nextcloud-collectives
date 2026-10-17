@@ -13,7 +13,7 @@ const DETAIL_SEPARATOR = ' · ';
 /** Notice text for a finished sync. Conflicts and failures get their own sentence on a separate line. */
 export function formatSyncResult(result: SyncResult, pages: number, t: Translator, skips: readonly Skip[] = []): SyncNoticeSpec {
 	const changed =
-		result.created + result.updated + result.pushed + result.metaUpdated + result.conflicts + result.failed +
+		result.created + result.updated + result.pushed + result.metaUpdated + result.metaPushed + result.metaInvalid + result.conflicts + result.failed +
 		result.uploaded + result.moved + result.trashed + result.removed + result.restored;
 	const lines: string[] = [];
 	if (changed === 0) {
@@ -24,6 +24,7 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 		if (result.updated > 0) details.push(t('sync.result.updated', { count: result.updated }));
 		if (result.pushed > 0) details.push(t('sync.result.pushed', { count: result.pushed }));
 		if (result.metaUpdated > 0) details.push(t('sync.result.metaUpdated', { count: result.metaUpdated }));
+		if (result.metaPushed > 0) details.push(t('sync.result.metaPushed', { count: result.metaPushed }));
 		if (result.uploaded > 0) details.push(t('sync.result.uploaded', { count: result.uploaded }));
 		if (result.moved > 0) details.push(t('sync.result.moved', { count: result.moved }));
 		if (result.trashed > 0) details.push(t('sync.result.trashed', { count: result.trashed }));
@@ -40,12 +41,15 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 			: t('sync.result.conflicts.other', { count: result.conflicts, label }));
 		lines.push(t('sync.result.conflicts.hint'));
 	}
+	if (result.metaInvalid > 0) {
+		lines.push(result.metaInvalid === 1 ? t('sync.result.metaInvalid.one') : t('sync.result.metaInvalid.other', { count: result.metaInvalid }));
+	}
 	if (result.failed > 0) {
 		lines.push(result.failed === 1 ? t('sync.result.failed.one') : t('sync.result.failed.other', { count: result.failed }));
 	}
 	const hints = skipHints(skips, t);
 	lines.push(...hints);
-	const level: NoticeLevel = result.conflicts > 0 || result.failed > 0 || hints.length > 0 ? 'warning' : 'info';
+	const level: NoticeLevel = result.conflicts > 0 || result.failed > 0 || result.metaInvalid > 0 || hints.length > 0 ? 'warning' : 'info';
 	return { lines, level };
 }
 

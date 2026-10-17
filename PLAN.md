@@ -222,13 +222,13 @@ Flache Keys, damit die Obsidian-Properties-Ansicht funktioniert:
 nc_page_id: 1234
 nc_collective_id: 12
 nc_emoji: "📘"
-nc_tags: [Projekt, Wichtig]
+tags: [Projekt, Wichtig]            # Obsidians Tag-Eigenschaft (Leerzeichen → "-")
 nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweichend
 ---
 ```
 
-- Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
-- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives).
+- Beim Hochladen werden nur die `nc_*`-Felder, `tags` und eine von Hand angelegte Eigenschaft `emoji` entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
+- Tags: Es gibt nur Obsidians Eigenschaft `tags` (Option `tagsProperty` entfällt, ADR 0019). Namen aus Collectives: Leerzeichen werden zu `-`, ein `-` bleibt `-`; ein neues `-` in Obsidian wird als `-` angelegt und nie in ein Leerzeichen verwandelt. Rückabbildung: erst der Tag mit genau diesem Namen, sonst der Tag, dessen Name mit `-` für Leerzeichen so aussieht (ohne Beachtung der Schreibweise). `#Tags` im Text kommen hinzu (nur hinzufügend). Die Eigenschaft wird wie `nc_*` nicht hochgeladen. Ein altes `nc_tags` zählt, solange `tags` fehlt, und wird beim nächsten Schreiben der Felder entfernt. Die Schlüssel der übrigen Felder bleiben technisch, die Eigenschaften-Ansicht zeigt lokalisierte Namen (oder blendet sie aus), das Emoji steht nur in der Anzeige vor dem Titel, die Notiz eines Ordners steht in der Dateiliste zuerst (M6).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
 ### 6.3 Sync-State
@@ -323,7 +323,8 @@ Umsetzung (M5, ADR 0018): Ein Lauf besteht aus bis zu 3 Durchläufen (scannen, p
 - Emoji: Vergleich `nc_emoji` vs. Remote; Änderung lokal → `PUT …/emoji`.
 - Tags: Abgleich der Namen; fehlende Tags im Collective per `POST /tags` anlegen (Default-Farbe), dann `PUT`/`DELETE …/tags/{tagId}`.
   Vor dem Anlegen case-insensitiv gegen den Tag-Cache prüfen (Server-Duplikatprüfung hängt von der DB-Collation ab, M0). Default-Farbe als 6 Hex-Zeichen ohne `#`. Nach einem Collective-übergreifenden Verschieben die Tags im Ziel-Collective neu zuweisen.
-- Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash`; bei beidseitiger Änderung gewinnt Remote, Hinweis im Log.
+- Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash` (Hash von Emoji und Tags, ohne Titel), aber mit **derselben Entscheidung wie der Inhalt** (§7.3, `conflictStrategy`): nur eine Seite geändert → diese gewinnt; beide gleich → kein Konflikt; beide verschieden → `conflictFile` (Notiz behält ihre Werte, die des Servers stehen in einer Konfliktkopie, Seite ist `conflict`), `preferLocal`, `preferRemote`. (M6, ADR 0019; ersetzt „bei beidseitiger Änderung gewinnt Remote“.)
+- Umsetzung (M6, ADR 0019): Der Executor vergleicht Emoji/Tags der Notiz beim `push`/`update` mit dem `metaHash` des States (`src/sync/executorMeta.ts`); Emoji wird mit `""` entfernt (api-notes §4); neue Notizen und Collective-Wechsel übertragen die Tags der Notiz.
 
 ### 7.6 Eigene Schreibzugriffe ignorieren
 
@@ -401,7 +402,6 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 | `conflictStrategy` | `conflictFile` | `conflictFile`/`preferLocal`/`preferRemote` |
 | `localDeleteBehaviour` | `ask` | `ask` (Bestätigung, dann Remote-Papierkorb) / `trashRemote` (ohne Rückfrage). Für Collectives immer `ask` |
 | `remoteDeleteBehaviour` | `obsidianTrash` | `obsidianTrash`/`keepUnlinked` |
-| `tagsProperty` | `nc_tags` | `nc_tags`/`tags` |
 | `convertLinks` | true | |
 | `attachmentFolderPattern` | `_attachments/{title}` | |
 | `maxAttachmentSizeMb` | 20 | |
@@ -499,8 +499,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
 ### M6 – Tags und Emojis
-- Abgleich laut 7.5, Tag-Anlage, `tagsProperty`-Option.
-- Hinweis aus M3: Remote → lokal (`nc_emoji`, `nc_tags`, `metaHash`) ist umgesetzt; M6 ergänzt Push und `tagsProperty`.
+- Abgleich laut 7.5, Tag-Anlage; die Option `tagsProperty` ist entfallen (nur Obsidians `tags`, ADR 0019).
+- Hinweis aus M3: Remote → lokal (`nc_emoji`, `nc_tags`, `metaHash`) ist umgesetzt; M6 ergänzt den Push.
 - Akzeptanz: Änderungen in beide Richtungen; kein Duplikat-Tag.
 
 ### M7 – Links
@@ -561,8 +561,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M2 | umgesetzt (ONC-3), gemergt (PR #14) |
 | M3 | umgesetzt (ONC-4), gemergt (PR #15) |
 | M4 | umgesetzt (ONC-5), gemergt (PR #16) |
-| M5 | umgesetzt (ONC-6), PR offen |
-| M6 | offen |
+| M5 | umgesetzt (ONC-6), gemergt |
+| M6 | umgesetzt (ONC-7), PR offen |
 | M7 | offen |
 | M8 | offen |
 | M9 | offen |

@@ -1,14 +1,15 @@
 // Structure operations of the sync executor (PLAN §7.4): create, move, rename, trash and restore pages and collectives.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
-import { readNcMeta, replaceNcMeta, stripNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
+import { readLocalFields, readNcMeta, replaceNcMeta, stripNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
 import type { NcMeta } from '../mapping/frontmatter';
 import { ncTitleFor, pathKey, sanitizeName } from '../mapping/paths';
-import { NotFoundError } from '../util/errors';
+import { NotFoundError, isRunFatal } from '../util/errors';
 import { metaHash, sha256Hex } from '../util/hash';
 import { applyContentOp, fetchPage, readLocal, requireMtime, requireState, uploadLocal, writeIfUnchanged } from './executorContent';
 import type { ContentOp } from './executorContent';
 import type { ExecutorDeps, StructureApi } from './executorDeps';
+import { localMetaFromFields, pushLocalMeta, reassignTags } from './executorMeta';
 import { noteCreated, scratchOf } from './executorScratch';
 import { metaFor, newPageState, remoteFields, unconfirmedRemote } from './pageState';
 import type { ParentRef, SyncOp } from './plannerTypes';
@@ -54,8 +55,14 @@ function requireApi(deps: ExecutorDeps): StructureApi {
 async function metaForPage(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId): Promise<{ meta: NcMeta; hash: string }> {
 	const cache = deps.state.tags[String(collectiveId)] ?? [];
 	const tags = page.tags.flatMap((id) => cache.filter((tag) => tag.id === id).map((tag) => tag.name));
-	const meta: NcMeta = { pageId: page.id, collectiveId, title: page.title, emoji: page.emoji, tags };
-	return { meta, hash: await metaHash(meta.title, meta.emoji, meta.tags) };
+	const meta: NcMeta = {
+		pageId: page.id,
+		collectiveId,
+		title: page.title,
+		emoji: page.emoji,
+		tags,
+	};
+	return { meta, hash: await metaHash(meta.emoji, meta.tags) };
 }
 
 function resolveParent(deps: ExecutorDeps, parent: ParentRef): PageId {
@@ -90,9 +97,15 @@ async function refreshPage(deps: ExecutorDeps, collectiveId: CollectiveId, pageI
  * Links the local file at `path` to the page just created for it: the file gets its nc fields, the state records the page,
  * and the file's text is uploaded. The state is saved before the upload, so a failing upload cannot create the page twice.
  */
-async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId, path: string): Promise<void> {
-	const { meta, hash } = await metaForPage(deps, page, collectiveId);
+async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId, path: string, result?: SyncResult): Promise<void> {
+	let { meta, hash } = await metaForPage(deps, page, collectiveId);
 	const now = deps.now().getTime();
+	// A new note may carry tags (or an emoji) already: they become the page's, instead of being dropped by the nc fields.
+	const fields = readLocalFields(await deps.vault.read(path));
+	if (fields !== null && (fields.emoji !== null || (fields.tags?.length ?? 0) > 0)) {
+		const pushed = await pushLocalMeta({ page, meta, metaHash: hash }, localMetaFromFields(fields, collectiveId, deps), deps, result);
+		({ meta, hash } = pushed);
+	}
 	await deps.vault.process(path, (current) => replaceNcMeta(current, metaFor(page, meta, path)));
 	// The page exists on the server and the file carries its id: remember that before anything else can fail. A new page is
 	// empty, so that is its base until the first read; if it is not, the next run reports a conflict instead of a duplicate.
@@ -205,7 +218,7 @@ async function createRemote(op: Op<'createRemote'>, deps: ExecutorDeps, result: 
 		await refreshPage(deps, op.collectiveId, parentId);
 	}
 	if (op.fileExists) {
-		await linkNewPage(deps, page, op.collectiveId, op.path);
+		await linkNewPage(deps, page, op.collectiveId, op.path, result);
 	} else {
 		await createNote(deps, page, op.collectiveId, op.path);
 	}
@@ -248,7 +261,7 @@ async function moveRemote(op: Op<'moveRemote'>, deps: ExecutorDeps, result: Sync
 		page = await api.getPage(op.collectiveId, op.pageId);
 		if (title !== null) page = await api.updatePage(op.collectiveId, op.pageId, { title });
 		remoteChanged = true;
-		await refreshSubtree(deps, op.collectiveId, op.pageId);
+		await refreshSubtree(deps, op.collectiveId, op.pageId, result);
 	} else if (title !== null || (parentId !== null && parentId !== page.parentId)) {
 		const change: { title?: string; parentId?: PageId } = {};
 		if (title !== null) change.title = title;
@@ -269,8 +282,11 @@ async function moveRemote(op: Op<'moveRemote'>, deps: ExecutorDeps, result: Sync
 	const text = await deps.vault.read(path);
 	const existing = readNcMeta(text);
 	let mtime = mtimeBefore;
+	// Tags belong to a collective: after a move into another one they have to be assigned again from the note.
+	const reassigned = existing !== null && found.collectiveId !== op.collectiveId ? await reassignTags(page, op.collectiveId, text, deps, result) : null;
 	if (existing !== null) {
-		const next = replaceNcMeta(text, { ...existing, collectiveId: op.collectiveId, title: ncTitleFor(page.title, path, false) });
+		const tags = reassigned?.meta.tags ?? existing.tags;
+		const next = replaceNcMeta(text, { ...existing, tags, collectiveId: op.collectiveId, title: ncTitleFor(page.title, path, false) });
 		if (next !== text) mtime = (await writeIfUnchanged(deps.vault, path, text, next)) ?? mtime;
 	}
 	const remote = remoteChanged ? { etag: s.remoteEtag, remoteMtime: UNCONFIRMED_REMOTE_MTIME } : { etag: s.remoteEtag, remoteMtime: s.remoteMtime };
@@ -281,13 +297,14 @@ async function moveRemote(op: Op<'moveRemote'>, deps: ExecutorDeps, result: Sync
 		collectiveId: op.collectiveId,
 		localPath: path,
 		localMtime: unchangedSinceSync ? mtime : s.localMtime,
+		...(reassigned === null ? {} : { metaHash: reassigned.hash }),
 	};
 	result.moved++;
 	return true;
 }
 
 /** After a page moved into another collective with its sub-pages: the state of the sub-pages follows. */
-async function refreshSubtree(deps: ExecutorDeps, collectiveId: CollectiveId, rootId: PageId): Promise<void> {
+async function refreshSubtree(deps: ExecutorDeps, collectiveId: CollectiveId, rootId: PageId, result: SyncResult): Promise<void> {
 	const pages = await requireApi(deps).listPages(collectiveId);
 	const below = new Set<PageId>([rootId]);
 	for (let grew = true; grew;) {
@@ -307,7 +324,22 @@ async function refreshSubtree(deps: ExecutorDeps, collectiveId: CollectiveId, ro
 			...known,
 			...remoteFields(page, unconfirmedRemote(known.remoteEtag)),
 			collectiveId,
+			...(await reassignedHash(deps, page, collectiveId, known.localPath, result)),
 		};
+	}
+}
+
+/** metaHash of a sub-page after its tags were assigned again from its note in the new collective; {} if that was not possible. */
+async function reassignedHash(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId, localPath: string, result: SyncResult): Promise<{ metaHash?: string }> {
+	try {
+		if (!deps.vault.exists(localPath)) return {};
+		const pushed = await reassignTags(page, collectiveId, await deps.vault.read(localPath), deps, result);
+		return pushed === null ? {} : { metaHash: pushed.hash };
+	} catch (err) {
+		if (isRunFatal(err)) throw err;
+		// The tags stay lost on the server; the next run takes the server's metadata over.
+		deps.log.warn('Tags of a moved sub-page could not be assigned again', { pageId: page.id, error: err instanceof Error ? err.name : 'unknown' });
+		return {};
 	}
 }
 

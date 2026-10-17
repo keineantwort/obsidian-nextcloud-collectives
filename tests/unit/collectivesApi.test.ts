@@ -123,12 +123,12 @@ describe('setCollectiveEmoji', () => {
 		expect(result).toBeUndefined();
 	});
 
-	it('keeps emoji null in the body so the emoji is removed', async () => {
+	it('sends an empty string to remove the emoji: the server ignores a JSON null', async () => {
 		const { api, calls } = setup(ocsOk({}));
 
 		await api.setCollectiveEmoji(asCollectiveId(1), null);
 
-		expect(sentBody(calls)).toStrictEqual({ emoji: null });
+		expect(sentBody(calls)).toStrictEqual({ emoji: '' });
 	});
 });
 
@@ -282,12 +282,12 @@ describe('setPageEmoji', () => {
 		expect(result).toMatchObject({ id: 100, emoji: '🏖️', tags: [1] });
 	});
 
-	it('keeps emoji null in the body and maps the page without an emoji', async () => {
+	it('sends an empty string to remove the emoji and maps the page without an emoji', async () => {
 		const { api, calls } = setup(replyFromFixture(loadFixture('page-emoji-remove.json')));
 
 		const result = await api.setPageEmoji(asCollectiveId(1), asPageId(97), null);
 
-		expect(sentBody(calls)).toStrictEqual({ emoji: null });
+		expect(sentBody(calls)).toStrictEqual({ emoji: '' });
 		expect(result).toMatchObject({ id: 97, emoji: null });
 	});
 });

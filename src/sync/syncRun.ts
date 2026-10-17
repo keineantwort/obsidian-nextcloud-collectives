@@ -247,7 +247,7 @@ async function buildRemoteMeta(
 				emoji: page.emoji,
 				tags: tagNamesOf(page, tagNames, log),
 			};
-			out.set(page.id, { meta, hash: await metaHash(meta.title, meta.emoji, meta.tags) });
+			out.set(page.id, { meta, hash: await metaHash(meta.emoji, meta.tags) });
 		}
 	}
 	return out;

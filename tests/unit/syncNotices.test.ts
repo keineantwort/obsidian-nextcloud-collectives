@@ -59,6 +59,19 @@ describe('formatSyncResult', () => {
 		expect(spec.lines[0]).toBe('Synchronisierung abgeschlossen. Aktualisiert: 2 · Nur Metadaten: 1');
 	});
 
+	it('reports emoji and tags sent to the server, and does not call a run with only those idle', () => {
+		expect(formatSyncResult(result({ metaPushed: 2 }), 5, en).lines).toEqual(['Sync complete. Emoji/tags sent: 2']);
+		expect(formatSyncResult(result({ metaPushed: 1 }), 0, de).lines[0]).toBe('Synchronisierung abgeschlossen. Emoji/Tags gesendet: 1');
+	});
+
+	it('warns about notes whose emoji is not a single emoji', () => {
+		const spec = formatSyncResult(result({ metaInvalid: 2 }), 5, en);
+
+		expect(spec.level).toBe('warning');
+		expect(spec.lines.join('\n')).toContain('2 notes have an emoji property that is not a single emoji');
+		expect(formatSyncResult(result({ metaInvalid: 1 }), 5, de).lines.join('\n')).toContain('Eine Notiz hat ein Emoji-Feld');
+	});
+
 	it('puts a single conflict on its own line, with the conflict label, as a warning', () => {
 		const spec = formatSyncResult(result({ conflicts: 1 }), 0, en);
 

@@ -22,7 +22,8 @@ import { MemoryVault } from '../fakes/memoryVault';
 const SERVER = 'https://cloud.example.com';
 const NOW = new Date(2026, 9, 16, 14, 30);
 const CONFLICT_SUFFIX = ' (Konflikt 2026-10-16 1430)';
-const META_HASH = 'meta-1';
+/** metaHash(null, []): the hash of metaOf() without emoji and tags, so a note without nc_emoji/nc_tags counts as unchanged. */
+const META_HASH = '97294f05c3603881a6466e787eb8726dde04588d242bea02914b0f0a8e12bdb2';
 const META_HASH_2 = 'meta-2';
 
 const REMOTE_V1 = '# Notiz\n\nErste Fassung\n';
@@ -851,7 +852,7 @@ describe('executeSync: push (local change, remote known unchanged)', () => {
 		h.vault.seed(NOTE_PATH, toLocal(REMOTE_V1, meta));
 		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
 		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
-		h.vault.userEdit(NOTE_PATH, toLocal(REMOTE_V1, metaOf(10, { tags: ['lokal'] })));
+		h.vault.userEdit(NOTE_PATH, toLocal(REMOTE_V1, metaOf(10, { title: 'Anderer Titel' })));
 		const mtimeAfterEdit = h.vault.mtime(NOTE_PATH);
 		const writesBefore = h.vault.writes;
 
