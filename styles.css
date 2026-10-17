@@ -96,6 +96,9 @@
 	border-inline-start: 3px solid var(--background-modifier-border);
 }
 .nc-confirm-item.is-warning { border-inline-start-color: var(--color-red); }
-.nc-confirm-label { display: flex; gap: var(--size-4-2); align-items: baseline; font-weight: var(--font-semibold); }
+.nc-confirm-row { display: flex; align-items: center; gap: var(--size-4-3); cursor: pointer; }
+.nc-confirm-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.nc-confirm-row input[type='checkbox'] { flex: 0 0 auto; margin: 0; }
+.nc-confirm-label { font-weight: var(--font-semibold); }
 .nc-confirm-warning { color: var(--text-error); margin-top: var(--size-4-1); }
 .nc-confirm-detail { color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: var(--size-4-1); }

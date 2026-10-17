@@ -132,7 +132,6 @@ export const en = {
 	'settings.remoteDelete.option.obsidianTrash': 'Move the file to the trash',
 	'settings.remoteDelete.option.keepUnlinked': 'Keep the file (it is uploaded as a new page)',
 	'confirm.title': 'Confirm changes',
-	'confirm.intro': 'Check what should happen. Unchecked items are not carried out.',
 	'confirm.deletePage.label': 'Delete page “{title}”',
 	'confirm.deletePage.descendants': 'with {count} sub-pages',
 	'confirm.deleteCollective.label': 'Delete collective “{name}”',

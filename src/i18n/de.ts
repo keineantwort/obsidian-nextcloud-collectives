@@ -134,7 +134,6 @@ export const de: Record<MessageKey, string> = {
 	'settings.remoteDelete.option.obsidianTrash': 'Datei in den Papierkorb legen',
 	'settings.remoteDelete.option.keepUnlinked': 'Datei behalten (sie wird als neue Seite hochgeladen)',
 	'confirm.title': 'Änderungen bestätigen',
-	'confirm.intro': 'Hake an, was passieren soll. Nicht Angehaktes wird nicht ausgeführt.',
 	'confirm.deletePage.label': 'Seite „{title}“ löschen',
 	'confirm.deletePage.descendants': 'mit {count} Unterseiten',
 	'confirm.deleteCollective.label': 'Collective „{name}“ löschen',

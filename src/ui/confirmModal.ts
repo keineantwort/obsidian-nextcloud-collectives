@@ -8,7 +8,6 @@ import { buildConfirmRows, decisionsFor, laterDecisions } from './confirmView';
 import type { ConfirmRow } from './confirmView';
 
 const TITLE_ID = 'nc-confirm-title';
-const DESC_ID = 'nc-confirm-desc';
 
 /**
  * Asks the questions of one plan. Closing the dialog (Esc, close button, back gesture) postpones all of them.
@@ -43,9 +42,7 @@ class ConfirmModal extends Modal {
 		if (!modalEl.hasAttribute('role')) modalEl.setAttribute('role', 'dialog');
 		modalEl.setAttribute('aria-modal', 'true');
 		modalEl.setAttribute('aria-labelledby', TITLE_ID);
-		modalEl.setAttribute('aria-describedby', DESC_ID);
 
-		contentEl.createEl('p', { text: t('confirm.intro'), attr: { id: DESC_ID } });
 		const list = contentEl.createEl('ul', { cls: 'nc-confirm-list' });
 		this.rows.forEach((row, index) => this.renderRow(list, row, index));
 
@@ -59,13 +56,15 @@ class ConfirmModal extends Modal {
 	private renderRow(list: HTMLElement, row: ConfirmRow, index: number): void {
 		const item = list.createEl('li', { cls: row.warning === null ? 'nc-confirm-item' : 'nc-confirm-item is-warning' });
 		const boxId = `nc-confirm-box-${index}`;
-		const label = item.createEl('label', { cls: 'nc-confirm-label', attr: { for: boxId } });
+		// The whole row is the label: text on the left, the box on the right, centred to all lines of the row.
+		const label = item.createEl('label', { cls: 'nc-confirm-row', attr: { for: boxId } });
+		const text = label.createDiv({ cls: 'nc-confirm-text' });
+		text.createDiv({ cls: 'nc-confirm-label', text: row.label });
+		if (row.warning !== null) text.createDiv({ cls: 'nc-confirm-warning', text: row.warning, attr: { role: 'alert' } });
+		for (const detail of row.details) text.createDiv({ cls: 'nc-confirm-detail', text: detail });
 		// Nothing is checked at first: every destructive step needs the user's own tick.
 		const box = label.createEl('input', { attr: { type: 'checkbox', id: boxId } });
-		label.createSpan({ text: row.label });
 		this.boxes.set(row.id, box);
-		if (row.warning !== null) item.createDiv({ cls: 'nc-confirm-warning', text: row.warning, attr: { role: 'alert' } });
-		for (const detail of row.details) item.createDiv({ cls: 'nc-confirm-detail', text: detail });
 	}
 
 	private checked(): Set<string> {
