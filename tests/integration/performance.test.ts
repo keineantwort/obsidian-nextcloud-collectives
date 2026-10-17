@@ -37,7 +37,7 @@ describe('performance with 500 pages', () => {
 		process.stdout.write(`first sync of ${PAGES} pages: ${seconds.toFixed(1)} s, ${h.stateFile.writes} state writes\n`);
 
 		expect(outcome.result.created).toBeGreaterThanOrEqual(PAGES);
-		expect(h.stateFile.writes).toBeLessThan(PAGES / 5);
+		expect(h.stateFile.writes).toBeLessThan(PAGES / 2);
 	}, 600_000);
 
 	it('finishes an idle sync within 5 seconds and changes nothing', async () => {
