@@ -1,9 +1,8 @@
 // Conflict list and resolution (PLAN §7.6, spec §7). No 'obsidian' import: trash and file access come through ResolutionVault.
 import type { CollectiveId, PageId } from '../api/types';
-import { readLocalFields, replaceNcMeta, toRemote } from '../mapping/frontmatter';
-import { resolveTagNames } from '../mapping/tags';
+import { replaceNcMeta, toRemote } from '../mapping/frontmatter';
 import type { TagsProperty } from '../mapping/tags';
-import { metaHash, sha256Hex } from '../util/hash';
+import { sha256Hex } from '../util/hash';
 import type { Logger } from '../util/logger';
 import { indexFiles, locatePage } from './locate';
 import type { Locatable } from './locate';
@@ -80,10 +79,10 @@ export function countConflicts(state: SyncState): number {
 
 /**
  * Pure state transition for a resolved conflict. `localHash` = sha256Hex(toRemote(current local text)).
- * `localMetaHash` = metaHash of the emoji and tags of the current local text (if it could be read): "take remote" makes it the
- * base, so the next run takes the server's emoji and tags like it takes the server's text.
+ * "Take remote" also forgets the base of the metadata (metaHash ''): the next run takes the server's emoji and tags like it
+ * takes the server's text.
  */
-export function resolveConflict(prev: PageState, choice: ConflictChoice, localHash: string, localMetaHash?: string): PageState {
+export function resolveConflict(prev: PageState, choice: ConflictChoice, localHash: string): PageState {
 	if (choice === 'keepLocal') {
 		// The base stays: it is the hash of the remote text the conflict was recorded against (see state.ts).
 		return { ...prev, status: 'synced', conflictPath: null, localMtime: UNCHECKED_LOCAL_MTIME };
@@ -94,16 +93,8 @@ export function resolveConflict(prev: PageState, choice: ConflictChoice, localHa
 		conflictPath: null,
 		baseHash: localHash,
 		remoteMtime: UNCONFIRMED_REMOTE_MTIME,
-		...(localMetaHash === undefined || prev.metaHash === '' ? {} : { metaHash: localMetaHash }),
+		metaHash: '',
 	};
-}
-
-/** metaHash of the note's emoji and tags, tags in the spelling of the collective's tags; undefined without frontmatter. */
-async function localMetaHash(state: SyncState, page: PageState, text: string, property: TagsProperty): Promise<string | undefined> {
-	const fields = readLocalFields(text, property);
-	if (fields === null) return undefined;
-	const known = (state.tags[String(page.collectiveId)] ?? []).map((tag) => tag.name);
-	return metaHash(fields.emoji, resolveTagNames(fields.tags, known, property));
 }
 
 /** Options of applyResolution; both are optional. */
@@ -115,7 +106,7 @@ export interface ResolutionOptions {
 	 * conflictPath, the choice is refused: the server version of the current copy was never shown.
 	 */
 	expectedConflictPath?: string | null;
-	/** Setting tagsProperty (default nc_tags): which key holds the tags of the note. */
+	/** Setting tagsProperty (default nc_tags): with `tags` the property is not part of the page text. */
 	tagsProperty?: TagsProperty;
 }
 
@@ -123,9 +114,9 @@ export interface ResolutionOptions {
  * Legacy fallback for states written before M4, where a conflict had baseHash ''. keepLocal takes the base from the
  * conflict copy, which must be read before it is trashed: the copy holds the remote text the conflict was recorded against.
  */
-async function withLegacyBase(vault: ResolutionVault, page: PageState): Promise<PageState> {
+async function withLegacyBase(vault: ResolutionVault, page: PageState, tagsProperty: TagsProperty): Promise<PageState> {
 	if (page.baseHash !== '' || page.conflictPath === null || !vault.exists(page.conflictPath)) return page;
-	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath))) };
+	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath), tagsProperty)) };
 }
 
 /**
@@ -159,11 +150,11 @@ export async function applyResolution(
 		page = { ...prev, metaHash: '', localMtime };
 	}
 
-	const localText = await deps.vault.read(currentPath);
-	const localHash = await sha256Hex(toRemote(localText));
+	const tagsProperty = options.tagsProperty ?? 'nc_tags';
+	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath), tagsProperty));
 	const trashPath = page.conflictPath;
-	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page) : page;
-	deps.state.pages[key] = resolveConflict(withBase, choice, localHash, await localMetaHash(deps.state, page, localText, options.tagsProperty ?? 'nc_tags'));
+	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page, tagsProperty) : page;
+	deps.state.pages[key] = resolveConflict(withBase, choice, localHash);
 
 	if (trashPath !== null && deps.vault.exists(trashPath)) {
 		try {

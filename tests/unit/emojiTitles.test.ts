@@ -3,10 +3,18 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '../../src/i18n';
 import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from '../../src/ui/emojiTitles';
-import { applyPropertyLabels, cssString } from '../../src/ui/propertyLabels';
+import { clearProperties, decorateProperties, propertyLabels } from '../../src/ui/propertyLabels';
 
 function dom(html: string): ParentNode {
-	return new JSDOM(`<body>${html}</body>`).window.document.body;
+	const { window } = new JSDOM(`<body>${html}</body>`);
+	// Obsidian adds createSpan to every element; jsdom does not have it.
+	(window.Element.prototype as unknown as { createSpan: (o: { cls: string }) => Element }).createSpan = function (this: Element, o) {
+		const span = this.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'span');
+		span.className = o.cls;
+		this.appendChild(span);
+		return span;
+	};
+	return window.document.body;
 }
 
 const EXPLORER = `
@@ -57,22 +65,38 @@ describe('decorateView and clearEmoji', () => {
 	});
 });
 
-describe('applyPropertyLabels', () => {
-	it('sets a quoted label per property in the language and removes them again', () => {
-		const set: Record<string, string> = {};
-		const removed: string[] = [];
-		const body = { setCssProps: (props: Record<string, string>) => Object.assign(set, props), style: { removeProperty: (name: string) => { removed.push(name); return ''; } } };
+describe('property labels', () => {
+	const ROWS = `
+<div class="metadata-property" data-property-key="nc_page_id"><div class="metadata-property-key"><span class="icon"></span><input class="metadata-property-key-input" value="nc_page_id"></div><div class="metadata-property-value">12</div></div>
+<div class="metadata-property" data-property-key="tags"><div class="metadata-property-key"><input class="metadata-property-key-input" value="tags"></div></div>`;
 
-		const undo = applyPropertyLabels(body, createTranslator('de'));
-
-		expect(set['--nc-label-nc-page-id']).toBe('"Seiten-ID"');
-		expect(set['--nc-label-nc-emoji']).toBe('"Emoji"');
-		expect(Object.keys(set)).toHaveLength(5);
-		undo();
-		expect(removed.sort()).toEqual(Object.keys(set).sort());
+	it('has a label per plugin property in the language of the UI', () => {
+		expect(propertyLabels(createTranslator('de'))).toMatchObject({ nc_page_id: 'Seiten-ID', nc_tags: 'Collectives-Tags', nc_emoji: 'Emoji' });
+		expect(propertyLabels(createTranslator('en')).nc_page_id).toBe('Page ID');
 	});
 
-	it('quotes and escapes the text for a CSS string', () => {
-		expect(cssString('a"b\\c')).toBe('"a\\"b\\\\c"');
+	it('shows the label of a plugin property in place of its key, once, and leaves other properties alone', () => {
+		const root = dom(ROWS);
+		const labels = { nc_page_id: 'Seiten-ID' };
+
+		decorateProperties(root, labels);
+		decorateProperties(root, labels);
+
+		expect(root.querySelectorAll('.nc-property-label')).toHaveLength(1);
+		expect(root.querySelector('.nc-property-label')?.textContent).toBe('Seiten-ID');
+		const rows = Array.from(root.querySelectorAll('.metadata-property'));
+		expect(rows.map((row) => row.classList.contains('nc-property-labelled'))).toEqual([true, false]);
+		expect(root.querySelector('[data-property-key="nc_page_id"] input')?.getAttribute('value')).toBe('nc_page_id');
+	});
+
+	it('updates the label text and clearProperties shows the keys again', () => {
+		const root = dom(ROWS);
+		decorateProperties(root, { nc_page_id: 'Seiten-ID' });
+		decorateProperties(root, { nc_page_id: 'Page ID' });
+		expect(root.querySelector('.nc-property-label')?.textContent).toBe('Page ID');
+
+		clearProperties(root);
+
+		expect(root.querySelectorAll('.nc-property-label, .nc-property-labelled')).toHaveLength(0);
 	});
 });

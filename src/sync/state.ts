@@ -1,6 +1,7 @@
 // Sync state: types, strict parsing and stable serialization. Pure; persistence lives in stateStore.ts.
 import { asAttachmentId, asCollectiveId, asPageId, asTagId } from '../api/types';
 import type { AttachmentId, CollectiveId, PageId, TagId } from '../api/types';
+import type { TagsProperty } from '../mapping/tags';
 import { isRecord } from '../util/isRecord';
 
 export const STATE_SCHEMA_VERSION = 1;
@@ -66,6 +67,11 @@ export interface SyncState {
 	pages: Record<string, PageState>;
 	/** Tag cache per collective (key String(collectiveId)). */
 	tags: Record<string, { id: TagId; name: string; color: string }[]>;
+	/**
+	 * The setting tagsProperty of the last run (absent: nc_tags). If it differs from the setting now, the metaHash of all
+	 * pages is forgotten, so the next run writes the server's tags into the other property instead of reading a missing one as 'no tags'.
+	 */
+	tagsProperty?: TagsProperty;
 }
 
 const STATE_KEYS = ['schemaVersion', 'serverUrl', 'user', 'collectives', 'pages', 'tags'];
@@ -83,14 +89,18 @@ export function emptyState(serverUrl: string, user: string): SyncState {
 
 /** Strict validation of persisted JSON; anything unexpected (incl. other schemaVersion) → null. */
 export function parseSyncState(raw: unknown): SyncState | null {
-	if (!isRecord(raw) || !hasExactKeys(raw, STATE_KEYS)) return null;
-	const { schemaVersion, serverUrl, user, collectives, pages, tags } = raw;
+	if (!isRecord(raw) || !hasExactKeys(raw, 'tagsProperty' in raw ? [...STATE_KEYS, 'tagsProperty'] : STATE_KEYS)) return null;
+	const { schemaVersion, serverUrl, user, collectives, pages, tags, tagsProperty } = raw;
+	if ('tagsProperty' in raw && tagsProperty !== 'nc_tags' && tagsProperty !== 'tags') return null;
 	if (schemaVersion !== STATE_SCHEMA_VERSION || !isText(serverUrl) || !isText(user)) return null;
 	const parsedCollectives = parseRecord(collectives, parseCollectiveState, (key, value) => String(value.collectiveId) === key);
 	const parsedPages = parseRecord(pages, parsePageState, (key, value) => String(value.pageId) === key);
 	const parsedTags = parseRecord(tags, parseTagList, () => true);
 	if (parsedCollectives === null || parsedPages === null || parsedTags === null) return null;
-	return { schemaVersion: STATE_SCHEMA_VERSION, serverUrl, user, collectives: parsedCollectives, pages: parsedPages, tags: parsedTags };
+	return {
+		schemaVersion: STATE_SCHEMA_VERSION, serverUrl, user, collectives: parsedCollectives, pages: parsedPages, tags: parsedTags,
+		...(tagsProperty === 'tags' || tagsProperty === 'nc_tags' ? { tagsProperty } : {}),
+	};
 }
 
 /** Stable JSON (keys of collectives/pages sorted numerically) so that unchanged state serializes identically. */
@@ -102,6 +112,7 @@ export function serializeSyncState(state: SyncState): string {
 		collectives: state.collectives,
 		pages: state.pages,
 		tags: state.tags,
+		...(state.tagsProperty === undefined ? {} : { tagsProperty: state.tagsProperty }),
 	};
 	return JSON.stringify(sortKeysDeep(ordered), null, 2);
 }

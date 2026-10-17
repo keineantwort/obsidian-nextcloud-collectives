@@ -344,19 +344,21 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 			expect(readLocalFields('Nur #Text')).toBeNull();
 		});
 
-		it('falls back to nc_tags while the note has no tags property', () => {
-			expect(readLocalFields('---\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual(['x']);
+		it('reads a missing tags property as no tags, and ignores nc_tags in tags mode', () => {
+			expect(readLocalFields('---\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual([]);
+			expect(readLocalFields('---\ntags: [y]\n---\n')?.tags).toEqual([]);
 		});
 
-		it('falls back to nc_tags for a flow list over several lines it cannot read', () => {
-			expect(readLocalFields('---\ntags: [a,\n  b]\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual(['x']);
+		it('reports a flow list over several lines it cannot read as null: no change is assumed', () => {
+			expect(readLocalFields('---\ntags: [a,\n  b]\n---\n', 'tags')?.tags).toBeNull();
 		});
 	});
 
 	describe('toLocal with tagsProperty = tags', () => {
-		it('writes nc_tags and the tags property in Obsidian form, and replaces the tags the remote text carried', () => {
+		it('writes only the tags property, in Obsidian form, and replaces the tags the remote text carried', () => {
 			const local = toLocal('---\ntags: [alt]\nautor: Ich\n---\n\nText', meta({ tags: ['Mein Tag'], tagsProperty: 'tags' }));
-			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["Mein Tag"]\ntags: ["Mein-Tag"]\nautor: Ich\n---\n\nText');
+			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\ntags: ["Mein-Tag"]\nautor: Ich\n---\n\nText');
+			expect(replaceNcMeta('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["Alt"]\n---\nText', meta({ tags: ['Mein Tag'], tagsProperty: 'tags' }))).not.toContain('nc_tags');
 		});
 
 		it('removes the tags property when the page has no tags', () => {
@@ -369,9 +371,11 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["A"]\ntags: [privat]\n---\nText');
 		});
 
-		it('keeps the tags property in the remote format: it is page content', () => {
+		it('keeps the tags property in the remote format with nc_tags (it is user text there), drops it with tags', () => {
 			const local = toLocal('Text', meta({ tags: ['A'], tagsProperty: 'tags' }));
 			expect(toRemote(local)).toBe('---\ntags: ["A"]\n---\n\nText');
+			expect(toRemote(local, 'tags')).toBe('Text');
+			expect(canonicalRemote('---\ntags:\n  - A\nautor: Ich\n---\n\nText', 'tags')).toBe('---\nautor: Ich\n---\n\nText');
 		});
 	});
 

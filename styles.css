@@ -110,16 +110,7 @@
 .inline-title[data-nc-emoji]::before,
 .view-header-title[data-nc-emoji]::before { content: attr(data-nc-emoji) ' '; }
 
-/* Readable names for the plugin's properties (labels come from src/ui/propertyLabels.ts). The key input is hidden, so the
-   key of these technical properties cannot be renamed by accident; the value stays editable. */
-.metadata-property[data-property-key='nc_page_id'] .metadata-property-key-input,
-.metadata-property[data-property-key='nc_collective_id'] .metadata-property-key-input,
-.metadata-property[data-property-key='nc_emoji'] .metadata-property-key-input,
-.metadata-property[data-property-key='nc_tags'] .metadata-property-key-input,
-.metadata-property[data-property-key='nc_title'] .metadata-property-key-input { display: none; }
-.metadata-property[data-property-key='nc_page_id'] .metadata-property-key::after { content: var(--nc-label-nc-page-id); }
-.metadata-property[data-property-key='nc_collective_id'] .metadata-property-key::after { content: var(--nc-label-nc-collective-id); }
-.metadata-property[data-property-key='nc_emoji'] .metadata-property-key::after { content: var(--nc-label-nc-emoji); }
-.metadata-property[data-property-key='nc_tags'] .metadata-property-key::after { content: var(--nc-label-nc-tags); }
-.metadata-property[data-property-key='nc_title'] .metadata-property-key::after { content: var(--nc-label-nc-title); }
-.metadata-property[data-property-key^='nc_'] .metadata-property-key::after { color: var(--text-muted); font-size: var(--font-ui-small); }
+/* Readable names for the plugin's properties (src/ui/propertyLabels.ts): the key input is hidden, a label stands in its place.
+   The value stays editable. */
+.nc-property-labelled .metadata-property-key-input { display: none; }
+.nc-property-label { flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: var(--font-ui-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

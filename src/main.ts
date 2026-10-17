@@ -11,7 +11,7 @@ import { StateStore, type StateFile } from './sync/stateStore';
 import { SyncController } from './syncController';
 import { StatusBar } from './ui/statusBar';
 import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from './ui/emojiTitles';
-import { applyPropertyLabels } from './ui/propertyLabels';
+import { clearProperties, decorateProperties, propertyLabels } from './ui/propertyLabels';
 import { Logger } from './util/logger';
 import { isRecord } from './util/isRecord';
 
@@ -65,7 +65,6 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			this.refreshStatusBar();
 		}
 		// Vault events during the initial vault load are not user changes, so they are only tracked once the layout is ready.
-		this.register(applyPropertyLabels(activeDocument.body, this.t));
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEmojiTitles();
 			this.registerDirtyTracking(sync);
@@ -142,9 +141,14 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		let observers: MutationObserver[] = [];
 		const watchExplorers = (): void => {
 			for (const observer of observers) observer.disconnect();
-			observers = this.app.workspace.getLeavesOfType('file-explorer').map((leaf) => {
+			// File explorers (renamed or scrolled items) and note views (the properties are drawn after the note opens).
+			const containers = [
+				...this.app.workspace.getLeavesOfType('file-explorer'),
+				...this.app.workspace.getLeavesOfType('markdown'),
+			].map((leaf) => leaf.view.containerEl);
+			observers = containers.map((container) => {
 				const observer = new MutationObserver(schedule);
-				observer.observe(leaf.view.containerEl, { childList: true, subtree: true });
+				observer.observe(container, { childList: true, subtree: true });
 				return observer;
 			});
 			schedule();
@@ -159,11 +163,12 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			for (const observer of observers) observer.disconnect();
 			if (timer !== null) window.clearTimeout(timer);
 			clearEmoji(activeDocument.body);
+			clearProperties(activeDocument.body);
 		});
 		watchExplorers();
 	}
 
-	/** Sets or removes the emoji marks on the file explorers and note views (setting showEmojiInTitles). */
+	/** Sets or removes the emoji marks (setting showEmojiInTitles) and shows the readable property names in the note views. */
 	refreshEmojiTitles(): void {
 		const { workspace, vault, metadataCache } = this.app;
 		const show = this.settings.showEmojiInTitles;
@@ -173,8 +178,11 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			return emojiFromFrontmatter(file === null ? undefined : metadataCache.getFileCache(file)?.frontmatter?.['nc_emoji']);
 		};
 		for (const leaf of workspace.getLeavesOfType('file-explorer')) decorateExplorer(leaf.view.containerEl, emojiOf);
+		const labels = propertyLabels(this.t);
 		workspace.iterateAllLeaves((leaf) => {
-			if (leaf.view instanceof MarkdownView) decorateView(leaf.view.containerEl, emojiOf(leaf.view.file?.path ?? ''));
+			if (!(leaf.view instanceof MarkdownView)) return;
+			decorateView(leaf.view.containerEl, emojiOf(leaf.view.file?.path ?? ''));
+			decorateProperties(leaf.view.containerEl, labels);
 		});
 	}
 

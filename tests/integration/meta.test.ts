@@ -170,7 +170,7 @@ describe('tagsProperty = tags', () => {
 		ctx = await setup('ONC M6 tags', 'tags');
 	}, 60_000);
 
-	it('sends Obsidian tags to the server as tags of the collective, and the tags property stays page content', async () => {
+	it('sends Obsidian tags to the server as tags of the collective, and the tags property stays out of the page text', async () => {
 		const { h, path } = ctx;
 		await waitPastSecondBoundary();
 		const text = await h.vault.read(path);
@@ -182,7 +182,10 @@ describe('tagsProperty = tags', () => {
 		expect(await tagNames(ctx, await current(ctx))).toEqual(['mein-tag', 'zweiter']);
 		const local = await h.vault.read(path);
 		expect(readLocalFields(local, 'tags')?.tags).toEqual(['mein-tag', 'zweiter']);
-		expect(toRemote(local)).toContain('tags: ["mein-tag","zweiter"]');
+		// With the tags property the tags are Collectives tags, not page text.
+		expect(toRemote(local, 'tags')).toBe('Inhalt');
+		expect(await remoteTextOf(ctx)).toBe('Inhalt');
+		expect(local).not.toContain('nc_tags');
 	}, 60_000);
 
 	it('maps a tag with a space on the server to a dashed Obsidian tag and back without creating a duplicate', async () => {
@@ -213,4 +216,31 @@ describe('tagsProperty = tags', () => {
 		expect(await tagNames(ctx, await current(ctx))).toContain('Inline-Tag');
 		expect(readLocalFields(await h.vault.read(path), 'tags')?.tags).toContain('Inline-Tag');
 	}, 90_000);
+});
+
+describe('switching tagsProperty', () => {
+	it('writes the server tags into the other property and removes no tag, both ways', async () => {
+		const ctx = await setup('ONC M6 switch', 'nc_tags');
+		const { h, collective, page, path } = ctx;
+		const tag = await h.clients.collectives.createTag(collective.id, 'Wechsel', '0082c9');
+		await h.clients.collectives.addPageTag(collective.id, page.id, tag.id);
+		await h.sync();
+		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(['Wechsel']);
+
+		await waitPastSecondBoundary();
+		h.settings = { ...h.settings, tagsProperty: 'tags' };
+		const toTags = await h.sync();
+		expect(toTags.result.failed).toBe(0);
+		expect(await tagNames(ctx, await current(ctx))).toEqual(['Wechsel']);
+		const asTags = await h.vault.read(path);
+		expect(readLocalFields(asTags, 'tags')?.tags).toEqual(['Wechsel']);
+		expect(asTags).not.toContain('nc_tags');
+
+		await waitPastSecondBoundary();
+		h.settings = { ...h.settings, tagsProperty: 'nc_tags' };
+		const back = await h.sync();
+		expect(back.result.failed).toBe(0);
+		expect(await tagNames(ctx, await current(ctx))).toEqual(['Wechsel']);
+		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(['Wechsel']);
+	}, 120_000);
 });

@@ -103,7 +103,7 @@ async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: Col
 	const now = deps.now().getTime();
 	// A new note may carry tags (or an emoji) already: they become the page's, instead of being dropped by the nc fields.
 	const fields = readLocalFields(await deps.vault.read(path), deps.tagsProperty ?? 'nc_tags');
-	if (fields !== null && (fields.emoji !== null || fields.tags.length > 0)) {
+	if (fields !== null && (fields.emoji !== null || (fields.tags?.length ?? 0) > 0)) {
 		const pushed = await pushLocalMeta({ page, meta, metaHash: hash }, localMetaFromFields(fields, collectiveId, deps), deps, result);
 		({ meta, hash } = pushed);
 	}
@@ -132,7 +132,7 @@ async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: Col
 		lastSyncedAt: now,
 	});
 	await deps.persist(deps.state);
-	const local = await readLocal(deps.vault, path);
+	const local = await readLocal(deps.vault, path, deps.tagsProperty ?? 'nc_tags');
 	if (local.hash === remote.hash) {
 		deps.state.pages[String(page.id)] = { ...requireState(deps, page.id), localMtime: local.mtimeBefore };
 		return;
@@ -372,7 +372,7 @@ async function removeLocal(op: Op<'removeLocal'>, deps: ExecutorDeps, result: Sy
 		forgetPages(deps, [op.pageId]);
 		return true;
 	}
-	const hash = await sha256Hex(toRemote(await deps.vault.read(op.path)));
+	const hash = await sha256Hex(toRemote(await deps.vault.read(op.path), deps.tagsProperty ?? 'nc_tags'));
 	if (s.status === 'synced' && hash === s.baseHash) {
 		if (op.mode === 'obsidianTrash') await deps.vault.trash(op.path);
 		else await deps.vault.process(op.path, stripNcMeta);

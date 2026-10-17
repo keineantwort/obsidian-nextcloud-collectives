@@ -403,7 +403,7 @@ describe('tagsProperty = tags', () => {
 		expect(h.api.entries.get(s.page.id)?.page.tags).toEqual([tagId, neu?.id]);
 		const text = await h.vault.read(PATH);
 		expect(text).toContain('tags: ["Mein-Tag","neu"]');
-		expect(text).toContain('nc_tags: ["Mein Tag","neu"]');
+		expect(text).not.toContain('nc_tags');
 	});
 
 	it('sends #tags of the text as tags, keeps them in the property, and does not remove a tag when the #tag leaves the text', async () => {
@@ -425,11 +425,11 @@ describe('tagsProperty = tags', () => {
 		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
 	});
 
-	it('does not touch the tags of the server for a note that has only the old nc_tags', async () => {
+	it('assumes no tag change for a tags property in a form it cannot read', async () => {
 		const h = harness('tags');
 		const tagId = serverTag(h, 1, 'A');
 		const s = await synced(h, { tagNames: ['A'], tagIds: [tagId], tagsProperty: 'tags' });
-		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\nnc_tags: ["A"]\n---\n${TEXT}`);
+		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\ntags: [a,\n  b]\n---\n${TEXT}`);
 
 		await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: s.meta, metaHash: s.hash, metaChanged: false }]), h.deps);
 
@@ -454,7 +454,8 @@ describe('a new local note with tags becomes a page with these tags', () => {
 		const text = await h.vault.read('Coll/Neu.md');
 		expect(readLocalFields(text, 'tags')?.tags).toEqual(['Vorhanden', 'frisch']);
 		expect(h.state.pages[String(page.id)]?.metaHash).toBe(await metaHash(null, ['Vorhanden', 'frisch']));
-		expect(h.dav.content(page)).toBe('---\ntags: ["Vorhanden","frisch"]\n---\n\nText');
+		// With the tags property the tags are Collectives tags, not page text.
+		expect(h.dav.content(page)).toBe('Text');
 	});
 
 	it('ignores a plain tags property with nc_tags', async () => {

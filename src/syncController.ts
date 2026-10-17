@@ -196,10 +196,11 @@ export class SyncController {
 	 */
 	private async loadConflictTexts(entry: ConflictEntry): Promise<{ local: string | null; remote: string | null }> {
 		const vault = createObsidianVault(this.host.app);
-		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath)) : null;
+		const tagsProperty = this.host.settings().tagsProperty;
+		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath), tagsProperty) : null;
 		const copy = entry.conflictPath;
 		if (copy === null || !vault.exists(copy)) return { local, remote: null };
-		return { local, remote: toRemote(await vault.read(copy)) };
+		return { local, remote: toRemote(await vault.read(copy), tagsProperty) };
 	}
 
 	/**

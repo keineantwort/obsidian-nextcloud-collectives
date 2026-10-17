@@ -90,6 +90,14 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 		state.user = userId;
 	}
 
+	// Another property for the tags than in the last run: forget the metadata base of all pages, so the server's tags are
+	// written into the new property (a property the notes do not have yet must not read as 'no tags').
+	const tagsProperty = deps.settings.tagsProperty ?? 'nc_tags';
+	if (hasPages && (state.tagsProperty ?? 'nc_tags') !== tagsProperty) {
+		for (const page of Object.values(state.pages)) page.metaHash = '';
+	}
+	if (tagsProperty !== 'nc_tags' || state.tagsProperty !== undefined) state.tagsProperty = tagsProperty;
+
 	const total = emptyResult();
 	const skips: Skip[] = [];
 	const decisions = new Map<string, Decision>();
@@ -105,7 +113,6 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const tagsProperty = deps.settings.tagsProperty ?? 'nc_tags';
 		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log, tagsProperty);
 		const input: PlannerInput = {
 			state,
@@ -114,7 +121,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			remoteMeta,
 			paths,
 			dirty: deps.dirty(),
-			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log),
+			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log, tagsProperty),
 			remoteTrash: await findRemoteTrash(state, remote, local, clients.collectives),
 			decisions,
 			behaviour: {
@@ -182,6 +189,7 @@ async function findRemoteChanged(
 	local: LocalSnapshot,
 	webdav: Pick<WebdavClient, 'get'>,
 	log: Logger,
+	tagsProperty: TagsProperty,
 ): Promise<Set<PageId>> {
 	const changed = new Set<PageId>();
 	const index = indexFiles(local.files);
@@ -193,7 +201,7 @@ async function findRemoteChanged(
 		if (known.remoteMtime !== UNCONFIRMED_REMOTE_MTIME && page.timestamp === known.remoteMtime && page.size === known.remoteSize) continue;
 		try {
 			const file = await webdav.get(remotePagePath(page));
-			if ((await sha256Hex(canonicalRemote(file.content))) !== known.baseHash) changed.add(known.pageId);
+			if ((await sha256Hex(canonicalRemote(file.content, tagsProperty))) !== known.baseHash) changed.add(known.pageId);
 		} catch (err) {
 			if (isRunFatal(err)) throw err;
 			log.warn('Deleted page could not be compared with the server', { pageId: known.pageId, error: err instanceof Error ? err.name : 'unknown' });
