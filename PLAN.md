@@ -505,6 +505,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 ### M7 – Links
 - `links.ts` laut 9.2/9.3, Integration in Pull/Push, Hash auf Remote-Format.
+- Umgesetzt laut ADR 0020; Abweichung von §9.2: Anker werden unverändert übernommen (keine Slug↔Überschrift-Abbildung). Anhänge/Bilder folgen in M8.
 - Akzeptanz: Rundlauf-Tests grün; in Collectives gesetzte Links funktionieren in Obsidian und umgekehrt.
 
 ### M8 – Anhänge
@@ -562,8 +563,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M3 | umgesetzt (ONC-4), gemergt (PR #15) |
 | M4 | umgesetzt (ONC-5), gemergt (PR #16) |
 | M5 | umgesetzt (ONC-6), gemergt |
-| M6 | umgesetzt (ONC-7), PR offen |
-| M7 | offen |
+| M6 | umgesetzt (ONC-7), gemergt |
+| M7 | umgesetzt (ONC-8), PR offen |
 | M8 | offen |
 | M9 | offen |
 | M10 | offen |

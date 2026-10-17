@@ -5,6 +5,7 @@ import type { CollectivesApi } from '../api/collectivesApi';
 import type { RequestFn } from '../api/http';
 import type { CollectiveId, PageId, PageInfo, Tag, TagId } from '../api/types';
 import { canonicalRemote } from '../mapping/frontmatter';
+import type { LinkIndex } from '../mapping/links';
 import type { NcMeta } from '../mapping/frontmatter';
 import { planLocalPaths, remotePagePath } from '../mapping/paths';
 import type { CollectiveTree, PathPlan } from '../mapping/paths';
@@ -19,6 +20,7 @@ import { executeSync } from './executor';
 import type { VaultWriter } from './executor';
 import { scanLocal } from './localScanner';
 import type { LocalSnapshot, VaultReader } from './localScanner';
+import { buildLinkIndex } from './linkIndex';
 import { indexFiles, locatePage } from './locate';
 import { planSync } from './planner';
 import type { PlannerBehaviour, PlannerInput, SyncPlan } from './planner';
@@ -54,6 +56,8 @@ export interface SyncRunDeps {
 	 * 'defer' (ask again in the next run).
 	 */
 	confirm: (proposals: Proposal[]) => Promise<ReadonlyMap<string, Decision>>;
+	/** Called with the page index of each pass, so the conflict dialog can hash and show texts like the sync does. */
+	onLinks?: (links: LinkIndex) => void;
 	t: Translator;
 	log: Logger;
 	now?: () => Date;
@@ -102,6 +106,8 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
+		const links = buildLinkIndex(remote, local, paths, serverUrl);
+		deps.onLinks?.(links);
 		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 		const input: PlannerInput = {
 			state,
@@ -110,7 +116,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			remoteMeta,
 			paths,
 			dirty: deps.dirty(),
-			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log),
+			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log, links),
 			remoteTrash: await findRemoteTrash(state, remote, local, clients.collectives),
 			decisions,
 			behaviour: {
@@ -130,6 +136,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			webdav: clients.webdav,
 			api: clients.collectives,
 			state,
+			links,
 			persist: async (current) => {
 				await deps.stateStore.save(current);
 			},
@@ -177,6 +184,7 @@ async function findRemoteChanged(
 	local: LocalSnapshot,
 	webdav: Pick<WebdavClient, 'get'>,
 	log: Logger,
+	links: LinkIndex,
 ): Promise<Set<PageId>> {
 	const changed = new Set<PageId>();
 	const index = indexFiles(local.files);
@@ -188,7 +196,7 @@ async function findRemoteChanged(
 		if (known.remoteMtime !== UNCONFIRMED_REMOTE_MTIME && page.timestamp === known.remoteMtime && page.size === known.remoteSize) continue;
 		try {
 			const file = await webdav.get(remotePagePath(page));
-			if ((await sha256Hex(canonicalRemote(file.content))) !== known.baseHash) changed.add(known.pageId);
+			if ((await sha256Hex(canonicalRemote(file.content, { index: links, sourceId: known.pageId }))) !== known.baseHash) changed.add(known.pageId);
 		} catch (err) {
 			if (isRunFatal(err)) throw err;
 			log.warn('Deleted page could not be compared with the server', { pageId: known.pageId, error: err instanceof Error ? err.name : 'unknown' });

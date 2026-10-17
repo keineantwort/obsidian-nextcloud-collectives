@@ -23,3 +23,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0017](0017-push-etag-bestaetigung-und-konfliktaufloesung.md) | Push: bestätigte ETags, Entscheidung als reine Funktion, Konfliktauflösung über den State | akzeptiert |
 | [0018](0018-struktur-mehrere-durchlaeufe-rueckfragen-und-platzierung.md) | Struktur: mehrere Durchläufe, Rückfragen als Vorschläge, Platzierung neuer Dateien | akzeptiert |
 | [0019](0019-tags-emoji-push-und-tags-eigenschaft.md) | Tags und Emoji: Push über den metaHash, Eigenschaft `tags` bleibt Seiteninhalt | akzeptiert |
+| [0020](0020-links-index-anker-und-hash.md) | Links: Seitenindex, Anker unverändert, Hash im Remote-Format | akzeptiert |

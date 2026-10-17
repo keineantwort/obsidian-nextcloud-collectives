@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { asAttachmentId, asCollectiveId, asPageId } from '../../src/api/types';
 import type { PageId } from '../../src/api/types';
 import { readPageId, replaceNcMeta, toRemote } from '../../src/mapping/frontmatter';
+import { LinkIndex } from '../../src/mapping/links';
 import { pathKey } from '../../src/mapping/paths';
 import { applyResolution, countConflicts, listConflicts, resolveConflict, withCurrentPaths } from '../../src/sync/conflicts';
 import type { ConflictEntry, ResolutionVault } from '../../src/sync/conflicts';
@@ -123,6 +124,25 @@ function conflictEntry(id: number, over: Partial<ConflictEntry> = {}): ConflictE
 		...over,
 	};
 }
+
+describe('applyResolution: links', () => {
+	it('takeRemote hashes the note in the remote format when it has the page index', async () => {
+		const vault = new RecordingVault();
+		const text = 'Siehe [[Coll/Ziel]]\n';
+		vault.seed(NOTE_PATH, text);
+		vault.seed(NOTE_CONFLICT, REMOTE_TEXT);
+		const index = new LinkIndex([
+			{ pageId: PAGE_ID, collectiveId: COLLECTIVE, collectiveSlug: 'coll', slug: 'notiz', landing: false, title: 'Notiz', remotePath: 'Notiz.md', localPath: NOTE_PATH },
+			{ pageId: asPageId(11), collectiveId: COLLECTIVE, collectiveSlug: 'coll', slug: 'ziel', landing: false, title: 'Ziel', remotePath: 'Ziel.md', localPath: 'Coll/Ziel.md' },
+		]);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: NOTE_PATH, conflictPath: NOTE_CONFLICT })), vault);
+
+		await applyResolution({ ...ctx.deps, links: index }, PAGE_ID, 'takeRemote');
+
+		const expected = await sha256Hex('Siehe [Ziel](Ziel.md?fileId=11)');
+		expect(ctx.state.pages['10']?.baseHash).toBe(expected);
+	});
+});
 
 describe('withCurrentPaths', () => {
 	it('gives a conflict the path of the only file that carries its nc_page_id', () => {
