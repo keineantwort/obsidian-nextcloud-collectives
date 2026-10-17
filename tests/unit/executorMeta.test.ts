@@ -4,7 +4,6 @@ import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';
 import { readLocalFields, readNcMeta, readPageId, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
-import type { TagsProperty } from '../../src/mapping/tags';
 import { applyResolution } from '../../src/sync/conflicts';
 import { executeSync } from '../../src/sync/executor';
 import type { ExecutorDeps } from '../../src/sync/executor';
@@ -35,7 +34,7 @@ interface H {
 	infos: string[];
 }
 
-function harness(tagsProperty?: TagsProperty): H {
+function harness(): H {
 	const vault = new MemoryVault();
 	const dav = new FakeDav();
 	const api = new FakeApi(dav);
@@ -72,7 +71,6 @@ function harness(tagsProperty?: TagsProperty): H {
 		sleep: async () => undefined,
 		log,
 		occupied: new Set<string>(),
-		...(tagsProperty === undefined ? {} : { tagsProperty }),
 	};
 	vault.seedFolder('Coll');
 	vault.seedFolder('Zwei');
@@ -103,9 +101,9 @@ interface Synced {
 }
 
 /** A page the state knows as synced: file, state and server agree on `emoji` and `tagNames`. */
-async function synced(h: H, over: { emoji?: string | null; tagNames?: string[]; tagIds?: number[]; tagsProperty?: TagsProperty } = {}): Promise<Synced> {
+async function synced(h: H, over: { emoji?: string | null; tagNames?: string[]; tagIds?: number[] } = {}): Promise<Synced> {
 	const page = h.api.addPage(1, { title: 'Notiz', parentId: LANDING, emoji: over.emoji ?? null, tags: (over.tagIds ?? []).map(asTagId) });
-	const meta = metaOf(page, { emoji: over.emoji ?? null, tags: over.tagNames ?? [], ...(over.tagsProperty === 'tags' ? { tagsProperty: 'tags' as const } : {}) });
+	const meta = metaOf(page, { emoji: over.emoji ?? null, tags: over.tagNames ?? [] });
 	const hash = await metaHash(meta.emoji, meta.tags);
 	h.vault.seed(PATH, toLocal(TEXT, meta));
 	h.dav.serve(page, TEXT, '"e1"');
@@ -431,11 +429,11 @@ describe('remote text pulled while the note has own metadata changes', () => {
 	});
 });
 
-describe('tagsProperty = tags', () => {
+describe('tags as the tags property', () => {
 	it('reads the Obsidian tags, maps dashes back to the server names and writes both properties', async () => {
-		const h = harness('tags');
+		const h = harness();
 		const tagId = serverTag(h, 1, 'Mein Tag');
-		const s = await synced(h, { tagsProperty: 'tags' });
+		const s = await synced(h);
 		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\ntags: [mein-tag, neu]\n---\n${TEXT}`);
 
 		await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: s.meta, metaHash: s.hash, metaChanged: false }]), h.deps);
@@ -449,8 +447,8 @@ describe('tagsProperty = tags', () => {
 	});
 
 	it('sends #tags of the text as tags, keeps them in the property, and does not remove a tag when the #tag leaves the text', async () => {
-		const h = harness('tags');
-		const s = await synced(h, { tagsProperty: 'tags' });
+		const h = harness();
+		const s = await synced(h);
 		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\n---\n${TEXT} #Inline\n`);
 
 		await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: s.meta, metaHash: s.hash, metaChanged: false }]), h.deps);
@@ -463,14 +461,14 @@ describe('tagsProperty = tags', () => {
 		const next = { ...s, page: h.api.entries.get(s.page.id)?.page as PageInfo, hash: await metaHash(null, ['Inline']) };
 		h.vault.userEdit(PATH, (await h.vault.read(PATH)).replace(' #Inline', ''));
 		h.api.calls.length = 0;
-		await executeSync(plan([{ kind: 'push', page: next.page, path: PATH, meta: { ...s.meta, tags: ['Inline'], tagsProperty: 'tags' }, metaHash: next.hash, metaChanged: false }]), h.deps);
+		await executeSync(plan([{ kind: 'push', page: next.page, path: PATH, meta: { ...s.meta, tags: ['Inline'] }, metaHash: next.hash, metaChanged: false }]), h.deps);
 		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
 	});
 
 	it('assumes no tag change for a tags property in a form it cannot read', async () => {
-		const h = harness('tags');
+		const h = harness();
 		const tagId = serverTag(h, 1, 'A');
-		const s = await synced(h, { tagNames: ['A'], tagIds: [tagId], tagsProperty: 'tags' });
+		const s = await synced(h, { tagNames: ['A'], tagIds: [tagId] });
 		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\ntags: [a,\n  b]\n---\n${TEXT}`);
 
 		await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: s.meta, metaHash: s.hash, metaChanged: false }]), h.deps);
@@ -483,7 +481,7 @@ describe('a new local note with tags becomes a page with these tags', () => {
 	const create: SyncOp = { kind: 'createRemote', path: 'Coll/Neu.md', title: 'Neu', collectiveId: COLL, parent: { kind: 'page', pageId: LANDING }, fileExists: true, order: 2 };
 
 	it('creates the tags of the note on the server (tags property) and keeps them in the file', async () => {
-		const h = harness('tags');
+		const h = harness();
 		serverTag(h, 1, 'Vorhanden');
 		h.vault.seed('Coll/Neu.md', '---\ntags: [vorhanden, frisch]\n---\n\nText\n');
 
@@ -498,16 +496,6 @@ describe('a new local note with tags becomes a page with these tags', () => {
 		expect(h.state.pages[String(page.id)]?.metaHash).toBe(await metaHash(null, ['Vorhanden', 'frisch']));
 		// With the tags property the tags are Collectives tags, not page text.
 		expect(h.dav.content(page)).toBe('Text');
-	});
-
-	it('ignores a plain tags property with nc_tags', async () => {
-		const h = harness();
-		h.vault.seed('Coll/Neu.md', '---\ntags: [privat]\n---\n\nText\n');
-
-		await executeSync(plan([create]), h.deps);
-
-		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
-		expect(await h.vault.read('Coll/Neu.md')).toContain('tags: [privat]');
 	});
 });
 

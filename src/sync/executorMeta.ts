@@ -4,7 +4,6 @@ import type { CollectiveId, PageInfo, Tag, TagId } from '../api/types';
 import { readLocalFields } from '../mapping/frontmatter';
 import type { LocalFields, NcMeta } from '../mapping/frontmatter';
 import { DEFAULT_TAG_COLOR, findTagByName, resolveTagNames } from '../mapping/tags';
-import type { TagsProperty } from '../mapping/tags';
 import { isRunFatal } from '../util/errors';
 import { metaHash } from '../util/hash';
 import type { ExecutorDeps, StructureApi } from './executorDeps';
@@ -35,10 +34,6 @@ export interface PushedMeta {
 
 type CachedTag = SyncState['tags'][string][number];
 
-function propertyOf(deps: ExecutorDeps): TagsProperty {
-	return deps.tagsProperty ?? 'nc_tags';
-}
-
 function requireApi(deps: ExecutorDeps): StructureApi {
 	if (deps.api === undefined) throw new Error('Metadata operations need the Collectives API');
 	return deps.api;
@@ -61,11 +56,10 @@ function storeTags(deps: ExecutorDeps, collectiveId: CollectiveId, tags: readonl
  * unchanged, nothing is sent for it.
  */
 async function localMetaOf(text: string, collectiveId: CollectiveId, deps: ExecutorDeps): Promise<(LocalMeta & { hash: string }) | null> {
-	const property = propertyOf(deps);
-	const fields = readLocalFields(text, property);
+	const fields = readLocalFields(text);
 	if (fields === null || fields.tags === null || fields.emojiInvalid) return null;
 	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
-	const tags = resolveTagNames(fields.tags, known, property);
+	const tags = resolveTagNames(fields.tags, known);
 	return { emoji: fields.emoji, tags, hash: await metaHash(fields.emoji, tags) };
 }
 
@@ -79,7 +73,7 @@ async function localMetaOf(text: string, collectiveId: CollectiveId, deps: Execu
 export async function decideMeta(op: MetaOp, state: PageState, text: string, deps: ExecutorDeps): Promise<{ action: ContentAction; local: LocalMeta | null; invalidEmoji: boolean }> {
 	if (state.metaHash === '') return { action: 'pull', local: null, invalidEmoji: false };
 	const local = await localMetaOf(text, op.meta.collectiveId, deps);
-	const invalidEmoji = local === null && readLocalFields(text, propertyOf(deps))?.emojiInvalid === true;
+	const invalidEmoji = local === null && readLocalFields(text)?.emojiInvalid === true;
 	if (invalidEmoji) deps.log.warn('Emoji not sent: the property holds text or more than one emoji', { pageId: op.page.id });
 	const action = decideContent({
 		baseHash: state.metaHash,
@@ -94,14 +88,13 @@ export async function decideMeta(op: MetaOp, state: PageState, text: string, dep
 /** Fields of a note that has no nc fields yet, as the tags the server knows (a new page: its tags are created). */
 export function localMetaFromFields(fields: LocalFields, collectiveId: CollectiveId, deps: ExecutorDeps): LocalMeta {
 	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
-	return { emoji: fields.emoji, tags: resolveTagNames(fields.tags ?? [], known, propertyOf(deps)) };
+	return { emoji: fields.emoji, tags: resolveTagNames(fields.tags ?? [], known) };
 }
 
 /** The tag for a name: from the cache, else created on the server. A duplicate error is settled by reading the tags again. */
 async function tagFor(deps: ExecutorDeps, collectiveId: CollectiveId, name: string): Promise<CachedTag> {
-	const property = propertyOf(deps);
 	const api = requireApi(deps);
-	const cached = findTagByName(tagCache(deps, collectiveId), name, property);
+	const cached = findTagByName(tagCache(deps, collectiveId), name);
 	if (cached !== undefined) return cached;
 	try {
 		const created = await api.createTag(collectiveId, name, DEFAULT_TAG_COLOR);
@@ -113,7 +106,7 @@ async function tagFor(deps: ExecutorDeps, collectiveId: CollectiveId, name: stri
 		if (isRunFatal(err)) throw err;
 		// Someone created the tag since the listing (or the server compares names another way than the cache): use theirs.
 		const listed = storeTags(deps, collectiveId, await api.listTags(collectiveId));
-		const found = findTagByName(listed, name, property);
+		const found = findTagByName(listed, name);
 		if (found === undefined) throw err;
 		return found;
 	}
@@ -149,8 +142,7 @@ export async function pushLocalMeta(op: MetaOp, local: LocalMeta, deps: Executor
  * Returns the metadata the page has now, or null if the note has no frontmatter to read.
  */
 export async function reassignTags(page: PageInfo, collectiveId: CollectiveId, text: string, deps: ExecutorDeps, result?: SyncResult): Promise<PushedMeta | null> {
-	const property = propertyOf(deps);
-	const fields = readLocalFields(text, property);
+	const fields = readLocalFields(text);
 	if (fields === null) return null;
 	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
 	const meta: NcMeta = {
@@ -159,8 +151,7 @@ export async function reassignTags(page: PageInfo, collectiveId: CollectiveId, t
 		title: page.title,
 		emoji: page.emoji,
 		tags: [],
-		...(property === 'tags' ? { tagsProperty: property } : {}),
 	};
-	const tags = resolveTagNames(fields.tags ?? [], known, property);
+	const tags = resolveTagNames(fields.tags ?? [], known);
 	return pushLocalMeta({ page, meta, metaHash: '' }, { emoji: page.emoji, tags }, deps, result);
 }

@@ -107,6 +107,7 @@
 
 /* Page emoji in front of note titles (display only, src/ui/emojiTitles.ts). */
 .nav-file-title-content[data-nc-emoji]::before,
+.nav-folder-title-content[data-nc-emoji]::before,
 .inline-title[data-nc-emoji]::before,
 .view-header-title[data-nc-emoji]::before { content: attr(data-nc-emoji) ' '; }
 
@@ -135,3 +136,7 @@
 .nc-rename-input.is-invalid { border-color: var(--text-error); }
 .nc-rename-message { min-height: 1.5em; margin-bottom: var(--size-4-2); color: var(--text-error); font-size: var(--font-ui-small); }
 .is-mobile .nc-rename-modal .modal-button-container button { min-height: 44px; }
+
+/* The note of a folder first in its folder (display only; the flag comes from src/ui/emojiTitles.ts). */
+.nav-folder-children:has(> .nav-file[data-nc-folder-note]) { display: flex; flex-direction: column; }
+.nav-folder-children > .nav-file[data-nc-folder-note] { order: -1; }

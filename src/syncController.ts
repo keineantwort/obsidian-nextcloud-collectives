@@ -196,11 +196,10 @@ export class SyncController {
 	 */
 	private async loadConflictTexts(entry: ConflictEntry): Promise<{ local: string | null; remote: string | null }> {
 		const vault = createObsidianVault(this.host.app);
-		const tagsProperty = this.host.settings().tagsProperty;
-		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath), tagsProperty) : null;
+		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath)) : null;
 		const copy = entry.conflictPath;
 		if (copy === null || !vault.exists(copy)) return { local, remote: null };
-		return { local, remote: toRemote(await vault.read(copy), tagsProperty) };
+		return { local, remote: toRemote(await vault.read(copy)) };
 	}
 
 	/**
@@ -221,7 +220,6 @@ export class SyncController {
 		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.host.log }, entry.pageId, choice, {
 			localPath: entry.localPath,
 			expectedConflictPath: entry.conflictPath,
-			tagsProperty: this.host.settings().tagsProperty,
 		});
 		if (!applied) return false;
 		await store.save(state);

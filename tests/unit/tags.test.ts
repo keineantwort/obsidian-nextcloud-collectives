@@ -14,35 +14,38 @@ describe('findTagByName', () => {
 	const tags = [{ name: 'Projekt' }, { name: 'projekt' }, { name: 'Mein Tag' }];
 
 	it('prefers the exact name over a name that differs in case', () => {
-		expect(findTagByName(tags, 'projekt', 'nc_tags')).toBe(tags[1]);
-		expect(findTagByName(tags, 'Projekt', 'nc_tags')).toBe(tags[0]);
+		expect(findTagByName(tags, 'projekt')).toBe(tags[1]);
+		expect(findTagByName(tags, 'Projekt')).toBe(tags[0]);
 	});
 
 	it('finds a name regardless of case', () => {
-		expect(findTagByName(tags, 'PROJEKT', 'nc_tags')).toBe(tags[0]);
+		expect(findTagByName(tags, 'PROJEKT')).toBe(tags[0]);
 	});
 
-	it('does not match a dashed name with nc_tags, but maps it back to the spaced name with tags', () => {
-		expect(findTagByName(tags, 'Mein-Tag', 'nc_tags')).toBeUndefined();
-		expect(findTagByName(tags, 'mein-tag', 'tags')).toBe(tags[2]);
+	it('maps a dashed name back to the tag with a space, but prefers a tag that is really named with the dash', () => {
+		expect(findTagByName(tags, 'mein-tag')).toBe(tags[2]);
+		const both = [{ name: 'a b' }, { name: 'a-b' }];
+		expect(findTagByName(both, 'a-b')).toBe(both[1]);
+		expect(findTagByName([{ name: 'a b' }], 'a-b')).toEqual({ name: 'a b' });
 	});
 
 	it('finds nothing for an empty name', () => {
-		expect(findTagByName(tags, '  ', 'nc_tags')).toBeUndefined();
+		expect(findTagByName(tags, '  ')).toBeUndefined();
 	});
 });
 
 describe('resolveTagNames', () => {
 	it('takes the server spelling of known tags and keeps unknown ones as written', () => {
-		expect(resolveTagNames(['projekt', 'Neu'], ['Projekt'], 'nc_tags')).toEqual(['Projekt', 'Neu']);
+		expect(resolveTagNames(['projekt', 'Neu'], ['Projekt'])).toEqual(['Projekt', 'Neu']);
 	});
 
 	it('drops empty names and repeats, also across spellings', () => {
-		expect(resolveTagNames(['a', ' ', 'A', 'b'], [], 'nc_tags')).toEqual(['a', 'b']);
+		expect(resolveTagNames(['a', ' ', 'A', 'b'], [])).toEqual(['a', 'b']);
 	});
 
 	it('maps dashed Obsidian tags to the server names and writes unknown ones in Obsidian form', () => {
-		expect(resolveTagNames(['mein-tag', '#neu tag'], ['Mein Tag'], 'tags')).toEqual(['Mein Tag', 'neu-tag']);
+		expect(resolveTagNames(['mein-tag', '#neu tag'], ['Mein Tag'])).toEqual(['Mein Tag', 'neu-tag']);
+		expect(resolveTagNames(['x-y'], [])).toEqual(['x-y']);
 	});
 });
 

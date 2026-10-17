@@ -2,7 +2,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '../../src/i18n';
-import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from '../../src/ui/emojiTitles';
+import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter, isFolderNotePath } from '../../src/ui/emojiTitles';
 import { clearProperties, decorateProperties, propertyLabels } from '../../src/ui/propertyLabels';
 
 function dom(html: string): ParentNode {
@@ -52,6 +52,59 @@ describe('decorateExplorer', () => {
 	});
 });
 
+describe('folders in the explorer', () => {
+	const TREE = `
+<div class="nav-folder"><div class="nav-folder-title" data-path="Coll/Ordner"><div class="nav-folder-title-content">Ordner</div></div>
+<div class="nav-folder-children">
+<div class="nav-file"><div class="nav-file-title" data-path="Coll/Ordner/Alpha.md"><div class="nav-file-title-content">Alpha</div></div></div>
+<div class="nav-file"><div class="nav-file-title" data-path="Coll/Ordner/Ordner.md"><div class="nav-file-title-content">Ordner</div></div></div>
+</div></div>`;
+
+	it('shows the emoji of the folder note at the folder', () => {
+		const root = dom(TREE);
+
+		decorateExplorer(root, (path) => (path === 'Coll/Ordner/Ordner.md' ? '📘' : null));
+
+		expect(root.querySelector('.nav-folder-title-content')?.getAttribute('data-nc-emoji')).toBe('📘');
+		expect(root.querySelector('[data-path="Coll/Ordner/Ordner.md"] .nav-file-title-content')?.getAttribute('data-nc-emoji')).toBe('📘');
+		expect(root.querySelector('[data-path="Coll/Ordner/Alpha.md"] .nav-file-title-content')?.hasAttribute('data-nc-emoji')).toBe(false);
+	});
+
+	it('flags only the note of a folder to be shown first, and not when the option is off', () => {
+		const root = dom(TREE);
+
+		decorateExplorer(root, () => null);
+		const flagged = Array.from(root.querySelectorAll('.nav-file[data-nc-folder-note]')).map((el) => el.querySelector('.nav-file-title')?.getAttribute('data-path'));
+		expect(flagged).toEqual(['Coll/Ordner/Ordner.md']);
+
+		decorateExplorer(root, () => null, false);
+		expect(root.querySelectorAll('[data-nc-folder-note]')).toHaveLength(0);
+	});
+
+	it('never moves or renames anything: the order of the items and the titles stay as they are', () => {
+		const root = dom(TREE);
+		const before = Array.from(root.querySelectorAll('.nav-file-title')).map((el) => `${el.getAttribute('data-path')}|${el.textContent}`);
+
+		decorateExplorer(root, () => '📘');
+
+		expect(Array.from(root.querySelectorAll('.nav-file-title')).map((el) => `${el.getAttribute('data-path')}|${el.textContent}`)).toEqual(before);
+	});
+
+	it('clearEmoji removes the flags too', () => {
+		const root = dom(TREE);
+		decorateExplorer(root, () => null);
+		clearEmoji(root);
+		expect(root.querySelectorAll('[data-nc-folder-note]')).toHaveLength(0);
+	});
+
+	it('knows a folder note by its path', () => {
+		expect(isFolderNotePath('Coll/Ordner/Ordner.md')).toBe(true);
+		expect(isFolderNotePath('Coll/Coll.md')).toBe(true);
+		expect(isFolderNotePath('Coll/Ordner/Alpha.md')).toBe(false);
+		expect(isFolderNotePath('Alpha.md')).toBe(false);
+	});
+});
+
 describe('decorateView and clearEmoji', () => {
 	it('marks the inline title and the header title, and clearEmoji removes every mark', () => {
 		const root = dom('<div class="view-header-title">T</div><div class="inline-title">T</div>');
@@ -71,7 +124,7 @@ describe('property labels', () => {
 <div class="metadata-property" data-property-key="tags"><div class="metadata-property-key"><input class="metadata-property-key-input" value="tags"></div></div>`;
 
 	it('has a label per plugin property in the language of the UI', () => {
-		expect(propertyLabels(createTranslator('de'))).toMatchObject({ nc_page_id: 'Seiten-ID', nc_tags: 'Collectives-Tags', nc_emoji: 'Emoji' });
+		expect(propertyLabels(createTranslator('de'))).toMatchObject({ nc_page_id: 'Seiten-ID', nc_collective_id: 'Collective-ID', nc_emoji: 'Emoji' });
 		expect(propertyLabels(createTranslator('en')).nc_page_id).toBe('Page ID');
 	});
 

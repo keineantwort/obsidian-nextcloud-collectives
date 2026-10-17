@@ -4,7 +4,7 @@ import { testConnection, type ConnectionResult } from './api/connection';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
 import {
-	DEFAULT_SETTINGS, isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, isTagsProperty, NcSettings,
+	DEFAULT_SETTINGS, isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, NcSettings,
 } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
@@ -120,10 +120,9 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isLocalDeleteBehaviour(localDelete)) loaded.localDeleteBehaviour = localDelete;
 			const remoteDelete = data['remoteDeleteBehaviour'];
 			if (isRemoteDeleteBehaviour(remoteDelete)) loaded.remoteDeleteBehaviour = remoteDelete;
-			const tagsProperty = data['tagsProperty'];
-			if (isTagsProperty(tagsProperty)) loaded.tagsProperty = tagsProperty;
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
+			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];
 		}
 		this.settings = { ...DEFAULT_SETTINGS, ...loaded };
 	}
@@ -281,7 +280,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			const file = vault.getFileByPath(path);
 			return emojiFromFrontmatter(file === null ? undefined : metadataCache.getFileCache(file)?.frontmatter?.['nc_emoji']);
 		};
-		for (const leaf of workspace.getLeavesOfType('file-explorer')) decorateExplorer(leaf.view.containerEl, emojiOf);
+		for (const leaf of workspace.getLeavesOfType('file-explorer')) decorateExplorer(leaf.view.containerEl, emojiOf, this.settings.folderNoteFirst);
 		const labels = propertyLabels(this.t);
 		workspace.iterateAllLeaves((leaf) => {
 			if (!(leaf.view instanceof MarkdownView)) return;

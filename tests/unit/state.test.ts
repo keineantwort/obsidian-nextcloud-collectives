@@ -101,20 +101,6 @@ describe('parseSyncState', () => {
 	});
 });
 
-describe('tagsProperty in the state', () => {
-	it('is optional: a state without it parses as before and serializes without it', () => {
-		const state = emptyState('https://cloud.example.com', 'alice');
-		expect(serializeSyncState(state)).not.toContain('tagsProperty');
-		expect(parseSyncState(JSON.parse(serializeSyncState(state)))).toEqual(state);
-	});
-
-	it('round-trips tags and nc_tags and rejects any other value', () => {
-		const state: SyncState = { ...emptyState('https://cloud.example.com', 'alice'), tagsProperty: 'tags' };
-		expect(parseSyncState(JSON.parse(serializeSyncState(state)))).toEqual(state);
-		expect(parseSyncState({ ...JSON.parse(serializeSyncState(state)), tagsProperty: 'labels' })).toBeNull();
-	});
-});
-
 describe('isCollision', () => {
 	it.each<{ name: string; status: PageState['status']; expected: boolean }>([
 		{ name: 'is true for status collision', status: 'collision', expected: true },

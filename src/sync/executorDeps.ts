@@ -1,7 +1,6 @@
 // Dependencies of the sync executor (PLAN §7.2). Types only.
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { WebdavClient } from '../api/webdavClient';
-import type { TagsProperty } from '../mapping/tags';
 import type { Logger } from '../util/logger';
 import type { ConflictStrategy } from './decide';
 import type { SyncState } from './state';
@@ -46,8 +45,6 @@ export interface ExecutorDeps {
 	/** Waits before a second GET when an ETag is not confirmed yet. Injectable for tests. */
 	sleep: (ms: number) => Promise<void>;
 	log: Logger;
-	/** Frontmatter key for the tags besides nc_tags (PLAN §10.2); default nc_tags only. */
-	tagsProperty?: TagsProperty;
 	/** Set of pathKey of all vault paths; executor adds the paths it creates. */
 	occupied: Set<string>;
 }

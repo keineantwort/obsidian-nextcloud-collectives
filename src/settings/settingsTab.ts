@@ -3,7 +3,7 @@ import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
-import { isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, isTagsProperty } from './types';
+import { isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
@@ -198,6 +198,17 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName(t('settings.folderNoteFirst.name'))
+			.setDesc(t('settings.folderNoteFirst.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.folderNoteFirst).onChange(async (value) => {
+					settings.folderNoteFirst = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
+
+		new Setting(containerEl)
 			.setName(t('settings.emojiTitles.name'))
 			.setDesc(t('settings.emojiTitles.desc'))
 			.addToggle((toggle) => {
@@ -206,23 +217,6 @@ export class NcSettingTab extends PluginSettingTab {
 					await plugin.saveSettings();
 					plugin.refreshEmojiTitles();
 				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.tagsProperty.name'))
-			.setDesc(t('settings.tagsProperty.desc'))
-			.addDropdown((dd) => {
-				dd.addOptions({
-					nc_tags: t('settings.tagsProperty.option.nc_tags'),
-					tags: t('settings.tagsProperty.option.tags'),
-				})
-					.setValue(settings.tagsProperty)
-					.onChange(async (value) => {
-						if (!isTagsProperty(value)) return;
-						settings.tagsProperty = value;
-						await plugin.saveSettings();
-					});
-				dd.selectEl.setAttribute('aria-label', t('settings.tagsProperty.name'));
 			});
 	}
 }

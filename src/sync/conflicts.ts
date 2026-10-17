@@ -1,7 +1,6 @@
 // Conflict list and resolution (PLAN §7.6, spec §7). No 'obsidian' import: trash and file access come through ResolutionVault.
 import type { CollectiveId, PageId } from '../api/types';
 import { replaceNcMeta, toRemote } from '../mapping/frontmatter';
-import type { TagsProperty } from '../mapping/tags';
 import { sha256Hex } from '../util/hash';
 import type { Logger } from '../util/logger';
 import { indexFiles, locatePage } from './locate';
@@ -106,17 +105,15 @@ export interface ResolutionOptions {
 	 * conflictPath, the choice is refused: the server version of the current copy was never shown.
 	 */
 	expectedConflictPath?: string | null;
-	/** Setting tagsProperty (default nc_tags): with `tags` the property is not part of the page text. */
-	tagsProperty?: TagsProperty;
 }
 
 /**
  * Legacy fallback for states written before M4, where a conflict had baseHash ''. keepLocal takes the base from the
  * conflict copy, which must be read before it is trashed: the copy holds the remote text the conflict was recorded against.
  */
-async function withLegacyBase(vault: ResolutionVault, page: PageState, tagsProperty: TagsProperty): Promise<PageState> {
+async function withLegacyBase(vault: ResolutionVault, page: PageState): Promise<PageState> {
 	if (page.baseHash !== '' || page.conflictPath === null || !vault.exists(page.conflictPath)) return page;
-	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath), tagsProperty)) };
+	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath))) };
 }
 
 /**
@@ -150,10 +147,9 @@ export async function applyResolution(
 		page = { ...prev, metaHash: '', localMtime };
 	}
 
-	const tagsProperty = options.tagsProperty ?? 'nc_tags';
-	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath), tagsProperty));
+	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath)));
 	const trashPath = page.conflictPath;
-	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page, tagsProperty) : page;
+	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page) : page;
 	deps.state.pages[key] = resolveConflict(withBase, choice, localHash);
 
 	if (trashPath !== null && deps.vault.exists(trashPath)) {

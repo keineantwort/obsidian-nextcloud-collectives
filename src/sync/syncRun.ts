@@ -8,7 +8,6 @@ import { canonicalRemote } from '../mapping/frontmatter';
 import type { NcMeta } from '../mapping/frontmatter';
 import { planLocalPaths, remotePagePath } from '../mapping/paths';
 import type { CollectiveTree, PathPlan } from '../mapping/paths';
-import type { TagsProperty } from '../mapping/tags';
 import type { Translator } from '../i18n';
 import type { WebdavClient } from '../api/webdavClient';
 import { ConfigError, isRunFatal } from '../util/errors';
@@ -41,8 +40,6 @@ export interface SyncRunDeps {
 		newFolderBehaviour: PlannerBehaviour['newFolder'];
 		localDeleteBehaviour: PlannerBehaviour['localDelete'];
 		remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
-		/** Default nc_tags. */
-		tagsProperty?: TagsProperty;
 	};
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
@@ -90,14 +87,6 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 		state.user = userId;
 	}
 
-	// Another property for the tags than in the last run: forget the metadata base of all pages, so the server's tags are
-	// written into the new property (a property the notes do not have yet must not read as 'no tags').
-	const tagsProperty = deps.settings.tagsProperty ?? 'nc_tags';
-	if (hasPages && (state.tagsProperty ?? 'nc_tags') !== tagsProperty) {
-		for (const page of Object.values(state.pages)) page.metaHash = '';
-	}
-	if (tagsProperty !== 'nc_tags' || state.tagsProperty !== undefined) state.tagsProperty = tagsProperty;
-
 	const total = emptyResult();
 	const skips: Skip[] = [];
 	const decisions = new Map<string, Decision>();
@@ -113,7 +102,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log, tagsProperty);
+		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 		const input: PlannerInput = {
 			state,
 			remote,
@@ -121,7 +110,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			remoteMeta,
 			paths,
 			dirty: deps.dirty(),
-			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log, tagsProperty),
+			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log),
 			remoteTrash: await findRemoteTrash(state, remote, local, clients.collectives),
 			decisions,
 			behaviour: {
@@ -150,7 +139,6 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			sleep: deps.sleep ?? defaultSleep,
 			log: deps.log,
 			occupied: local.occupied,
-			tagsProperty,
 		});
 		addResult(total, result);
 		// Another pass finds what depended on this one (a new collective's pages, a folder page's moved note). A failure ends the loop.
@@ -189,7 +177,6 @@ async function findRemoteChanged(
 	local: LocalSnapshot,
 	webdav: Pick<WebdavClient, 'get'>,
 	log: Logger,
-	tagsProperty: TagsProperty,
 ): Promise<Set<PageId>> {
 	const changed = new Set<PageId>();
 	const index = indexFiles(local.files);
@@ -201,7 +188,7 @@ async function findRemoteChanged(
 		if (known.remoteMtime !== UNCONFIRMED_REMOTE_MTIME && page.timestamp === known.remoteMtime && page.size === known.remoteSize) continue;
 		try {
 			const file = await webdav.get(remotePagePath(page));
-			if ((await sha256Hex(canonicalRemote(file.content, tagsProperty))) !== known.baseHash) changed.add(known.pageId);
+			if ((await sha256Hex(canonicalRemote(file.content))) !== known.baseHash) changed.add(known.pageId);
 		} catch (err) {
 			if (isRunFatal(err)) throw err;
 			log.warn('Deleted page could not be compared with the server', { pageId: known.pageId, error: err instanceof Error ? err.name : 'unknown' });
@@ -246,7 +233,6 @@ async function buildRemoteMeta(
 	collectives: RemoteCollective[],
 	paths: PathPlan,
 	log: Logger,
-	tagsProperty: TagsProperty,
 ): Promise<Map<PageId, { meta: NcMeta; hash: string }>> {
 	const out = new Map<PageId, { meta: NcMeta; hash: string }>();
 	for (const rc of collectives) {
@@ -260,7 +246,6 @@ async function buildRemoteMeta(
 				title: page.title,
 				emoji: page.emoji,
 				tags: tagNamesOf(page, tagNames, log),
-				...(tagsProperty === 'tags' ? { tagsProperty } : {}),
 			};
 			out.set(page.id, { meta, hash: await metaHash(meta.emoji, meta.tags) });
 		}

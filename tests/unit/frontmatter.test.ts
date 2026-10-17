@@ -43,7 +43,7 @@ describe('toLocal', () => {
 	it('writes title, emoji and tags after the ids in fixed order, with JSON string values', () => {
 		const text = toLocal('Hallo', meta({ title: 'A#B', emoji: '📘', tags: ['Projekt', 'Wichtig'] }));
 		expect(text).toBe(
-			'---\nnc_page_id: 1\nnc_collective_id: 2\nnc_title: "A#B"\nnc_emoji: "📘"\nnc_tags: ["Projekt","Wichtig"]\n---\nHallo',
+			'---\nnc_page_id: 1\nnc_collective_id: 2\nnc_title: "A#B"\nnc_emoji: "📘"\ntags: ["Projekt","Wichtig"]\n---\nHallo',
 		);
 	});
 
@@ -128,7 +128,7 @@ describe('replaceNcMeta', () => {
 	it('rewrites only the nc lines and keeps user YAML and body byte-identical', () => {
 		const local = '---\nnc_page_id: 1\nnc_collective_id: 2\ntitle:   Foo  \n---\n\nText  \n\n';
 		const result = replaceNcMeta(local, meta({ tags: ['a'] }));
-		expect(result.split('\n')).toContain('nc_tags: ["a"]');
+		expect(result.split('\n')).toContain('tags: ["a"]');
 		expect(result.split('\n')).toContain('title:   Foo  ');
 		expect(result.endsWith('\n---\n\nText  \n\n')).toBe(true);
 	});
@@ -239,7 +239,7 @@ describe('BOM at the start of a text', () => {
 
 	it('replaces the nc lines behind the BOM and keeps the BOM', () => {
 		expect(replaceNcMeta(`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\n---\nText`, meta({ tags: ['a'] }))).toBe(
-			`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\nnc_tags: ["a"]\n---\nText`,
+			`${BOM}---\nnc_page_id: 1\nnc_collective_id: 2\ntags: ["a"]\n---\nText`,
 		);
 	});
 
@@ -283,7 +283,8 @@ describe('pageIdFromFrontmatterValue', () => {
 });
 
 describe('readNcMeta and stripNcMeta', () => {
-	const meta: NcMeta = { pageId: asPageId(12), collectiveId: asCollectiveId(3), title: 'Alt/Titel', emoji: '📘', tags: ['a', 'b c'] };
+	const meta: NcMeta = { pageId: asPageId(12), collectiveId: asCollectiveId(3), title: 'Alt/Titel', emoji: '📘', tags: ['a', 'b-c'] };
+	const untagged: NcMeta = { ...meta, tags: [] };
 
 	it('reads back what replaceNcMeta wrote', () => {
 		expect(readNcMeta(replaceNcMeta('Text', meta))).toEqual(meta);
@@ -301,11 +302,11 @@ describe('readNcMeta and stripNcMeta', () => {
 	});
 
 	it('removes the nc fields and drops an empty block', () => {
-		expect(stripNcMeta(replaceNcMeta('Text', meta))).toBe('Text');
+		expect(stripNcMeta(replaceNcMeta('Text', untagged))).toBe('Text');
 	});
 
 	it('keeps the user YAML and the body byte-identical', () => {
-		const text = replaceNcMeta('---\nauthor: "Ann"\n---\n\nText\n', meta);
+		const text = replaceNcMeta('---\nauthor: "Ann"\n---\n\nText\n', untagged);
 
 		expect(stripNcMeta(text)).toBe('---\nauthor: "Ann"\n---\n\nText\n');
 	});
@@ -315,51 +316,50 @@ describe('readNcMeta and stripNcMeta', () => {
 	});
 });
 
-describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
+describe('emoji and tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 	const meta = (over: Partial<NcMeta> = {}): NcMeta => ({ pageId: asPageId(7), collectiveId: asCollectiveId(1), title: null, emoji: null, tags: [], ...over });
 
 	describe('readLocalFields', () => {
-		it('reads nc_emoji and nc_tags', () => {
-			const text = '---\nnc_page_id: 7\nnc_collective_id: 1\nnc_emoji: "📘"\nnc_tags: ["A","B C"]\n---\nText';
-			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B C'] });
+		it('reads nc_emoji and the tags property', () => {
+			const text = '---\nnc_page_id: 7\nnc_collective_id: 1\nnc_emoji: "📘"\ntags: ["A","B-C"]\n---\nText';
+			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B-C'] });
 		});
 
-		it('returns null without a frontmatter block, and ignores a plain tags property with nc_tags', () => {
-			expect(readLocalFields('Text')).toBeNull();
-			expect(readLocalFields('---\ntags: [x]\n---\nText')).toEqual({ emoji: null, emojiInvalid: false, tags: [] });
+		it('reads a note without frontmatter by its #tags only', () => {
+			expect(readLocalFields('Nur #Text')).toEqual({ emoji: null, emojiInvalid: false, tags: ['Text'] });
+			expect(readLocalFields('Text')).toEqual({ emoji: null, emojiInvalid: false, tags: [] });
 		});
 
 		it('reads a flow list, a block list and a scalar from the tags property', () => {
-			expect(readLocalFields('---\ntags: [a, "b-c", \'#d\']\n---\n', 'tags')?.tags).toEqual(['a', 'b-c', 'd']);
-			expect(readLocalFields('---\ntags:\n  - a\n  - "#b-c"\nother: 1\n---\n', 'tags')?.tags).toEqual(['a', 'b-c']);
-			expect(readLocalFields('---\ntags: a, b\n---\n', 'tags')?.tags).toEqual(['a', 'b']);
-			expect(readLocalFields('---\ntags: []\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual([]);
+			expect(readLocalFields('---\ntags: [a, "b-c", \'#d\']\n---\n')?.tags).toEqual(['a', 'b-c', 'd']);
+			expect(readLocalFields('---\ntags:\n  - a\n  - "#b-c"\nother: 1\n---\n')?.tags).toEqual(['a', 'b-c']);
+			expect(readLocalFields('---\ntags: a, b\n---\n')?.tags).toEqual(['a', 'b']);
+			expect(readLocalFields('---\nTags: [x]\n---\n')?.tags).toEqual(['x']);
+			expect(readLocalFields('---\ntags: []\n---\n')?.tags).toEqual([]);
 		});
 
-		it('adds the #tags of the text with tagsProperty = tags, also for a note without frontmatter, but not with nc_tags', () => {
+		it('adds the #tags of the text, without repeats and without code', () => {
 			const text = '---\ntags: [a]\n---\nText #B und #a und `#c`\n';
-			expect(readLocalFields(text, 'tags')?.tags).toEqual(['a', 'B']);
-			expect(readLocalFields(text)?.tags).toEqual([]);
-			expect(readLocalFields('Nur #Text', 'tags')).toEqual({ emoji: null, emojiInvalid: false, tags: ['Text'] });
-			expect(readLocalFields('Nur #Text')).toBeNull();
+			expect(readLocalFields(text)?.tags).toEqual(['a', 'B']);
 		});
 
-		it('reads a missing tags property as no tags, and ignores nc_tags in tags mode', () => {
-			expect(readLocalFields('---\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual([]);
-			expect(readLocalFields('---\ntags: [y]\n---\n')?.tags).toEqual([]);
+		it('reads a missing tags property as no tags, but takes the old nc_tags while there is no tags property yet', () => {
+			expect(readLocalFields('---\nnc_page_id: 1\n---\n')?.tags).toEqual([]);
+			expect(readLocalFields('---\nnc_tags: ["x"]\n---\n')?.tags).toEqual(['x']);
+			expect(readLocalFields('---\nnc_tags: ["x"]\ntags: [y]\n---\n')?.tags).toEqual(['y']);
 		});
 
 		it('reports a flow list over several lines it cannot read as null: no change is assumed', () => {
-			expect(readLocalFields('---\ntags: [a,\n  b]\n---\n', 'tags')?.tags).toBeNull();
+			expect(readLocalFields('---\ntags: [a,\n  b]\n---\n')?.tags).toBeNull();
 		});
 	});
 
-	describe('emoji and tags as Obsidian\'s properties view writes them', () => {
-		it('reads an unquoted emoji, a block list of nc_tags and a quoted title', () => {
-			const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_emoji: 📘\nnc_tags:\n  - A\n  - B C\nnc_title: "Ein/Titel"\n---\nText';
+	describe('as Obsidian\'s properties view writes them', () => {
+		it('reads an unquoted emoji, a block list and a quoted title', () => {
+			const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_emoji: 📘\ntags:\n  - A\n  - B-C\nnc_title: "Ein/Titel"\n---\nText';
 
-			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B C'] });
-			expect(readNcMeta(text)).toMatchObject({ emoji: '📘', title: 'Ein/Titel', tags: ['A', 'B C'] });
+			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B-C'] });
+			expect(readNcMeta(text)).toMatchObject({ emoji: '📘', title: 'Ein/Titel', tags: ['A', 'B-C'] });
 		});
 
 		it('reads single-quoted values and an emoji with a variation selector or skin tone', () => {
@@ -385,34 +385,30 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 		});
 	});
 
-	describe('toLocal with tagsProperty = tags', () => {
-		it('writes only the tags property, in Obsidian form, and replaces the tags the remote text carried', () => {
-			const local = toLocal('---\ntags: [alt]\nautor: Ich\n---\n\nText', meta({ tags: ['Mein Tag'], tagsProperty: 'tags' }));
-			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\ntags: ["Mein-Tag"]\nautor: Ich\n---\n\nText');
-			expect(replaceNcMeta('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["Alt"]\n---\nText', meta({ tags: ['Mein Tag'], tagsProperty: 'tags' }))).not.toContain('nc_tags');
+	describe('toLocal and toRemote with the tags property', () => {
+		it('writes the tags only as the tags property, with \'-\' for spaces, and replaces the tags the remote text carried', () => {
+			const local = toLocal('---\ntags: [alt]\nautor: Ich\n---\n\nText', meta({ tags: ['Mein Tag', 'a-b'] }));
+			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\ntags: ["Mein-Tag","a-b"]\nautor: Ich\n---\n\nText');
+		});
+
+		it('replaces the old nc_tags by the tags property', () => {
+			const local = replaceNcMeta('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["Alt"]\n---\nText', meta({ tags: ['Neu'] }));
+			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\ntags: ["Neu"]\n---\nText');
 		});
 
 		it('removes the tags property when the page has no tags', () => {
-			const local = toLocal('---\ntags:\n  - alt\n---\n\nText', meta({ tagsProperty: 'tags' }));
+			const local = toLocal('---\ntags:\n  - alt\n---\n\nText', meta());
 			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\n---\n\nText');
 		});
 
-		it('leaves the tags property of the user alone with nc_tags', () => {
-			const local = replaceNcMeta('---\ntags: [privat]\n---\nText', meta({ tags: ['A'] }));
-			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["A"]\ntags: [privat]\n---\nText');
+		it('keeps the tags out of the remote text: they are Collectives tags, not page text', () => {
+			const local = toLocal('Text', meta({ tags: ['A'] }));
+			expect(toRemote(local)).toBe('Text');
+			expect(canonicalRemote('---\ntags:\n  - A\nautor: Ich\n---\n\nText')).toBe('---\nautor: Ich\n---\n\nText');
 		});
 
-		it('keeps the tags property in the remote format with nc_tags (it is user text there), drops it with tags', () => {
-			const local = toLocal('Text', meta({ tags: ['A'], tagsProperty: 'tags' }));
-			expect(toRemote(local)).toBe('---\ntags: ["A"]\n---\n\nText');
-			expect(toRemote(local, 'tags')).toBe('Text');
-			expect(canonicalRemote('---\ntags:\n  - A\nautor: Ich\n---\n\nText', 'tags')).toBe('---\nautor: Ich\n---\n\nText');
+		it('keeps the tags when only the plugin fields are removed (a note that is unlinked)', () => {
+			expect(stripNcMeta('---\nnc_page_id: 7\ntags: [a]\n---\nText')).toBe('---\ntags: [a]\n---\nText');
 		});
-	});
-
-	it('readNcMeta reads the tags property with tagsProperty = tags', () => {
-		const text = '---\nnc_page_id: 7\nnc_collective_id: 1\nnc_tags: ["Alt"]\ntags: [neu]\n---\nText';
-		expect(readNcMeta(text)?.tags).toEqual(['Alt']);
-		expect(readNcMeta(text, 'tags')).toMatchObject({ tags: ['neu'], tagsProperty: 'tags' });
 	});
 });

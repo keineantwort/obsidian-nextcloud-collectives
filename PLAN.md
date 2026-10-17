@@ -222,13 +222,13 @@ Flache Keys, damit die Obsidian-Properties-Ansicht funktioniert:
 nc_page_id: 1234
 nc_collective_id: 12
 nc_emoji: "📘"
-nc_tags: [Projekt, Wichtig]
+tags: [Projekt, Wichtig]            # Obsidians Tag-Eigenschaft (Leerzeichen → "-")
 nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweichend
 ---
 ```
 
-- Beim Hochladen werden nur die `nc_*`-Felder (im Modus `tags` auch `tags`) entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
-- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives). Im Modus `tags` (Default) stehen die Tags nur in der Eigenschaft `tags` (kein `nc_tags`); sie wird wie `nc_*` nicht hochgeladen; `#Tags` im Text kommen hinzu (nur hinzufügend). Ein Wechsel des Modus lässt den Server gelten (State merkt sich den Modus). Die Schlüssel bleiben technisch, die Eigenschaften-Ansicht zeigt lokalisierte Namen, das Emoji steht nur in der Anzeige vor dem Titel (M6, ADR 0019).
+- Beim Hochladen werden nur die `nc_*`-Felder, `tags` und eine von Hand angelegte Eigenschaft `emoji` entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
+- Tags: Es gibt nur Obsidians Eigenschaft `tags` (Option `tagsProperty` entfällt, ADR 0019). Namen aus Collectives: Leerzeichen werden zu `-`, ein `-` bleibt `-`; ein neues `-` in Obsidian wird als `-` angelegt und nie in ein Leerzeichen verwandelt. Rückabbildung: erst der Tag mit genau diesem Namen, sonst der Tag, dessen Name mit `-` für Leerzeichen so aussieht (ohne Beachtung der Schreibweise). `#Tags` im Text kommen hinzu (nur hinzufügend). Die Eigenschaft wird wie `nc_*` nicht hochgeladen. Ein altes `nc_tags` zählt, solange `tags` fehlt, und wird beim nächsten Schreiben der Felder entfernt. Die Schlüssel der übrigen Felder bleiben technisch, die Eigenschaften-Ansicht zeigt lokalisierte Namen (oder blendet sie aus), das Emoji steht nur in der Anzeige vor dem Titel, die Notiz eines Ordners steht in der Dateiliste zuerst (M6).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
 ### 6.3 Sync-State
@@ -402,7 +402,6 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 | `conflictStrategy` | `conflictFile` | `conflictFile`/`preferLocal`/`preferRemote` |
 | `localDeleteBehaviour` | `ask` | `ask` (Bestätigung, dann Remote-Papierkorb) / `trashRemote` (ohne Rückfrage). Für Collectives immer `ask` |
 | `remoteDeleteBehaviour` | `obsidianTrash` | `obsidianTrash`/`keepUnlinked` |
-| `tagsProperty` | `nc_tags` | `nc_tags`/`tags` |
 | `convertLinks` | true | |
 | `attachmentFolderPattern` | `_attachments/{title}` | |
 | `maxAttachmentSizeMb` | 20 | |
@@ -500,8 +499,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
 ### M6 – Tags und Emojis
-- Abgleich laut 7.5, Tag-Anlage, `tagsProperty`-Option.
-- Hinweis aus M3: Remote → lokal (`nc_emoji`, `nc_tags`, `metaHash`) ist umgesetzt; M6 ergänzt Push und `tagsProperty`.
+- Abgleich laut 7.5, Tag-Anlage; die Option `tagsProperty` ist entfallen (nur Obsidians `tags`, ADR 0019).
+- Hinweis aus M3: Remote → lokal (`nc_emoji`, `nc_tags`, `metaHash`) ist umgesetzt; M6 ergänzt den Push.
 - Akzeptanz: Änderungen in beide Richtungen; kein Duplikat-Tag.
 
 ### M7 – Links

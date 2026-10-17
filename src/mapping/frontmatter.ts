@@ -2,7 +2,6 @@ import { asCollectiveId, asPageId } from '../api/types';
 import type { CollectiveId, PageId } from '../api/types';
 import { parseEmoji } from './emoji';
 import { inlineTags, toObsidianTag } from './tags';
-import type { TagsProperty } from './tags';
 
 /** Plugin fields stored as flat top-level keys in the frontmatter of a local file (PLAN §6.2). */
 export interface NcMeta {
@@ -13,8 +12,6 @@ export interface NcMeta {
 	emoji: string | null;
 	/** Tag names; [] = no tags. */
 	tags: string[];
-	/** Which key carries the tags besides `nc_tags` (PLAN §10.2). Default: `nc_tags` only. */
-	tagsProperty?: TagsProperty;
 }
 
 /** What a note says about its emoji and tags. `tags` are the names as written, not yet matched to the server's tags. */
@@ -67,7 +64,7 @@ function splitBlock(text: string): Block | null {
 
 /**
  * Removes each nc_* line together with its continuation lines (indented or starting with '-'). With `withTags` the
- * `tags` property goes too: the plugin writes it itself (tagsProperty = tags). The `emoji` alias always goes.
+ * `tags` property goes too: the plugin writes it itself. The `emoji` alias always goes.
  */
 function withoutNcLines(lines: string[], withTags = false): string[] {
 	const kept: string[] = [];
@@ -89,8 +86,8 @@ function ncLines(meta: NcMeta, eol: string): string {
 	if (meta.title !== null) out += `nc_title: ${JSON.stringify(meta.title)}${eol}`;
 	if (meta.emoji !== null) out += `nc_emoji: ${JSON.stringify(meta.emoji)}${eol}`;
 	if (meta.tags.length > 0) {
-		// One property for the tags: Obsidian's `tags` (names with '-' for spaces) or the plugin's own `nc_tags`.
-		out += meta.tagsProperty === 'tags' ? `tags: ${JSON.stringify(meta.tags.map(toObsidianTag))}${eol}` : `nc_tags: ${JSON.stringify(meta.tags)}${eol}`;
+		// The tags are Obsidian's `tags` property: names with '-' for spaces.
+		out += `tags: ${JSON.stringify(meta.tags.map(toObsidianTag))}${eol}`;
 	}
 	return out;
 }
@@ -103,7 +100,7 @@ function withNcFields(text: string, meta: NcMeta): string {
 		return `${bom}---${eol}${ncLines(meta, eol)}---${eol}${body}`;
 	}
 	const { bom, eol } = block;
-	const userLines = withoutNcLines(block.yamlLines, meta.tagsProperty === 'tags');
+	const userLines = withoutNcLines(block.yamlLines, true);
 	const userYaml = userLines.length > 0 ? `${userLines.join(eol)}${eol}` : '';
 	return `${bom}---${eol}${ncLines(meta, eol)}${userYaml}---${eol}${block.rest}`;
 }
@@ -119,17 +116,17 @@ export function toLocal(remote: string, meta: NcMeta): string {
 }
 
 /**
- * Local file content → canonical remote format (the format baseHash is computed on). The byte order mark is kept. With
- * tagsProperty = tags the `tags` property is dropped too: the page's tags are real Collectives tags, not text.
+ * Local file content → canonical remote format (the format baseHash is computed on). The byte order mark is kept. The
+ * `tags` property is dropped too: the page's tags are real Collectives tags, not text.
  */
-export function toRemote(local: string, tagsProperty: TagsProperty = 'nc_tags'): string {
+export function toRemote(local: string): string {
 	const block = splitBlock(local);
 	if (!block) {
 		const { bom, body } = textParts(local);
 		return bom + stripTrailingNewlines(body);
 	}
 	const { bom, eol } = block;
-	const userLines = withoutNcLines(block.yamlLines, tagsProperty === 'tags');
+	const userLines = withoutNcLines(block.yamlLines, true);
 	const body = block.rest.startsWith(eol) ? block.rest.slice(eol.length) : block.rest;
 	const hasUserFields = userLines.some((line) => line !== '');
 	const text = hasUserFields ? `---${eol}${userLines.join(eol)}${eol}---${eol}${eol}${body}` : body;
@@ -244,26 +241,21 @@ function readEmoji(lines: readonly string[]): { emoji: string | null; invalid: b
 }
 
 /**
- * Emoji and tags a note carries: the emoji in `nc_emoji` (or `emoji`), and the tags in `nc_tags` or, with tagsProperty =
- * tags, in Obsidian's `tags` property plus the `#tags` in the text. A missing property means none. null if the text has no
- * frontmatter block (with nc_tags).
+ * Emoji and tags a note carries: the emoji in `nc_emoji` (or `emoji`), and the tags in Obsidian's `tags` property plus the
+ * `#tags` in the text. A missing property means no tags; a note that still has the old `nc_tags` and no `tags` yet counts
+ * with those (so the first sync after the update removes no tag). tags is null if the property is written in a form that
+ * is not read. A note without frontmatter can carry `#tags` (a new note).
  */
-export function readLocalFields(local: string, tagsProperty: TagsProperty = 'nc_tags'): LocalFields | null {
+export function readLocalFields(local: string): LocalFields | null {
 	const block = splitBlock(local);
-	// A note without frontmatter can still carry #tags (a new note); with nc_tags it has nothing to read.
-	if (!block) return tagsProperty === 'tags' ? { emoji: null, emojiInvalid: false, tags: inlineTags(textParts(local).body) } : null;
+	if (!block) return { emoji: null, emojiInvalid: false, tags: inlineTags(textParts(local).body) };
 	const { emoji, invalid } = readEmoji(block.yamlLines);
-	let tags: string[] | null;
-	if (tagsProperty === 'tags') {
-		const own = readList(block.yamlLines, 'tags', true);
-		tags = own === undefined ? [] : own;
-		if (tags !== null) {
-			const list: string[] = [...tags];
-			for (const name of inlineTags(block.rest)) if (!list.some((known) => known.toLowerCase() === name.toLowerCase())) list.push(name);
-			tags = list;
-		}
-	} else {
-		tags = readList(block.yamlLines, 'nc_tags', false) ?? [];
+	const own = readList(block.yamlLines, 'tags', true);
+	let tags: string[] | null = own === undefined ? (readList(block.yamlLines, 'nc_tags', false) ?? []) : own;
+	if (tags !== null) {
+		const list: string[] = [...tags];
+		for (const name of inlineTags(block.rest)) if (!list.some((known) => known.toLowerCase() === name.toLowerCase())) list.push(name);
+		tags = list;
 	}
 	return { emoji, emojiInvalid: invalid, tags };
 }
@@ -272,32 +264,31 @@ export function readLocalFields(local: string, tagsProperty: TagsProperty = 'nc_
  * Reads the nc_* fields written by the plugin (PLAN §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
  * Unknown or malformed optional fields count as absent.
  */
-export function readNcMeta(local: string, tagsProperty: TagsProperty = 'nc_tags'): NcMeta | null {
+export function readNcMeta(local: string): NcMeta | null {
 	const block = splitBlock(local);
 	if (!block) return null;
 	const pageId = pageIdFromFrontmatterValue(parseJson(readRaw(block.yamlLines, 'nc_page_id') ?? ''));
 	const collectiveId = pageIdFromFrontmatterValue(parseJson(readRaw(block.yamlLines, 'nc_collective_id') ?? ''));
 	if (pageId === undefined || collectiveId === undefined) return null;
 	const title = readScalar(block.yamlLines, 'nc_title');
-	const fields = readLocalFields(local, tagsProperty);
+	const fields = readLocalFields(local);
 	return {
 		pageId,
 		collectiveId: asCollectiveId(collectiveId),
 		title: title === undefined || title === '' ? null : title,
 		emoji: fields?.emoji ?? null,
 		tags: fields?.tags ?? [],
-		...(tagsProperty === 'tags' ? { tagsProperty } : {}),
 	};
 }
 
 /**
- * Remote text with the server's emoji and tags as `nc_emoji` / `nc_tags` (no page id): the conflict copy of a metadata
+ * Remote text with the server's emoji and tags as `nc_emoji` / `tags` (no page id): the conflict copy of a metadata
  * conflict shows what the server has. Such a file is not linked to a page and is never synced.
  */
 export function withMetaOnly(remote: string, meta: Pick<NcMeta, 'emoji' | 'tags'>): string {
 	const block = splitBlock(remote);
 	const { bom, body, eol } = textParts(remote);
-	const fields = `nc_emoji: ${JSON.stringify(meta.emoji)}${eol}nc_tags: ${JSON.stringify(meta.tags)}${eol}`;
+	const fields = `nc_emoji: ${JSON.stringify(meta.emoji)}${eol}tags: ${JSON.stringify(meta.tags.map(toObsidianTag))}${eol}`;
 	if (!block) return `${bom}---${eol}${fields}---${eol}${body}`;
 	const userLines = withoutNcLines(block.yamlLines);
 	const userYaml = userLines.length > 0 ? `${userLines.join(eol)}${eol}` : '';
@@ -305,15 +296,15 @@ export function withMetaOnly(remote: string, meta: Pick<NcMeta, 'emoji' | 'tags'
 }
 
 /** Removes the nc_* fields; the user's YAML and the body stay byte-identical. An empty block is dropped. */
-export function stripNcMeta(local: string, tagsProperty: TagsProperty = 'nc_tags'): string {
+export function stripNcMeta(local: string): string {
 	const block = splitBlock(local);
 	if (!block) return local;
-	const userLines = withoutNcLines(block.yamlLines, tagsProperty === 'tags');
+	const userLines = withoutNcLines(block.yamlLines);
 	if (userLines.length === 0) return block.bom + block.rest;
 	return `${block.bom}---${block.eol}${userLines.join(block.eol)}${block.eol}---${block.eol}${block.rest}`;
 }
 
 /** Canonical remote format of a remote text: toRemote(toLocal(remote, anyMeta)). */
-export function canonicalRemote(remote: string, tagsProperty: TagsProperty = 'nc_tags'): string {
-	return toRemote(toLocal(remote, { ...PLACEHOLDER_META, tagsProperty }), tagsProperty);
+export function canonicalRemote(remote: string): string {
+	return toRemote(toLocal(remote, PLACEHOLDER_META));
 }

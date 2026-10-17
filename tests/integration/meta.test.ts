@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { readLocalFields, readNcMeta, replaceNcMeta, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
-import type { TagsProperty } from '../../src/mapping/tags';
 import { remotePagePath } from '../../src/mapping/paths';
 import { CollectiveFixture, Harness, required, waitPastSecondBoundary } from './harness';
 
@@ -23,8 +22,8 @@ interface Ctx {
 }
 
 /** A harness with a collective and one note below the landing page, already pulled into the vault. */
-async function setup(prefix: string, tagsProperty: TagsProperty = 'nc_tags'): Promise<Ctx> {
-	const h = await Harness.create({ settings: { tagsProperty } });
+async function setup(prefix: string): Promise<Ctx> {
+	const h = await Harness.create();
 	const fx = new CollectiveFixture(h.clients);
 	fixtures.push(fx);
 	const { collective, landing, name } = await fx.collective(prefix);
@@ -46,7 +45,7 @@ async function tagNames(ctx: Ctx, page: PageInfo): Promise<string[]> {
 /** The user changes the nc fields of the note in the vault. */
 async function userSets(ctx: Ctx, over: Partial<NcMeta>): Promise<void> {
 	const text = await ctx.h.vault.read(ctx.path);
-	ctx.h.edit(ctx.path, replaceNcMeta(text, { ...required(readNcMeta(text, ctx.h.settings.tagsProperty ?? 'nc_tags'), 'nc fields'), ...over, tagsProperty: ctx.h.settings.tagsProperty ?? 'nc_tags' }));
+	ctx.h.edit(ctx.path, replaceNcMeta(text, { ...required(readNcMeta(text), 'nc fields'), ...over }));
 }
 
 describe('server to vault', () => {
@@ -164,10 +163,10 @@ async function remoteTextOf(ctx: Ctx): Promise<string> {
 	return (await ctx.h.clients.webdav.get(remotePagePath(await current(ctx)))).content;
 }
 
-describe('tagsProperty = tags', () => {
+describe('tags as the tags property', () => {
 	let ctx: Ctx;
 	beforeAll(async () => {
-		ctx = await setup('ONC M6 tags', 'tags');
+		ctx = await setup('ONC M6 tags');
 	}, 60_000);
 
 	it('sends Obsidian tags to the server as tags of the collective, and the tags property stays out of the page text', async () => {
@@ -181,9 +180,9 @@ describe('tagsProperty = tags', () => {
 		expect(outcome.result).toMatchObject({ metaPushed: 1, failed: 0 });
 		expect(await tagNames(ctx, await current(ctx))).toEqual(['mein-tag', 'zweiter']);
 		const local = await h.vault.read(path);
-		expect(readLocalFields(local, 'tags')?.tags).toEqual(['mein-tag', 'zweiter']);
+		expect(readLocalFields(local)?.tags).toEqual(['mein-tag', 'zweiter']);
 		// With the tags property the tags are Collectives tags, not page text.
-		expect(toRemote(local, 'tags')).toBe('Inhalt');
+		expect(toRemote(local)).toBe('Inhalt');
 		expect(await remoteTextOf(ctx)).toBe('Inhalt');
 		expect(local).not.toContain('nc_tags');
 	}, 60_000);
@@ -197,11 +196,26 @@ describe('tagsProperty = tags', () => {
 
 		await h.sync();
 
-		expect(readLocalFields(await h.vault.read(path), 'tags')?.tags).toEqual(expect.arrayContaining(['Mein-Tag']));
+		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(expect.arrayContaining(['Mein-Tag']));
 		await waitPastSecondBoundary();
 		const before = (await h.clients.collectives.listTags(collective.id)).length;
 		await h.sync();
 		expect((await h.clients.collectives.listTags(collective.id)).length).toBe(before);
+	}, 90_000);
+
+	it('keeps a dash typed in Obsidian as a dash on the server, and shows a space of the server as a dash', async () => {
+		const { h, collective, path } = ctx;
+		await h.sync();
+		await waitPastSecondBoundary();
+		const text = await h.vault.read(path);
+		h.edit(path, text.replace(/tags: \[/, 'tags: ["mit-strich", '));
+
+		const outcome = await h.sync();
+
+		expect(outcome.result.failed).toBe(0);
+		const names = (await h.clients.collectives.listTags(collective.id)).map((tag) => tag.name);
+		expect(names).toContain('mit-strich');
+		expect(names).not.toContain('mit strich');
 	}, 90_000);
 
 	it('takes a #tag in the text as a tag of the page and keeps it in the property', async () => {
@@ -214,34 +228,34 @@ describe('tagsProperty = tags', () => {
 
 		expect(outcome.result).toMatchObject({ failed: 0 });
 		expect(await tagNames(ctx, await current(ctx))).toContain('Inline-Tag');
-		expect(readLocalFields(await h.vault.read(path), 'tags')?.tags).toContain('Inline-Tag');
+		expect(readLocalFields(await h.vault.read(path))?.tags).toContain('Inline-Tag');
 	}, 90_000);
 });
 
-describe('switching tagsProperty', () => {
-	it('writes the server tags into the other property and removes no tag, both ways', async () => {
-		const ctx = await setup('ONC M6 switch', 'nc_tags');
+describe('notes from before the tags property', () => {
+	it('keeps the tags of a note that still has nc_tags, and moves them into the tags property when the server changes them', async () => {
+		const ctx = await setup('ONC M6 legacy');
 		const { h, collective, page, path } = ctx;
-		const tag = await h.clients.collectives.createTag(collective.id, 'Wechsel', '0082c9');
+		const tag = await h.clients.collectives.createTag(collective.id, 'Alt', '0082c9');
 		await h.clients.collectives.addPageTag(collective.id, page.id, tag.id);
 		await h.sync();
-		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(['Wechsel']);
+		// The note as the plugin wrote it before: tags in nc_tags, no tags property.
+		await waitPastSecondBoundary();
+		const text = await h.vault.read(path);
+		h.edit(path, text.replace(/tags: .*\n/, 'nc_tags: ["Alt"]\n'));
+
+		const first = await h.sync();
+
+		expect(first.result.failed).toBe(0);
+		expect(await tagNames(ctx, await current(ctx))).toEqual(['Alt']);
 
 		await waitPastSecondBoundary();
-		h.settings = { ...h.settings, tagsProperty: 'tags' };
-		const toTags = await h.sync();
-		expect(toTags.result.failed).toBe(0);
-		expect(await tagNames(ctx, await current(ctx))).toEqual(['Wechsel']);
-		const asTags = await h.vault.read(path);
-		expect(readLocalFields(asTags, 'tags')?.tags).toEqual(['Wechsel']);
-		expect(asTags).not.toContain('nc_tags');
-
-		await waitPastSecondBoundary();
-		h.settings = { ...h.settings, tagsProperty: 'nc_tags' };
-		const back = await h.sync();
-		expect(back.result.failed).toBe(0);
-		expect(await tagNames(ctx, await current(ctx))).toEqual(['Wechsel']);
-		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(['Wechsel']);
+		const other = await h.clients.collectives.createTag(collective.id, 'Neu', '0082c9');
+		await h.clients.collectives.addPageTag(collective.id, page.id, other.id);
+		await h.sync();
+		const now = await h.vault.read(path);
+		expect(readLocalFields(now)?.tags).toEqual(['Alt', 'Neu']);
+		expect(now).not.toContain('nc_tags');
 	}, 120_000);
 });
 

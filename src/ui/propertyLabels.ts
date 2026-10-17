@@ -3,7 +3,7 @@
 // Obsidian's events is in main.ts.
 import type { Translator } from '../i18n';
 
-const PROPERTIES = ['nc_page_id', 'nc_collective_id', 'nc_emoji', 'nc_tags', 'nc_title'] as const;
+const PROPERTIES = ['nc_page_id', 'nc_collective_id', 'nc_emoji', 'nc_title'] as const;
 
 export const LABEL_CLASS = 'nc-property-label';
 export const LABELLED_CLASS = 'nc-property-labelled';
