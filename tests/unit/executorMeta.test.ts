@@ -366,7 +366,7 @@ describe('page moved into another collective', () => {
 		const s = await synced(h, { tagNames: ['A', 'B'], tagIds: [a] });
 		const targetA = serverTag(h, 2, 'a');
 		h.vault.seed('Zwei/Notiz.md', await h.vault.read(PATH));
-		h.vault.trash(PATH).catch(() => undefined);
+		await h.vault.trash(PATH);
 		h.state.pages[String(s.page.id)] = { ...stateOf(h, s.page), localPath: 'Zwei/Notiz.md' };
 		h.dav.serve(s.page, TEXT, '"e1"');
 
