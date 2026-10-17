@@ -21,6 +21,8 @@ export interface NcSettings {
 	tagsProperty: TagsProperty;
 	/** Show the page emoji in front of note titles (display only). */
 	showEmojiInTitles: boolean;
+	/** Hide the nc_* properties in the properties view of a note (display only). */
+	hidePluginProperties: boolean;
 }
 
 export const DEFAULT_SETTINGS: NcSettings = {
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	remoteDeleteBehaviour: 'obsidianTrash',
 	tagsProperty: 'tags',
 	showEmojiInTitles: true,
+	hidePluginProperties: true,
 };
 
 export const CONFLICT_STRATEGIES = ['conflictFile', 'preferLocal', 'preferRemote'] as const;

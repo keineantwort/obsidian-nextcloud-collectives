@@ -187,6 +187,17 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName(t('settings.hideProperties.name'))
+			.setDesc(t('settings.hideProperties.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.hidePluginProperties).onChange(async (value) => {
+					settings.hidePluginProperties = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
+
+		new Setting(containerEl)
 			.setName(t('settings.emojiTitles.name'))
 			.setDesc(t('settings.emojiTitles.desc'))
 			.addToggle((toggle) => {

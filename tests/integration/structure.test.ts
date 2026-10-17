@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { Collective, PageInfo } from '../../src/api/types';
 import { readPageId, toRemote } from '../../src/mapping/frontmatter';
 import { remotePagePath } from '../../src/mapping/paths';
+import { planPageRename } from '../../src/mapping/renamePage';
 import { CollectiveFixture, Harness, required, waitPastSecondBoundary } from './harness';
 
 /** Every fixture of this file; all their collectives are trashed at the end. */
@@ -220,6 +221,31 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 		const again = await h.sync();
 		expect(again.result).toMatchObject({ moved: 0, uploaded: 0, failed: 0 });
 	}, 90_000);
+
+	it('renames a folder page when note and folder are renamed together, as the menu does', async () => {
+		const { h, collective, name } = ctx;
+		const plan = planPageRename(`${name}/Archiv/Archiv.md`, 'Ablage', () => false);
+		if (!plan.ok) throw new Error('rename not planned');
+		for (const step of plan.steps) await h.rename(step.from, step.to);
+
+		const outcome = await h.sync();
+
+		expect(outcome.result.failed).toBe(0);
+		const ablage = byTitle(await pagesOf(h, collective), 'Ablage');
+		expect(ablage.id).toBe(folder.id);
+		expect(readPageId(await h.vault.read(`${name}/Ablage/Ablage.md`))).toBe(folder.id);
+		expect(readPageId(await h.vault.read(`${name}/Ablage/Beta.md`))).toBe(alpha.id);
+		expect(h.vault.exists(`${name}/Archiv`)).toBe(false);
+		const again = await h.sync();
+		expect(again.result).toMatchObject({ moved: 0, uploaded: 0, failed: 0 });
+
+		// Back to the old name: the tests below work with it.
+		const back = planPageRename(`${name}/Ablage/Ablage.md`, 'Archiv', () => false);
+		if (!back.ok) throw new Error('rename back not planned');
+		for (const step of back.steps) await h.rename(step.from, step.to);
+		expect((await h.sync()).result.failed).toBe(0);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Archiv.md`))).toBe(folder.id);
+	}, 120_000);
 
 	it('renames the file when the page was renamed on the server', async () => {
 		const { h, collective, name } = ctx;

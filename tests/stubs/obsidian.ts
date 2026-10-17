@@ -65,6 +65,10 @@ export class ButtonComponent {}
 
 export class MarkdownView {}
 
+export class TFile {}
+
+export class TFolder {}
+
 export class PluginSettingTab {}
 
 export class Setting {}
