@@ -76,6 +76,8 @@ export type SyncOp =
 	| ({ kind: 'push'; metaChanged: boolean } & PageOpBase)
 	/** Known page, only metadata changed remotely. */
 	| ({ kind: 'updateMeta' } & PageOpBase)
+	/** Known page with attachments, nothing else to do for it: the attachments are compared with the server. */
+	| ({ kind: 'attachments' } & PageOpBase)
 	/** Known page moved or renamed on the server (or into another collective): the local file follows. `path` is the target. */
 	| ({ kind: 'renameLocal'; from: string } & PageOpBase)
 	/** Local file without nc_page_id: a new page on the server. `fileExists` is false for a missing folder note. */

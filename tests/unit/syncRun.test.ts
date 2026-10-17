@@ -514,7 +514,7 @@ describe('runSync: refusals and errors', () => {
 					metaHash: 'm',
 					status: 'synced',
 					conflictPath: null,
-					attachments: [{ id: asAttachmentId(1), name: 'a.png', etag: 'e', localPath: 'x' }],
+					attachments: [{ id: asAttachmentId(1), name: 'a.png', etag: 'e', localPath: 'x', hash: 'h' }],
 					lastSyncedAt: 1,
 				} satisfies PageState,
 			},

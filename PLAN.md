@@ -159,7 +159,7 @@ src/
     locate.ts, treeIndex.ts   REIN: Datei einer Seite finden (`locatePage`), Seitenbaum-Abfragen (M5)
     executor.ts           führt Operationen aus, aktualisiert State (Schleife und Verteilung); executorContent.ts
                           (Inhalt, M3/M4), executorStructure.ts (Struktur, M5), executorDeps.ts, executorScratch.ts,
-                          pageState.ts (State-Konstruktoren, `unconfirmedRemote`)
+                          pageState.ts (State-Konstruktoren, `unconfirmedRemote`), executorAttachments.ts (Anhänge, M8)
     conflicts.ts          Konfliktliste, Auflösung als State-Übergang (M4)
     scheduler.ts          Intervall, Debounce nach Speichern, Mutex
     dirtyQueue.ts         lokale Vault-Events sammeln, eigene Schreibzugriffe unterdrücken (M4)
@@ -167,7 +167,7 @@ src/
     paths.ts              Remote-Struktur ↔ Vault-Pfade, Dateinamen-Sanitizing
     frontmatter.ts        Frontmatter lesen/schreiben/entfernen
     links.ts              Link-Konvertierung in beide Richtungen
-    attachments.ts        Anhang-Pfade und Einbettungen
+    attachments.ts        Anhang-Pfade und Einbettungen, `AttachmentIndex` (M8)
   ui/
     initialSyncModal.ts   Erstsync-Dialog (M3)
     confirmView.ts        reine Texte und Antworten des Rückfrage-Dialogs (M5); confirmModal.ts zeigt ihn
@@ -243,7 +243,7 @@ Gespeichert in der Datei `sync-state.json` im Plugin-Ordner via `app.vault.adapt
 | `remoteEtag`, `remoteMtime`, `remoteSize` | Remote-Stand. `remoteMtime = -1`: Stand unbestätigt (ETag aus derselben Sekunde oder eigener `PUT`), der nächste Lauf liest per `GET` und vergleicht Hashes (M4, ADR 0017) |
 | `baseHash` | SHA-256 des **Remote-Formats** des Inhalts beim letzten Sync (nach Link-Konvertierung, ohne `nc_*`-Frontmatter). Bei `conflict`/`collision`: Hash der Remote-Fassung der letzten Konfliktkopie (M4, ADR 0017) |
 | `metaHash` | Hash von Titel, Emoji, Tags |
-| `attachments` | Liste `{ id, name, etag, localPath }` |
+| `attachments` | Liste `{ id, name, etag, localPath, hash }`; `etag: ''` = noch nicht übertragen (M8, ADR 0021) |
 | `lastSyncedAt` | Zeitstempel |
 | `localMtime` | mtime der lokalen Datei nach dem letzten eigenen Schreiben bzw. vor dem Lesen des hochgeladenen Textes; Abweichung = Kandidat für lokale Änderung (M3). `-1`: lokale Datei ungeprüft (nach „Lokal behalten“, M4) |
 | `status`, `conflictPath` | `synced` / `conflict` / `collision` und Pfad der letzten Konfliktkopie (M3). `conflict`: Datei trägt ihre `nc_page_id`, beide Seiten verschieden (`baseHash = ''`, wenn die Basis unbekannt ist). `collision`: Zielpfad war durch eine fremde Nutzerdatei ohne `nc_page_id` belegt; `localPath` ist deren Pfad (ADR 0016) |
@@ -380,6 +380,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 - Push: neue eingebettete Dateien per WebDAV-`PUT` in `.attachments.{pageId}/` hochladen (vorher `MKCOL`, falls der Ordner fehlt). Collectives erkennt das, M0 ✔. Der OCS-Multipart-Upload funktioniert ebenfalls, benennt bei Kollision aber eigenmächtig um (`name (1).ext`) und wird daher nicht verwendet.
 - ETags von Anhängen per `PROPFIND` (die OCS-Liste enthält keine).
 - Lokal gelöschter, nicht mehr referenzierter Anhang → Remote löschen (Setting, Default an). Max. Dateigröße als Setting (Default 20 MB).
+- Umgesetzt in M8 laut ADR 0021: Einbettungen (`![[…]]`, `![](…)`) ⇄ `![name](.attachments.{id}/name)` über den Index in `links.ts`/`attachments.ts`; ein Schritt je Seite nach dem Inhalt (`executorAttachments.ts`) gleicht den Ordner `.attachments.{id}` per PROPFIND (ETag) ab. Weder hoch- noch heruntergeladen wird, was größer als das Limit ist. Eingefügte Dateien bleiben, wo sie liegen; heruntergeladene liegen im Ordner nach Muster. Lokale Änderungen vorhandener Anhänge werden nicht hochgeladen (siehe ADR).
 
 ## 10. Authentifizierung und Settings
 
@@ -403,8 +404,9 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 | `localDeleteBehaviour` | `ask` | `ask` (Bestätigung, dann Remote-Papierkorb) / `trashRemote` (ohne Rückfrage). Für Collectives immer `ask` |
 | `remoteDeleteBehaviour` | `obsidianTrash` | `obsidianTrash`/`keepUnlinked` |
 | `convertLinks` | true | |
-| `attachmentFolderPattern` | `_attachments/{title}` | |
-| `maxAttachmentSizeMb` | 20 | |
+| `attachmentFolderPattern` | `_attachments/{title}` | relativ zum Ordner der Notiz |
+| `maxAttachmentSizeMb` | 20 | 1–1000 |
+| `deleteRemoteAttachments` | true | lokal gelöschten, nicht mehr eingebetteten Anhang auch auf dem Server löschen (M8) |
 | `debugLogging` | false | |
 
 ## 11. UI und Commands
@@ -510,6 +512,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 
 ### M8 – Anhänge
 - Pull/Push/Löschen laut 9.4, Größenlimit.
+- Umgesetzt laut ADR 0021. Hinweise aus M1/M2 umgesetzt: Transport für `ArrayBuffer` (Body und Antwort), Content-Type und Timeout pro Request.
 - Akzeptanz: Bild in Obsidian eingefügt erscheint in Collectives und umgekehrt; unveränderte Anhänge werden nicht erneut übertragen.
 - Hinweis aus dem M1-Review: Transport (`http.ts`) für Binärdaten erweitern (`ArrayBuffer`-Body, Antwort als `arrayBuffer`).
 - Hinweis aus dem M2-Review: `WebdavClient.put` setzt fest `text/markdown`; für Anhänge Content-Type übergeben und den Timeout (30 s) für große Dateien pro Request konfigurierbar machen.
@@ -564,8 +567,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M4 | umgesetzt (ONC-5), gemergt (PR #16) |
 | M5 | umgesetzt (ONC-6), gemergt |
 | M6 | umgesetzt (ONC-7), gemergt |
-| M7 | umgesetzt (ONC-8), PR offen |
-| M8 | offen |
+| M7 | umgesetzt (ONC-8), gemergt |
+| M8 | umgesetzt (ONC-9), PR offen |
 | M9 | offen |
 | M10 | offen |
 

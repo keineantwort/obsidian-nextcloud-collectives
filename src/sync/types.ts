@@ -72,10 +72,12 @@ export interface SyncResult {
 	removed: number;
 	/** Pages restored from the Collectives trash. */
 	restored: number;
+	/** Attachment files transferred in either direction, or removed. */
+	attachments: number;
 }
 
 export function emptyResult(): SyncResult {
-	return { created: 0, updated: 0, pushed: 0, metaUpdated: 0, metaPushed: 0, metaInvalid: 0, conflicts: 0, unchanged: 0, failed: 0, uploaded: 0, moved: 0, trashed: 0, removed: 0, restored: 0 };
+	return { created: 0, updated: 0, pushed: 0, metaUpdated: 0, metaPushed: 0, metaInvalid: 0, conflicts: 0, unchanged: 0, failed: 0, uploaded: 0, moved: 0, trashed: 0, removed: 0, restored: 0, attachments: 0 };
 }
 
 export type SyncRunOutcome =

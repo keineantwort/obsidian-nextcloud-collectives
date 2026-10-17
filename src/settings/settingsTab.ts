@@ -3,7 +3,7 @@ import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
-import { isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
+import { isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
@@ -184,6 +184,55 @@ export class NcSettingTab extends PluginSettingTab {
 						await plugin.saveSettings();
 					});
 				dd.selectEl.setAttribute('aria-label', t('settings.remoteDelete.name'));
+			});
+
+		const patternSetting = new Setting(containerEl)
+			.setName(t('settings.attachmentFolder.name'))
+			.setDesc(t('settings.attachmentFolder.desc'));
+		patternSetting.addText((text) => {
+			text.setValue(settings.attachmentFolderPattern);
+			// Saved on commit; an unusable pattern is refused and the field shows the saved value again.
+			text.inputEl.addEventListener('change', () => { void (async () => {
+				const value = text.inputEl.value;
+				if (!isAttachmentFolderPattern(value)) {
+					new Notice(t('settings.attachmentFolder.invalid'));
+					text.setValue(settings.attachmentFolderPattern);
+					return;
+				}
+				settings.attachmentFolderPattern = value.trim().replace(/^\/+|\/+$/g, '');
+				await plugin.saveSettings();
+			})(); });
+			text.inputEl.setAttribute('aria-label', t('settings.attachmentFolder.name'));
+			applyPlainInputAttributes(text.inputEl);
+		});
+
+		new Setting(containerEl)
+			.setName(t('settings.maxAttachmentSize.name'))
+			.setDesc(t('settings.maxAttachmentSize.desc'))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.setValue(String(settings.maxAttachmentSizeMb));
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					const value = Number(text.inputEl.value);
+					if (!isMaxAttachmentSizeMb(value)) {
+						new Notice(t('settings.maxAttachmentSize.invalid'));
+						text.setValue(String(settings.maxAttachmentSizeMb));
+						return;
+					}
+					settings.maxAttachmentSizeMb = value;
+					await plugin.saveSettings();
+				})(); });
+				text.inputEl.setAttribute('aria-label', t('settings.maxAttachmentSize.name'));
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.deleteRemoteAttachments.name'))
+			.setDesc(t('settings.deleteRemoteAttachments.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.deleteRemoteAttachments).onChange(async (value) => {
+					settings.deleteRemoteAttachments = value;
+					await plugin.saveSettings();
+				});
 			});
 
 		new Setting(containerEl)

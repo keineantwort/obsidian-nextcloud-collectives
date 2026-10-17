@@ -59,7 +59,7 @@ function ocsOk(data: unknown): HttpResponse {
 /** The JSON body that was sent with the first request, or undefined if there was none. */
 function sentBody(calls: HttpRequest[]): unknown {
 	const body = calls[0]?.body;
-	return body === undefined ? undefined : JSON.parse(body);
+	return body === undefined ? undefined : JSON.parse(body as string);
 }
 
 async function captureError(promise: Promise<unknown>): Promise<unknown> {

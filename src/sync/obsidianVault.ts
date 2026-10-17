@@ -20,7 +20,7 @@ export function createObsidianVault(app: App): VaultReader & VaultWriter {
 
 	return {
 		configDir: vault.configDir,
-		listFiles: () => vault.getFiles().map((file) => ({ path: file.path, mtime: file.stat.mtime })),
+		listFiles: () => vault.getFiles().map((file) => ({ path: file.path, mtime: file.stat.mtime, size: file.stat.size })),
 		listFolders: () => vault.getAllFolders(false).map((folder) => folder.path),
 		/** Valid nc_page_id from the cache; undefined for anything else, so the scan reads the file itself. */
 		cachedPageId(path: string): PageId | undefined {
@@ -33,6 +33,16 @@ export function createObsidianVault(app: App): VaultReader & VaultWriter {
 			return pageIdFromFrontmatterValue(frontmatter['nc_page_id']);
 		},
 		read: (path) => vault.read(requireFile(path)),
+		readBinary: (path) => vault.readBinary(requireFile(path)),
+		createBinary: async (path, data) => {
+			const file = await vault.createBinary(path, data);
+			return file.stat.mtime;
+		},
+		modifyBinary: async (path, data) => {
+			const file = requireFile(path);
+			await vault.modifyBinary(file, data);
+			return file.stat.mtime;
+		},
 		exists: (path) => vault.getAbstractFileByPath(path) !== null,
 		create: async (path, content) => {
 			const file = await vault.create(path, content);

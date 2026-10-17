@@ -1,5 +1,7 @@
 // Local scan (PLAN §5): synced Markdown files with their nc_page_id, plus all vault paths for collision checks.
 import type { PageId } from '../api/types';
+import { isAttachmentFile } from '../mapping/attachments';
+import type { AttachmentFile } from '../mapping/attachments';
 import { readPageId } from '../mapping/frontmatter';
 import { isSyncedPath, pathKey } from '../mapping/paths';
 
@@ -23,13 +25,15 @@ export interface LocalSnapshot {
 	folders: string[];
 	/** Markdown files directly in the vault root: not synced (PLAN §6.1), reported in the log. */
 	rootFiles: string[];
+	/** Files that notes can embed as attachments (no notes), outside the config folder and hidden folders, with their size. */
+	attachmentFiles: AttachmentFile[];
 }
 
 /** Port, implemented over app.vault + app.metadataCache in src/sync/obsidianVault.ts. */
 export interface VaultReader {
 	configDir: string;
-	/** All files: path + mtime. */
-	listFiles(): { path: string; mtime: number }[];
+	/** All files: path, mtime and size in bytes. */
+	listFiles(): { path: string; mtime: number; size: number }[];
 	/** All folder paths except the root ''. */
 	listFolders(): string[];
 	/** Valid nc_page_id from the metadata cache; undefined if the cache has none. Then the file is read instead. */
@@ -50,12 +54,16 @@ export async function scanLocal(vault: VaultReader): Promise<LocalSnapshot> {
 	let nonEmpty = false;
 	const folders: string[] = [];
 	const rootFiles: string[] = [];
+	const attachmentFiles: AttachmentFile[] = [];
 
 	for (const file of vault.listFiles()) {
 		occupied.add(pathKey(file.path));
 		paths.set(pathKey(file.path), file.path);
 		if (!isInConfigDir(file.path, vault.configDir)) nonEmpty = true;
 		if (!file.path.includes('/') && file.path.endsWith('.md')) rootFiles.push(file.path);
+		if (isAttachmentFile(file.path) && !isInConfigDir(file.path, vault.configDir) && !file.path.split('/').some((segment) => segment.startsWith('.'))) {
+			attachmentFiles.push({ path: file.path, size: file.size });
+		}
 		if (!isSyncedPath(file.path, vault.configDir)) continue;
 		const cached = vault.cachedPageId(file.path);
 		const pageId = cached !== undefined ? cached : readPageId(await vault.read(file.path));
@@ -71,5 +79,5 @@ export async function scanLocal(vault: VaultReader): Promise<LocalSnapshot> {
 		}
 	}
 
-	return { files, occupied, paths, nonEmpty, folders, rootFiles };
+	return { files, occupied, paths, nonEmpty, folders, rootFiles, attachmentFiles };
 }

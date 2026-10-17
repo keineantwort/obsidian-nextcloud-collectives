@@ -8,8 +8,9 @@ export const REQUEST_TIMEOUT_MS = 30_000;
 export const obsidianRequest: RequestFn = async (req) => {
 	const res = await withTimeout(
 		requestUrl({ url: req.url, method: req.method, headers: req.headers, body: req.body, throw: false }),
-		REQUEST_TIMEOUT_MS,
+		req.timeoutMs ?? REQUEST_TIMEOUT_MS,
 	);
+	if (req.binaryResponse) return { status: res.status, headers: res.headers, text: '', data: res.arrayBuffer };
 	return { status: res.status, headers: res.headers, text: readText(res) };
 };
 

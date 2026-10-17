@@ -121,7 +121,7 @@ export function localSnapshot(files: LocalFile[], extraFolders: string[] = []): 
 		}
 	}
 	const folders = [...paths.entries()].filter(([key]) => !files.some((file) => pathKey(file.path) === key)).map(([, path]) => path);
-	return { files, occupied, paths, nonEmpty: files.length > 0, folders, rootFiles: [] };
+	return { files, occupied, paths, nonEmpty: files.length > 0, folders, rootFiles: [], attachmentFiles: [] };
 }
 
 export function syncState(parts: { collectives?: CollectiveState[]; pages?: PageState[]; tags?: SyncState['tags'] }): SyncState {

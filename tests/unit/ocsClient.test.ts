@@ -87,7 +87,7 @@ describe('OcsClient.request headers', () => {
 
 		expect(calls[0]?.method).toBe('POST');
 		expect(getHeader(calls[0]?.headers ?? {}, 'Content-Type')).toBe('application/json');
-		expect(JSON.parse(String(calls[0]?.body))).toEqual({ name: 'Handbuch', emoji: '📘' });
+		expect(JSON.parse(calls[0]?.body as string)).toEqual({ name: 'Handbuch', emoji: '📘' });
 	});
 
 	it('sends neither a Content-Type nor a body when no body is given', async () => {
