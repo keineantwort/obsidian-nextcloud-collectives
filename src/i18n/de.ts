@@ -233,4 +233,5 @@ export const de: Record<MessageKey, string> = {
 	'settings.login.failed': 'Anmeldung fehlgeschlagen: {reason}',
 	'sync.rerunQueued': 'Es läuft bereits eine Synchronisierung. Sie läuft danach noch einmal.',
 	'sync.auto.questionsPending': 'Einige Änderungen brauchen deine Entscheidung. Starte „Jetzt synchronisieren“, um zu antworten.',
+	'settings.login.insecure': 'Die Anmeldung im Browser braucht https:// – mit http:// würde das App-Passwort unverschlüsselt übertragen. Nutze https:// oder gib ein App-Passwort von Hand ein.',
 };

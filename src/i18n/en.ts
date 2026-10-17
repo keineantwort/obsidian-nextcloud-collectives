@@ -231,5 +231,6 @@ export const en = {
 	'settings.login.failed': 'Sign-in failed: {reason}',
 	'sync.rerunQueued': 'A sync is already running. It will run once more afterwards.',
 	'sync.auto.questionsPending': 'Some changes need your decision. Run “Sync now” to answer.',
+	'settings.login.insecure': 'Sign-in in the browser needs https:// – with http:// the app password would travel unencrypted. Use https:// or enter an app password by hand.',
 } as const;
 export type MessageKey = keyof typeof en;

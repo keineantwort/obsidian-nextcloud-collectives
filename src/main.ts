@@ -179,7 +179,8 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	 * except into secret storage.
 	 */
 	async loginWithBrowser(onStart: (start: LoginFlowStart) => void, isCancelled: () => boolean): Promise<{ kind: 'done'; user: string } | { kind: 'cancelled' } | { kind: 'timeout' }> {
-		const start = await startLoginFlow(normalizeServerUrl(this.settings.serverUrl), obsidianRequest);
+		const serverUrl = normalizeServerUrl(this.settings.serverUrl);
+		const start = await startLoginFlow(serverUrl, obsidianRequest);
 		onStart(start);
 		const outcome = await awaitLoginFlow(start, {
 			request: obsidianRequest,
@@ -188,6 +189,14 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			isCancelled,
 		});
 		if (outcome.kind !== 'done') return { kind: outcome.kind };
+		// The address was edited while waiting: the new app password belongs to the old server, so it is not stored.
+		let current: string | null = null;
+		try {
+			current = normalizeServerUrl(this.settings.serverUrl);
+		} catch {
+			current = null;
+		}
+		if (current !== serverUrl) return { kind: 'cancelled' };
 		await this.storeAppPassword(outcome.credentials.appPassword);
 		this.settings.username = outcome.credentials.loginName;
 		await this.saveSettings();

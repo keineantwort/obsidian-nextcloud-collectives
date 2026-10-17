@@ -10,6 +10,12 @@ export class NcSettingTab extends PluginSettingTab {
 	/** Fields that the browser login fills in. */
 	private usernameField: TextComponent | null = null;
 	private passwordField: TextComponent | null = null;
+	/** Set while a browser login waits; hide() cancels it so no invisible flow keeps polling. */
+	private cancelLogin: (() => void) | null = null;
+
+	hide(): void {
+		this.cancelLogin?.();
+	}
 
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
 
@@ -29,11 +35,13 @@ export class NcSettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder('https://cloud.example.com')
 					.setValue(settings.serverUrl)
-					.onChange(async (value) => {
-						settings.serverUrl = value.trim();
-						updateUrlWarning(value);
-						await plugin.saveSettings();
-					});
+					.onChange((value) => { updateUrlWarning(value); });
+				// Saved on commit (blur/Enter), not per keystroke: an automatic sync must never send the app password
+				// to a half-typed server address.
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					settings.serverUrl = text.inputEl.value.trim();
+					await plugin.saveSettings();
+				})(); });
 				applyPlainInputAttributes(text.inputEl);
 				text.inputEl.type = 'url';
 			});
@@ -352,8 +360,18 @@ export class NcSettingTab extends PluginSettingTab {
 					cancelled = true;
 					return;
 				}
+				// Plain http would send the sign-in and the new app password unencrypted.
+				try {
+					if (isInsecureRemoteUrl(normalizeServerUrl(plugin.settings.serverUrl))) {
+						statusEl.setText(t('settings.login.insecure'));
+						return;
+					}
+				} catch {
+					// An invalid or missing URL is reported by the login itself.
+				}
 				running = true;
 				cancelled = false;
+				this.cancelLogin = () => { cancelled = true; };
 				btn.setButtonText(t('settings.login.cancel'));
 				statusEl.empty();
 				statusEl.setText(t('settings.login.waiting'));
@@ -376,6 +394,7 @@ export class NcSettingTab extends PluginSettingTab {
 					statusEl.setText(t('settings.login.failed', { reason: describeConnectionError(err, t) }));
 				} finally {
 					running = false;
+					this.cancelLogin = null;
 					btn.setButtonText(t('settings.login.button'));
 				}
 			});
