@@ -27,6 +27,8 @@ export interface Context {
 	failed: Set<CollectiveId>;
 	/** Collectives whose folder or existence changes in this plan: their pages wait for the next pass. */
 	blocked: Set<CollectiveId>;
+	/** pathKeys of folders renamed in this plan: what lies in them waits for the next pass. */
+	blockedDirs: Set<string>;
 	/** Collectives the plugin forgets so that they are pulled again (folder deleted without the right, or deletion refused). */
 	restore: Set<CollectiveId>;
 	skips: Skip[];
@@ -60,6 +62,7 @@ export function createContext(input: PlannerInput): Context {
 		scanned: new Set<CollectiveId>(remoteCollectives.keys()),
 		failed,
 		blocked: new Set<CollectiveId>(),
+		blockedDirs: new Set<string>(),
 		restore: new Set<CollectiveId>(),
 		skips: [],
 		proposals: [],
@@ -98,6 +101,13 @@ export function collectivesByFolder(ctx: Context): Map<string, CollectiveId> {
 		if (!out.has(key)) out.set(key, id);
 	}
 	return out;
+}
+
+/** True if `path` lies in a folder that this plan renames. */
+export function inBlockedDir(ctx: Context, path: string): boolean {
+	const key = pathKey(path);
+	for (const dir of ctx.blockedDirs) if (key.startsWith(dir + '/')) return true;
+	return false;
 }
 
 export function dirnameOf(path: string): string {

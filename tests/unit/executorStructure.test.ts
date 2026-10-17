@@ -587,6 +587,22 @@ describe('collectives', () => {
 		expect(h.state.collectives['1']).toMatchObject({ name: 'Coll', localFolder: 'Coll' });
 	});
 
+	it('renames the folder of a folder page after its note, with the paths of everything in it', async () => {
+		const h = harness();
+		const folder = h.api.addPage(1, { title: 'Sammlung', parentId: LANDING, fileName: 'Readme.md', filePath: 'Ordner' });
+		const child = h.api.addPage(1, { title: 'Kind', parentId: folder.id, filePath: 'Ordner' });
+		await known(h, folder, 'Coll/Ordner/Sammlung.md', 'x');
+		await known(h, child, 'Coll/Ordner/Kind.md', 'y');
+
+		const result = await executeSync(plan([{ kind: 'renameFolderLocal', collectiveId: COLL, from: 'Coll/Ordner', to: 'Coll/Sammlung' }]), h.deps);
+
+		expect(result).toEqual({ ...emptyResult(), moved: 1 });
+		expect(h.vault.exists('Coll/Sammlung/Sammlung.md')).toBe(true);
+		expect(h.vault.exists('Coll/Sammlung/Kind.md')).toBe(true);
+		expect(stateOf(h, folder.id).localPath).toBe('Coll/Sammlung/Sammlung.md');
+		expect(stateOf(h, child.id).localPath).toBe('Coll/Sammlung/Kind.md');
+	});
+
 	it('moves the collective to the trash and forgets it', async () => {
 		const h = harness();
 		const page = h.api.addPage(1, { title: 'Seite', parentId: LANDING });

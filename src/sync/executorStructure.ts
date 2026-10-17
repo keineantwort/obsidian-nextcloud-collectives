@@ -18,7 +18,7 @@ import type { SyncResult } from './types';
 
 export type StructureOpKind =
 	| 'renameLocal' | 'createRemote' | 'moveRemote' | 'trashRemote' | 'removeLocal' | 'dropState' | 'restoreRemote'
-	| 'createCollective' | 'renameCollective' | 'renameCollectiveFolder' | 'trashCollective' | 'removeCollectiveLocal';
+	| 'createCollective' | 'renameCollective' | 'renameCollectiveFolder' | 'renameFolderLocal' | 'trashCollective' | 'removeCollectiveLocal';
 
 type Op<K extends StructureOpKind> = Extract<SyncOp, { kind: K }>;
 
@@ -35,6 +35,7 @@ export function applyStructureOp(op: Extract<SyncOp, { kind: StructureOpKind }>,
 		case 'createCollective': return createCollective(op, deps, result);
 		case 'renameCollective': return renameCollective(op, deps, result);
 		case 'renameCollectiveFolder': return renameCollectiveFolder(op, deps, result);
+		case 'renameFolderLocal': return renameFolderLocal(op, deps, result);
 		case 'trashCollective': return trashCollective(op, deps, result);
 		case 'removeCollectiveLocal': return removeCollectiveLocal(op, deps, result);
 	}
@@ -446,6 +447,16 @@ async function renameCollectiveFolder(op: Op<'renameCollectiveFolder'>, deps: Ex
 	rebasePaths(deps, op.collectiveId, known.localFolder, op.to);
 	deps.state.collectives[String(op.collectiveId)] = { ...known, name: op.name, localFolder: op.to };
 	await tidyLandingNote(deps, op.collectiveId, op.to);
+	result.moved++;
+	return true;
+}
+
+/** The folder of a folder page follows its note (the user renamed only the note). The state paths below it follow. */
+async function renameFolderLocal(op: Op<'renameFolderLocal'>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
+	if (deps.vault.exists(op.to)) throw new Error(`Target of the folder rename exists: ${op.to}`);
+	await deps.vault.rename(op.from, op.to);
+	deps.occupied.add(pathKey(op.to));
+	rebasePaths(deps, op.collectiveId, op.from, op.to);
 	result.moved++;
 	return true;
 }

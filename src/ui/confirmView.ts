@@ -7,7 +7,7 @@ export interface ConfirmRow {
 	kind: Proposal['kind'];
 	/** What happens if the box is checked. */
 	label: string;
-	/** Further lines: where, how much, what happens if the box stays unchecked. */
+	/** Further short lines: where and how much. Explanations live in the README, not in the dialog. */
 	details: string[];
 	/** Warning for a mass deletion (PLAN §16), or null. */
 	warning: string | null;
@@ -25,8 +25,8 @@ export function buildConfirmRows(proposals: readonly Proposal[], t: Translator):
 function toRow(proposal: Proposal, t: Translator): ConfirmRow {
 	switch (proposal.kind) {
 		case 'deletePage': {
-			const details = [proposal.path, t('confirm.deletePage.detail')];
-			if (proposal.descendants > 0) details.splice(1, 0, t('confirm.deletePage.descendants', { count: proposal.descendants }));
+			const details = [proposal.path];
+			if (proposal.descendants > 0) details.push(t('confirm.deletePage.descendants', { count: proposal.descendants }));
 			const warning = proposal.mass === null
 				? null
 				: t('confirm.mass.warning', { name: proposal.mass.collectiveName, deleted: proposal.mass.deleted, total: proposal.mass.total });

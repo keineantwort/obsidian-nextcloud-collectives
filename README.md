@@ -14,10 +14,10 @@ Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective is
 |---|---|
 | eine neue Notiz anlegen | Sie wird als neue Seite hochgeladen, ihre `nc_page_id` steht danach im Frontmatter. Die Seite hängt unter der Seite, der ihr Ordner gehört; liegt sie in einem Ordner ohne Notiz, legt das Plugin dafür eine Ordnerseite an. |
 | eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben, Tags gehen dabei verloren). |
-| den Ordner einer Seite mit Unterseiten umbenennen | Die Seite heißt danach wie der Ordner, die Notiz im Ordner folgt. Benenne dafür den **Ordner** um, nicht nur die Notiz darin. |
+| den Ordner einer Seite mit Unterseiten umbenennen, oder nur die Notiz darin | Die Seite heißt danach wie der Ordner bzw. die Notiz; Ordner und Notiz bekommen denselben Namen. |
 | einen neuen Ordner auf oberster Ebene mit Notizen anlegen | Ein neues Collective entsteht (einstellbar: „Neue Ordner auf oberster Ebene“). Die Notiz, die wie der Ordner heißt, wird die Startseite. |
 | den Ordner eines Collectives umbenennen | Das Collective wird umbenannt. Das dürfen nur Admins und Eigentümer; sonst wird der Ordner zurückbenannt. |
-| eine Notiz oder einen Ordner löschen | Das Plugin **fragt**, bevor eine Seite oder ein Collective auf dem Server in den Collectives-Papierkorb kommt (dort lässt sich beides wiederherstellen). Was du nicht anhakst, kommt in den Vault zurück. Schließt du den Dialog, wird beim nächsten Lauf erneut gefragt. |
+| eine Notiz oder einen Ordner löschen | Das Plugin **fragt**, bevor eine Seite oder ein Collective auf dem Server in den Collectives-Papierkorb kommt (dort lässt sich beides wiederherstellen). Im Dialog ist nichts vorausgewählt: Was du anhakst, wird gelöscht; was du nicht anhakst, kommt in den Vault zurück. Schließt du den Dialog (Esc), passiert nichts, und beim nächsten Lauf wird erneut gefragt. Eine Seite mit Unterseiten wird samt Unterseiten gelöscht. |
 
 In der anderen Richtung gilt:
 

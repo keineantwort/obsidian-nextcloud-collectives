@@ -205,6 +205,22 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 		expect(again.result).toMatchObject({ moved: 0, uploaded: 0, failed: 0 });
 	}, 90_000);
 
+	it('renames the page and then its folder when the user renames only the note of a folder page', async () => {
+		const { h, collective, name } = ctx;
+		await h.rename(`${name}/Sammlung/Sammlung.md`, `${name}/Sammlung/Archiv.md`);
+
+		const outcome = await h.sync();
+
+		expect(outcome.result.failed).toBe(0);
+		const archiv = byTitle(await pagesOf(h, collective), 'Archiv');
+		expect(archiv.id).toBe(folder.id);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Archiv.md`))).toBe(folder.id);
+		expect(h.vault.exists(`${name}/Sammlung`)).toBe(false);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Beta.md`))).toBe(alpha.id);
+		const again = await h.sync();
+		expect(again.result).toMatchObject({ moved: 0, uploaded: 0, failed: 0 });
+	}, 90_000);
+
 	it('renames the file when the page was renamed on the server', async () => {
 		const { h, collective, name } = ctx;
 		const innen = byTitle(await pagesOf(h, collective), 'Innen');
@@ -226,7 +242,7 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 		const outcome = await h.sync();
 
 		expect(outcome.result).toMatchObject({ moved: 1, failed: 0 });
-		expect(readPageId(await h.vault.read(`${name}/Sammlung/Drinnen.md`))).toBe(drinnen.id);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Drinnen.md`))).toBe(drinnen.id);
 		expect(h.vault.exists(`${name}/Drinnen.md`)).toBe(false);
 	}, 60_000);
 
@@ -234,15 +250,15 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 		const { h, collective, name } = ctx;
 		const pages = await pagesOf(h, collective);
 		const drinnen = byTitle(pages, 'Drinnen');
-		await h.rename(`${name}/Sammlung/Drinnen.md`, `${name}/Sammlung/Lokal.md`);
+		await h.rename(`${name}/Archiv/Drinnen.md`, `${name}/Archiv/Lokal.md`);
 		await h.clients.collectives.updatePage(collective.id, drinnen.id, { title: 'Remote' });
 
 		const outcome = await h.sync();
 
 		expect(outcome.skips).toContainEqual({ reason: 'remoteMoveWins', pageId: drinnen.id });
 		expect(byTitle(await pagesOf(h, collective), 'Remote').id).toBe(drinnen.id);
-		expect(readPageId(await h.vault.read(`${name}/Sammlung/Remote.md`))).toBe(drinnen.id);
-		expect(h.vault.exists(`${name}/Sammlung/Lokal.md`)).toBe(false);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Remote.md`))).toBe(drinnen.id);
+		expect(h.vault.exists(`${name}/Archiv/Lokal.md`)).toBe(false);
 	}, 60_000);
 
 	it('moves the file into the folder when a leaf page became a folder page on the server', async () => {
@@ -254,9 +270,9 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 		const outcome = await h.sync();
 
 		expect(outcome.result.failed).toBe(0);
-		expect(readPageId(await h.vault.read(`${name}/Sammlung/Remote/Remote.md`))).toBe(remote.id);
-		expect(h.vault.exists(`${name}/Sammlung/Remote.md`)).toBe(false);
-		expect(h.vault.exists(`${name}/Sammlung/Remote/Kind.md`)).toBe(true);
+		expect(readPageId(await h.vault.read(`${name}/Archiv/Remote/Remote.md`))).toBe(remote.id);
+		expect(h.vault.exists(`${name}/Archiv/Remote.md`)).toBe(false);
+		expect(h.vault.exists(`${name}/Archiv/Remote/Kind.md`)).toBe(true);
 	}, 90_000);
 });
 

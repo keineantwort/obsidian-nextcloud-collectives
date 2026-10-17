@@ -109,6 +109,8 @@ export type SyncOp =
 	| { kind: 'renameCollective'; collectiveId: CollectiveId; circleId: string; name: string; folder: string }
 	/** The local folder takes another name: the server's new name, or the old name again (no right to rename). */
 	| { kind: 'renameCollectiveFolder'; collectiveId: CollectiveId; from: string; to: string; name: string }
+	/** The folder of a folder page takes the page's name again (the user renamed only the note, PLAN §7.4, ADR 0018). */
+	| { kind: 'renameFolderLocal'; collectiveId: CollectiveId; from: string; to: string }
 	/** Local folder deletion confirmed: the collective goes to the Collectives trash. */
 	| { kind: 'trashCollective'; collectiveId: CollectiveId; folder: string }
 	/** Collective gone on the server, removal confirmed: the local folder goes to the trash. */

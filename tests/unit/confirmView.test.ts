@@ -17,36 +17,35 @@ const GONE: Proposal = { id: 'removeCollectiveLocal:2', kind: 'removeCollectiveL
 const FOLDER: Proposal = { id: 'newCollective:Neu', kind: 'newCollective', folder: 'Neu', files: 2 };
 
 describe('buildConfirmRows', () => {
-	it('says what happens if the box is checked, with the place and the consequence of leaving it unchecked', () => {
+	it('says in a few words what happens if the box is checked, and where', () => {
 		const [row] = buildConfirmRows([PAGE], en);
 
-		expect(row?.label).toBe('Delete the page “Urlaub” on the server');
-		expect(row?.details[0]).toBe('Coll/Urlaub.md');
-		expect(row?.details.join(' ')).toContain('Unchecked: the file comes back to your vault.');
+		expect(row?.label).toBe('Delete page “Urlaub”');
+		expect(row?.details).toEqual(['Coll/Urlaub.md']);
 		expect(row?.warning).toBeNull();
 	});
 
 	it('names the number of sub-pages that go with a folder page', () => {
 		const [row] = buildConfirmRows([PARENT], en);
 
-		expect(row?.details).toContain('This also deletes 3 sub-pages.');
+		expect(row?.details).toEqual(['Coll/Prozesse/Prozesse.md', 'with 3 sub-pages']);
 	});
 
 	it('warns about a mass deletion with the numbers', () => {
 		const [row] = buildConfirmRows([MASS], en);
 
-		expect(row?.warning).toBe('Many pages: 5 of 20 pages of “Coll” would be deleted.');
+		expect(row?.warning).toBe('5 of 20 pages of “Coll”');
 	});
 
 	it('words the collective and folder questions', () => {
 		const rows = buildConfirmRows([COLLECTIVE, GONE, FOLDER], en);
 
 		expect(rows.map((row) => row.label)).toEqual([
-			'Delete the collective “Handbuch” on the server',
-			'Move the folder “Alt” to the trash',
-			'Create the collective “Neu” on the server',
+			'Delete collective “Handbuch”',
+			'Remove folder “Alt” (deleted on the server)',
+			'Create collective “Neu”',
 		]);
-		expect(rows[1]?.details[0]).toContain('4 pages');
+		expect(rows.map((row) => row.details)).toEqual([['12 pages'], ['4 pages'], ['2 notes']]);
 	});
 
 	it('puts collective questions before page questions and mass deletions first among the pages', () => {
@@ -58,7 +57,7 @@ describe('buildConfirmRows', () => {
 	it('speaks German', () => {
 		const [row] = buildConfirmRows([PAGE], de);
 
-		expect(row?.label).toBe('Seite „Urlaub“ auf dem Server löschen');
+		expect(row?.label).toBe('Seite „Urlaub“ löschen');
 	});
 });
 

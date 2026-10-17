@@ -193,6 +193,42 @@ describe('planSync: lokal umbenannt oder verschoben', () => {
 		expect(moves).toContainEqual(expect.objectContaining({ pageId: 21, title: null, parent: null }));
 	});
 
+	it('renames the page after its note when the user renamed only the note, and asks for a pass that renames the folder', () => {
+		const files = treeFiles().map((f) => (f.path === 'Coll/Ordner/Ordner.md' ? { ...f, path: 'Coll/Ordner/Sammlung.md' } : f));
+		const plan = tree({ files });
+
+		expect(opsOf(plan, 'moveRemote')).toEqual([expect.objectContaining({ pageId: 20, title: 'Sammlung', tidyTo: null })]);
+		expect(plan.followUp).toBe(true);
+	});
+
+	it('renames the folder after the note once the server took the new title, and leaves its content for the next pass', () => {
+		const renamed = ordnerPage({ title: 'Sammlung' });
+		const state = treeState();
+		state.pages['20'] = pageState(renamed, 1, 'Coll/Ordner/Sammlung.md');
+		const files = treeFiles().map((f) => (f.path === 'Coll/Ordner/Ordner.md' ? { ...f, path: 'Coll/Ordner/Sammlung.md' } : f));
+		const plan = planFor({
+			remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage(), renamed, kindPage({ timestamp: 2 })])]),
+			state,
+			files,
+		});
+
+		expect(opsOf(plan, 'renameFolderLocal')).toEqual([{ kind: 'renameFolderLocal', collectiveId: 1, from: 'Coll/Ordner', to: 'Coll/Sammlung' }]);
+		// The child changed remotely, but its path changes with the folder: it is updated in the next pass.
+		expect(opsOf(plan, 'update')).toEqual([]);
+		expect(plan.proposals).toEqual([]);
+		expect(plan.followUp).toBe(true);
+	});
+
+	it('leaves the folder alone when another folder already has the note’s name', () => {
+		const renamed = ordnerPage({ title: 'Seite' });
+		const state = treeState();
+		state.pages['20'] = pageState(renamed, 1, 'Coll/Ordner/Seite.md');
+		const files = [...treeFiles().map((f) => (f.path === 'Coll/Ordner/Ordner.md' ? { ...f, path: 'Coll/Ordner/Seite.md' } : f)), localFile('Coll/Seite/Etwas.md', null)];
+		const plan = planFor({ remote: remote([remoteCollective(1, 'Coll', [startPage(), seitePage(), renamed, kindPage()])]), state, files });
+
+		expect(opsOf(plan, 'renameFolderLocal')).toEqual([]);
+	});
+
 	it('plans a move without a change on the server when the new place means the same (state path only)', () => {
 		const files = treeFiles().map((f) => (f.path === 'Coll/Seite.md' ? { ...f, path: 'Coll/Seite.md' } : f));
 		const state = treeState();

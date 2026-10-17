@@ -7,7 +7,7 @@ import { locatePage } from './locate';
 import type { Placer } from './placement';
 import type { ParentRef } from './plannerTypes';
 import type { Context } from './plannerContext';
-import { dirnameOf, lastSegment, stemOf, withoutEntries } from './plannerContext';
+import { dirnameOf, inBlockedDir, lastSegment, stemOf, withoutEntries } from './plannerContext';
 import { MASS_DELETE_MIN, MASS_DELETE_SHARE } from './plannerTypes';
 import { isCollision } from './state';
 import type { PageState } from './state';
@@ -37,7 +37,7 @@ export function planLocalDeletions(ctx: Context): void {
 	for (const known of Object.values(ctx.state.pages)) {
 		if (ctx.blocked.has(known.collectiveId) || !ctx.scanned.has(known.collectiveId)) continue;
 		if (!ctx.tree.pages.has(known.pageId) || ctx.files.duplicates.has(known.pageId)) continue;
-		if (locatePage(known, ctx.files) !== undefined) continue;
+		if (locatePage(known, ctx.files) !== undefined || inBlockedDir(ctx, known.localPath)) continue;
 		// The file of a collision page is the user's own, the page was never linked to it: it is pulled again, never deleted.
 		if (isCollision(known)) forget.add(known.pageId);
 		else missing.set(known.pageId, known);
@@ -125,6 +125,7 @@ export function planRemoteDeletions(ctx: Context): void {
 		if (ctx.tree.pages.has(known.pageId) || !ctx.scanned.has(known.collectiveId) || ctx.blocked.has(known.collectiveId)) continue;
 		if (ctx.files.duplicates.has(known.pageId)) continue;
 		const file = locatePage(known, ctx.files);
+		if (file !== undefined && inBlockedDir(ctx, file.path)) continue;
 		if (file === undefined || isCollision(known)) {
 			dropped.push(known.pageId);
 			continue;
@@ -192,6 +193,8 @@ export function planLocalMove(page: PageInfo, known: PageState, file: LocalFile,
 		order: 0,
 	});
 	if (parentChanged && turnsIntoFolder(ctx, placer, parent)) ctx.followUp = true;
+	// The note of a folder page got a new name: the next pass renames its folder too (planFolderNoteTidy).
+	if (folderPage && title !== null && tidy === null) ctx.followUp = true;
 	return tidy ?? file.path;
 }
 
@@ -208,6 +211,7 @@ export function planLocalFiles(ctx: Context, placer: Placer): void {
 		Object.values(ctx.state.pages).filter(isCollision).map((p) => pathKey(p.localPath)),
 	);
 	for (const file of ctx.input.local.files) {
+		if (inBlockedDir(ctx, file.path)) continue;
 		if (file.pageId !== null) {
 			planUnknownId(file, file.pageId, ctx);
 			continue;
@@ -255,4 +259,31 @@ function turnsIntoFolder(ctx: Context, placer: Placer, parent: ParentRef): boole
 	if (parent.kind === 'new') return !placer.isVirtual(parent.path) && !inOwnFolder(parent.path);
 	const page = ctx.tree.pages.get(parent.pageId)?.page;
 	return page !== undefined && page.parentId !== 0 && page.fileName !== FOLDER_NOTE;
+}
+
+// ---------------------------------------------------------------------------
+// Folder pages whose folder kept an old name
+// ---------------------------------------------------------------------------
+
+/**
+ * The user renamed only the note of a folder page (`Prozesse/Verfahren.md`); the server took the new title. The folder
+ * follows the note (`Verfahren/Verfahren.md`), so that the folder-note convention (ADR 0004) holds again. What lies in the
+ * folder waits for the next pass, when the paths are current again.
+ */
+export function planFolderNoteTidy(ctx: Context): void {
+	for (const known of Object.values(ctx.state.pages)) {
+		if (known.status !== 'synced' || known.remoteFileName !== FOLDER_NOTE || ctx.blocked.has(known.collectiveId)) continue;
+		const remote = ctx.tree.pages.get(known.pageId)?.page;
+		if (remote === undefined || remote.parentId === 0 || remote.fileName !== FOLDER_NOTE) continue;
+		const file = locatePage(known, ctx.files);
+		if (file === undefined || pathKey(file.path) !== pathKey(known.localPath)) continue;
+		const dir = dirnameOf(file.path);
+		const stem = stemOf(file.path);
+		if (pathKey(stem) === pathKey(lastSegment(dir)) || pathKey(stem) !== pathKey(sanitizeName(remote.title))) continue;
+		const to = `${dirnameOf(dir)}/${stem}`;
+		if (ctx.input.local.occupied.has(pathKey(to)) || inBlockedDir(ctx, dir)) continue;
+		ctx.collectiveOps.push({ kind: 'renameFolderLocal', collectiveId: known.collectiveId, from: dir, to });
+		ctx.blockedDirs.add(pathKey(dir));
+		ctx.followUp = true;
+	}
 }

@@ -5,8 +5,8 @@ import { canonicalPath, pathKey } from '../mapping/paths';
 import { locatePage } from './locate';
 import { Placer } from './placement';
 import { planCollectives } from './planFolders';
-import { movedLocally, planLocalDeletions, planLocalFiles, planLocalMove, planRemoteDeletions } from './planLocal';
-import { comparePaths, createContext, depth, withoutEntries } from './plannerContext';
+import { movedLocally, planFolderNoteTidy, planLocalDeletions, planLocalFiles, planLocalMove, planRemoteDeletions } from './planLocal';
+import { comparePaths, createContext, depth, inBlockedDir, withoutEntries } from './plannerContext';
 import type { Context } from './plannerContext';
 import type { PageOp, PlannerInput, SyncOp, SyncPlan } from './plannerTypes';
 import type { PageState } from './state';
@@ -26,6 +26,7 @@ const RANK: Record<SyncOp['kind'], number> = {
 	createCollective: 1,
 	renameCollective: 1,
 	renameCollectiveFolder: 1,
+	renameFolderLocal: 1,
 	saveTags: 2,
 	renameLocal: 3,
 	createRemote: 4,
@@ -53,6 +54,7 @@ export function planSync(input: PlannerInput): SyncPlan {
 	const ctx = createContext(input);
 	planCollectives(ctx);
 	if (ctx.restore.size > 0) ctx.state = withoutEntries(ctx.state, ctx.restore, new Set());
+	planFolderNoteTidy(ctx);
 	planLocalDeletions(ctx);
 	const placer = new Placer(ctx);
 
@@ -179,6 +181,7 @@ function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string },
 	if (target === undefined) throw new Error(`planSync: no target path planned for page ${page.id}`);
 	const { local } = ctx.input;
 	const path = canonicalPath(target.path, local.paths);
+	if (inBlockedDir(ctx, path)) return;
 	const key = pathKey(path);
 	const userFile = local.files.find((file) => file.pageId === null && pathKey(file.path) === key);
 	if (userFile !== undefined) {
@@ -222,7 +225,7 @@ function planKnownPage(
 	placer: Placer,
 ): void {
 	const file = locatePage(known, ctx.files);
-	if (file === undefined) return;
+	if (file === undefined || inBlockedDir(ctx, file.path)) return;
 	const meta = { page, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
 	let path = file.path;
 	const remoteMoved =
