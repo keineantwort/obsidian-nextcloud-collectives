@@ -263,6 +263,48 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 	});
 });
 
+describe('emoji as the user types it in the properties view', () => {
+	const edit = (h: H, s: Synced, yaml: string): void => {
+		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\n${yaml}---\n${TEXT}`);
+	};
+
+	it('sends an emoji written without quotes (Obsidian writes `nc_emoji: 🚀`)', async () => {
+		const h = harness();
+		const s = await synced(h);
+		edit(h, s, 'nc_emoji: 🚀\n');
+
+		await executeSync(plan([push(s)]), h.deps);
+
+		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
+	});
+
+	it('sends the emoji of a property the user added by hand (`Emoji`) and replaces it by nc_emoji', async () => {
+		const h = harness();
+		const s = await synced(h);
+		edit(h, s, 'Emoji: 🚀\n');
+
+		await executeSync(plan([push(s)]), h.deps);
+
+		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
+		const text = await h.vault.read(PATH);
+		expect(text).toContain('nc_emoji: "🚀"');
+		expect(text).not.toContain('Emoji:');
+	});
+
+	it.each(['hallo', '🚀🚀', '🚀 und mehr'])('does not send %s, keeps the note as it is and reports it', async (value) => {
+		const h = harness();
+		const s = await synced(h, { emoji: '📘' });
+		edit(h, s, `nc_emoji: ${value}\n`);
+
+		const result = await executeSync(plan([push(s)]), h.deps);
+
+		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
+		expect(result).toMatchObject({ metaInvalid: 1, metaPushed: 0, failed: 0 });
+		expect(await h.vault.read(PATH)).toContain(`nc_emoji: ${value}`);
+		expect(stateOf(h, s.page).metaHash).toBe(s.hash);
+	});
+});
+
 describe('emoji changed on both sides: the same strategies as for the content (PLAN §7.3)', () => {
 	/** Note says 🚀, the server says 🎯, the state still knows no emoji. Returns the op the planner would plan. */
 	async function bothChanged(h: H): Promise<{ s: Synced; op: SyncOp; remoteHash: string }> {

@@ -64,7 +64,7 @@ describe('server to vault', () => {
 		const outcome = await h.sync();
 
 		expect(outcome.result).toMatchObject({ metaUpdated: 1, metaPushed: 0, failed: 0 });
-		expect(readLocalFields(await h.vault.read(path))).toEqual({ emoji: '📘', tags: ['Wichtig'] });
+		expect(readLocalFields(await h.vault.read(path))).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['Wichtig'] });
 	}, 60_000);
 
 	it('removes them from the note when the server removes them', async () => {
@@ -75,7 +75,7 @@ describe('server to vault', () => {
 
 		await h.sync();
 
-		expect(readLocalFields(await h.vault.read(path))).toEqual({ emoji: null, tags: [] });
+		expect(readLocalFields(await h.vault.read(path))).toEqual({ emoji: null, emojiInvalid: false, tags: [] });
 	}, 60_000);
 });
 
@@ -242,5 +242,32 @@ describe('switching tagsProperty', () => {
 		expect(back.result.failed).toBe(0);
 		expect(await tagNames(ctx, await current(ctx))).toEqual(['Wechsel']);
 		expect(readLocalFields(await h.vault.read(path))?.tags).toEqual(['Wechsel']);
+	}, 120_000);
+});
+
+describe('emoji as typed in the properties view', () => {
+	it('sends an unquoted nc_emoji and a hand-made Emoji property, and refuses text', async () => {
+		const ctx = await setup('ONC M6 emoji');
+		const { h, path, page } = ctx;
+		const frontmatter = (yaml: string, text: string): string => `---\nnc_page_id: ${page.id}\nnc_collective_id: ${ctx.collective.id}\n${yaml}---\n${text}`;
+
+		await waitPastSecondBoundary();
+		h.edit(path, frontmatter('nc_emoji: 🚀\n', 'Inhalt'));
+		expect((await h.sync()).result).toMatchObject({ metaPushed: 1, failed: 0 });
+		expect((await current(ctx)).emoji).toBe('🚀');
+
+		await waitPastSecondBoundary();
+		h.edit(path, frontmatter('Emoji: 🎯\n', 'Inhalt'));
+		expect((await h.sync()).result).toMatchObject({ metaPushed: 1, failed: 0 });
+		expect((await current(ctx)).emoji).toBe('🎯');
+		const text = await h.vault.read(path);
+		expect(text).toContain('nc_emoji: "🎯"');
+		expect(text).not.toContain('Emoji:');
+
+		await waitPastSecondBoundary();
+		h.edit(path, frontmatter('nc_emoji: Hallo Welt\n', 'Inhalt'));
+		const refused = await h.sync();
+		expect(refused.result).toMatchObject({ metaInvalid: 1, metaPushed: 0, failed: 0 });
+		expect((await current(ctx)).emoji).toBe('🎯');
 	}, 120_000);
 });

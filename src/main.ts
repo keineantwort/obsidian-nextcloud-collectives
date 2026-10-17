@@ -1,4 +1,5 @@
-import { MarkdownView, Platform, Plugin, getLanguage, normalizePath } from 'obsidian';
+import { MarkdownView, Notice, Platform, Plugin, getLanguage, normalizePath } from 'obsidian';
+import type { TFile } from 'obsidian';
 import { testConnection, type ConnectionResult } from './api/connection';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
@@ -10,6 +11,7 @@ import { CredentialsStore } from './settings/credentialsStore';
 import { StateStore, type StateFile } from './sync/stateStore';
 import { SyncController } from './syncController';
 import { StatusBar } from './ui/statusBar';
+import { pickEmoji } from './ui/emojiModal';
 import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from './ui/emojiTitles';
 import { clearProperties, decorateProperties, propertyLabels } from './ui/propertyLabels';
 import { Logger } from './util/logger';
@@ -55,6 +57,15 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		this.addSettingTab(new NcSettingTab(this.app, this));
 		this.addCommand({ id: 'sync-now', name: this.t('command.syncNow'), callback: () => { void sync.runFromUi(); } });
 		this.addCommand({ id: 'show-conflicts', name: this.t('command.showConflicts'), callback: () => { sync.showConflicts(); } });
+		this.addCommand({
+			id: 'set-emoji',
+			name: this.t('command.setEmoji'),
+			callback: () => {
+				const file = this.app.workspace.getActiveFile();
+				if (file === null) new Notice(this.t('emoji.noNote'));
+				else void this.setPageEmoji(file);
+			},
+		});
 		this.addRibbonIcon('refresh-cw', this.t('ribbon.syncNow'), () => { void sync.runFromUi(); });
 		// The status bar is desktop only; on mobile the conflicts are reached through the command.
 		if (!Platform.isMobile) {
@@ -67,6 +78,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		// Vault events during the initial vault load are not user changes, so they are only tracked once the layout is ready.
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEmojiTitles();
+			this.registerEmojiPicker();
 			this.registerDirtyTracking(sync);
 			void sync.loadInitialState();
 		});
@@ -128,6 +140,34 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	}
 
 	/** Vault events that mark synced files as changed by the user. The plugin's own writes are filtered by suppressingWriter. */
+	/** Asks for the emoji of a note and writes it into its properties (`nc_emoji`; a hand-made `Emoji` property is replaced). */
+	private async setPageEmoji(file: TFile): Promise<void> {
+		const front = this.app.metadataCache.getFileCache(file)?.frontmatter;
+		const current = emojiFromFrontmatter(front?.['nc_emoji']);
+		const chosen = await pickEmoji(this.app, this.t, current);
+		if (chosen === undefined) return;
+		await this.app.fileManager.processFrontMatter(file, (properties: Record<string, unknown>) => {
+			for (const key of Object.keys(properties)) if (/^emoji$/i.test(key)) delete properties[key];
+			if (chosen === null) delete properties['nc_emoji'];
+			else properties['nc_emoji'] = chosen;
+		});
+		new Notice(this.t('emoji.set'));
+	}
+
+	/** Opens the picker when the user adds an empty `Emoji` property to the note they are editing. */
+	private registerEmojiPicker(): void {
+		const hadProperty = new Map<string, boolean>();
+		this.registerEvent(this.app.metadataCache.on('changed', (file, _data, cache) => {
+			const front = cache.frontmatter;
+			const key = front === undefined ? undefined : Object.keys(front).find((name) => /^emoji$/i.test(name));
+			const has = key !== undefined;
+			const wasThere = hadProperty.get(file.path) ?? true;
+			hadProperty.set(file.path, has);
+			const empty = key !== undefined && (front?.[key] === null || front?.[key] === '');
+			if (has && empty && !wasThere && this.app.workspace.getActiveFile()?.path === file.path) void this.setPageEmoji(file);
+		}));
+	}
+
 	/** Page emoji in front of the titles (display only): refreshed when notes, their metadata or the layout change. */
 	private registerEmojiTitles(): void {
 		let timer: number | null = null;

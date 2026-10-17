@@ -283,6 +283,7 @@ async function pullRemote(
 	let pulledMeta: PushedMeta = { meta: op.meta, hash: op.metaHash };
 	let metaConflict: LocalMeta | null = null;
 	const decided = await decideMeta(op, s, local.text, deps);
+	if (decided.invalidEmoji) result.metaInvalid++;
 	if (decided.local !== null && decided.action === 'push') {
 		pulledMeta = await pushLocalMeta(op, decided.local, deps, result);
 	} else if (decided.local !== null && decided.action === 'conflict' && s.status === 'synced') {
@@ -434,7 +435,8 @@ export async function uploadLocal(
  * the server has the values already).
  */
 async function applyMetaChange(op: ContentOp, state: PageState, expectedText: string, deps: ExecutorDeps, result?: SyncResult): Promise<PageState> {
-	const { action, local } = await decideMeta(op, state, expectedText, deps);
+	const { action, local, invalidEmoji } = await decideMeta(op, state, expectedText, deps);
+	if (invalidEmoji && result) result.metaInvalid++;
 	switch (action) {
 		case 'none':
 			return state;

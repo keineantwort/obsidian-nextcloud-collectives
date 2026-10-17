@@ -57,12 +57,13 @@ function storeTags(deps: ExecutorDeps, collectiveId: CollectiveId, tags: readonl
 
 /**
  * Emoji and tags the note holds, as the server's tags (resolveTagNames), with their hash. null for a note without
- * frontmatter and for a tags property in a form that is not read: it counts as unchanged, no tag is added or removed.
+ * frontmatter, for a tags property in a form that is not read and for an emoji that is not one emoji: such a note counts as
+ * unchanged, nothing is sent for it.
  */
 async function localMetaOf(text: string, collectiveId: CollectiveId, deps: ExecutorDeps): Promise<(LocalMeta & { hash: string }) | null> {
 	const property = propertyOf(deps);
 	const fields = readLocalFields(text, property);
-	if (fields === null || fields.tags === null) return null;
+	if (fields === null || fields.tags === null || fields.emojiInvalid) return null;
 	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
 	const tags = resolveTagNames(fields.tags, known, property);
 	return { emoji: fields.emoji, tags, hash: await metaHash(fields.emoji, tags) };
@@ -72,11 +73,14 @@ async function localMetaOf(text: string, collectiveId: CollectiveId, deps: Execu
  * What to do with the metadata of a page whose text is `text`: the same decision as for the content (PLAN §7.3, decideContent)
  * on the hashes of emoji and tags: base = the state's metaHash, local = the note's fields, remote = `op.metaHash`.
  * 'adoptBase' counts as 'pull' (the nc fields are written in the server's spelling). An unknown base ('') and a note without
- * frontmatter or a tags property that is not read take the server's values. `local` is null for those.
+ * frontmatter or a tags property that is not read take the server's values. `local` is null for those; `invalidEmoji` tells
+ * that the note's emoji is not one emoji (nothing is sent then).
  */
-export async function decideMeta(op: MetaOp, state: PageState, text: string, deps: ExecutorDeps): Promise<{ action: ContentAction; local: LocalMeta | null }> {
-	if (state.metaHash === '') return { action: 'pull', local: null };
+export async function decideMeta(op: MetaOp, state: PageState, text: string, deps: ExecutorDeps): Promise<{ action: ContentAction; local: LocalMeta | null; invalidEmoji: boolean }> {
+	if (state.metaHash === '') return { action: 'pull', local: null, invalidEmoji: false };
 	const local = await localMetaOf(text, op.meta.collectiveId, deps);
+	const invalidEmoji = local === null && readLocalFields(text, propertyOf(deps))?.emojiInvalid === true;
+	if (invalidEmoji) deps.log.warn('Emoji not sent: the property holds text or more than one emoji', { pageId: op.page.id });
 	const action = decideContent({
 		baseHash: state.metaHash,
 		localHash: local?.hash ?? state.metaHash,
@@ -84,7 +88,7 @@ export async function decideMeta(op: MetaOp, state: PageState, text: string, dep
 		status: state.status,
 		strategy: deps.strategy,
 	});
-	return { action: action === 'adoptBase' ? 'pull' : action, local: local === null ? null : { emoji: local.emoji, tags: local.tags } };
+	return { action: action === 'adoptBase' ? 'pull' : action, local: local === null ? null : { emoji: local.emoji, tags: local.tags }, invalidEmoji };
 }
 
 /** Fields of a note that has no nc fields yet, as the tags the server knows (a new page: its tags are created). */

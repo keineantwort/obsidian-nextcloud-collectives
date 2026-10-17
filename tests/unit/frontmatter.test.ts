@@ -289,8 +289,8 @@ describe('readNcMeta and stripNcMeta', () => {
 		expect(readNcMeta(replaceNcMeta('Text', meta))).toEqual(meta);
 	});
 
-	it('reads the required fields only and treats the optional ones as absent', () => {
-		const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_tags: nope\n---\nText';
+	it('reads the required fields only and treats the optional ones as absent; a text in nc_emoji is no emoji', () => {
+		const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_emoji: nope\n---\nText';
 
 		expect(readNcMeta(text)).toEqual({ pageId: 5, collectiveId: 2, title: null, emoji: null, tags: [] });
 	});
@@ -321,12 +321,12 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 	describe('readLocalFields', () => {
 		it('reads nc_emoji and nc_tags', () => {
 			const text = '---\nnc_page_id: 7\nnc_collective_id: 1\nnc_emoji: "📘"\nnc_tags: ["A","B C"]\n---\nText';
-			expect(readLocalFields(text)).toEqual({ emoji: '📘', tags: ['A', 'B C'] });
+			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B C'] });
 		});
 
 		it('returns null without a frontmatter block, and ignores a plain tags property with nc_tags', () => {
 			expect(readLocalFields('Text')).toBeNull();
-			expect(readLocalFields('---\ntags: [x]\n---\nText')).toEqual({ emoji: null, tags: [] });
+			expect(readLocalFields('---\ntags: [x]\n---\nText')).toEqual({ emoji: null, emojiInvalid: false, tags: [] });
 		});
 
 		it('reads a flow list, a block list and a scalar from the tags property', () => {
@@ -340,7 +340,7 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 			const text = '---\ntags: [a]\n---\nText #B und #a und `#c`\n';
 			expect(readLocalFields(text, 'tags')?.tags).toEqual(['a', 'B']);
 			expect(readLocalFields(text)?.tags).toEqual([]);
-			expect(readLocalFields('Nur #Text', 'tags')).toEqual({ emoji: null, tags: ['Text'] });
+			expect(readLocalFields('Nur #Text', 'tags')).toEqual({ emoji: null, emojiInvalid: false, tags: ['Text'] });
 			expect(readLocalFields('Nur #Text')).toBeNull();
 		});
 
@@ -351,6 +351,37 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 
 		it('reports a flow list over several lines it cannot read as null: no change is assumed', () => {
 			expect(readLocalFields('---\ntags: [a,\n  b]\n---\n', 'tags')?.tags).toBeNull();
+		});
+	});
+
+	describe('emoji and tags as Obsidian\'s properties view writes them', () => {
+		it('reads an unquoted emoji, a block list of nc_tags and a quoted title', () => {
+			const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_emoji: 📘\nnc_tags:\n  - A\n  - B C\nnc_title: "Ein/Titel"\n---\nText';
+
+			expect(readLocalFields(text)).toEqual({ emoji: '📘', emojiInvalid: false, tags: ['A', 'B C'] });
+			expect(readNcMeta(text)).toMatchObject({ emoji: '📘', title: 'Ein/Titel', tags: ['A', 'B C'] });
+		});
+
+		it('reads single-quoted values and an emoji with a variation selector or skin tone', () => {
+			expect(readLocalFields("---\nnc_emoji: '❤️'\n---\n")?.emoji).toBe('❤️');
+			expect(readLocalFields('---\nnc_emoji: "👍🏽"\n---\n')?.emoji).toBe('👍🏽');
+		});
+
+		it('reads the property emoji (any case) a user added by hand, nc_emoji wins', () => {
+			expect(readLocalFields('---\nEmoji: 🚀\n---\n')?.emoji).toBe('🚀');
+			expect(readLocalFields('---\nemoji: 🚀\nnc_emoji: 📘\n---\n')?.emoji).toBe('📘');
+		});
+
+		it('marks text and several emojis as invalid, and an empty value as no emoji', () => {
+			expect(readLocalFields('---\nnc_emoji: hallo\n---\n')).toMatchObject({ emoji: null, emojiInvalid: true });
+			expect(readLocalFields('---\nnc_emoji: 🚀🚀\n---\n')).toMatchObject({ emoji: null, emojiInvalid: true });
+			expect(readLocalFields('---\nnc_emoji:\n---\n')).toMatchObject({ emoji: null, emojiInvalid: false });
+		});
+
+		it('replaces the emoji alias by nc_emoji when the plugin writes the fields, and keeps it out of the remote text', () => {
+			const local = replaceNcMeta('---\nEmoji: 🚀\nautor: Ich\n---\nText', meta({ emoji: '📘' }));
+			expect(local).toBe('---\nnc_page_id: 7\nnc_collective_id: 1\nnc_emoji: "📘"\nautor: Ich\n---\nText');
+			expect(toRemote('---\nemoji: 🚀\nautor: Ich\n---\n\nText')).toBe('---\nautor: Ich\n---\n\nText');
 		});
 	});
 
