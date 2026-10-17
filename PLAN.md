@@ -323,7 +323,7 @@ Umsetzung (M5, ADR 0018): Ein Lauf besteht aus bis zu 3 Durchläufen (scannen, p
 - Emoji: Vergleich `nc_emoji` vs. Remote; Änderung lokal → `PUT …/emoji`.
 - Tags: Abgleich der Namen; fehlende Tags im Collective per `POST /tags` anlegen (Default-Farbe), dann `PUT`/`DELETE …/tags/{tagId}`.
   Vor dem Anlegen case-insensitiv gegen den Tag-Cache prüfen (Server-Duplikatprüfung hängt von der DB-Collation ab, M0). Default-Farbe als 6 Hex-Zeichen ohne `#`. Nach einem Collective-übergreifenden Verschieben die Tags im Ziel-Collective neu zuweisen.
-- Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash`; bei beidseitiger Änderung gewinnt Remote, Hinweis im Log.
+- Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash` (Hash von Emoji und Tags, ohne Titel), aber mit **derselben Entscheidung wie der Inhalt** (§7.3, `conflictStrategy`): nur eine Seite geändert → diese gewinnt; beide gleich → kein Konflikt; beide verschieden → `conflictFile` (Notiz behält ihre Werte, die des Servers stehen in einer Konfliktkopie, Seite ist `conflict`), `preferLocal`, `preferRemote`. (M6, ADR 0019; ersetzt „bei beidseitiger Änderung gewinnt Remote“.)
 - Umsetzung (M6, ADR 0019): Der Executor vergleicht Emoji/Tags der Notiz beim `push`/`update` mit dem `metaHash` des States (`src/sync/executorMeta.ts`); Emoji wird mit `""` entfernt (api-notes §4); neue Notizen und Collective-Wechsel übertragen die Tags der Notiz.
 
 ### 7.6 Eigene Schreibzugriffe ignorieren

@@ -39,7 +39,7 @@ export interface PageState {
 	 * conflict copy; '' only in states written before M4 (no known base) and for collisions that never had a copy.
 	 */
 	baseHash: string;
-	/** metaHash(title-for-frontmatter, emoji, tag names) at last sync. */
+	/** metaHash(emoji, tag names) at last sync (M6: without the title). */
 	metaHash: string;
 	status: PageStatus;
 	/** Path of the last conflict copy, or null. */

@@ -2,15 +2,15 @@
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import { isEtagConfirmed } from '../api/webdavClient';
 import type { PageInfo } from '../api/types';
-import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
+import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote, withMetaOnly } from '../mapping/frontmatter';
 import { conflictPath, pathKey, remotePagePath } from '../mapping/paths';
 import { sha256Hex } from '../util/hash';
 import { ConflictError } from '../util/errors';
 import { decideContent } from './decide';
 import type { ConflictStrategy, ContentAction } from './decide';
 import type { ExecutorDeps, VaultWriter } from './executorDeps';
-import { noteRemoteWins, pushLocalMeta, readLocalMeta } from './executorMeta';
-import type { PushedMeta } from './executorMeta';
+import { decideMeta, pushLocalMeta } from './executorMeta';
+import type { LocalMeta, PushedMeta } from './executorMeta';
 import { livePage } from './executorScratch';
 import { markConflict, markSynced, metaFor, newPageState, remoteFields, unconfirmedRemote } from './pageState';
 import type { RemoteVersion } from './pageState';
@@ -273,13 +273,15 @@ async function pullRemote(
 	result: SyncResult,
 	now: number,
 ): Promise<boolean> {
-	// The file takes the remote text, so the note's own emoji/tags changes have to reach the server first.
+	// The file takes the remote text, so the note's own emoji/tags changes are dealt with first (decideMeta).
 	let pulledMeta: PushedMeta = { meta: op.meta, hash: op.metaHash };
-	if (op.metaChanged) {
-		await noteRemoteWins(op, local.text, deps);
-	} else {
-		const changed = await readLocalMeta(op, local.text, deps);
-		if (changed !== null) pulledMeta = await pushLocalMeta(op, changed, deps, result);
+	let metaConflict: LocalMeta | null = null;
+	const decided = await decideMeta(op, s, local.text, deps);
+	if (decided.local !== null && decided.action === 'push') {
+		pulledMeta = await pushLocalMeta(op, decided.local, deps, result);
+	} else if (decided.local !== null && decided.action === 'conflict' && s.status === 'synced') {
+		metaConflict = decided.local;
+		pulledMeta = { meta: { ...op.meta, ...decided.local }, hash: op.metaHash };
 	}
 	const meta = metaFor(op.page, pulledMeta.meta, op.path);
 	const mtime = await writeIfUnchanged(deps.vault, op.path, local.text, toLocal(remote.content, meta));
@@ -289,6 +291,9 @@ async function pullRemote(
 		deps.log.info('Local changes replaced by remote text', { pageId: op.page.id });
 	}
 	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: pulledMeta.hash, localMtime: mtime, now });
+	if (metaConflict !== null) {
+		deps.state.pages[String(op.page.id)] = await recordMetaConflict(op, requireState(deps, op.page.id), canonicalRemote(remote.content), deps, result);
+	}
 	result.updated++;
 	return true;
 }
@@ -416,19 +421,39 @@ export async function uploadLocal(
 }
 
 /**
- * Brings the metadata in line after a content step. Changed on the server: the nc fields take the server's values (the
- * server wins, PLAN §7.5). Otherwise emoji and tags the user changed in the note go to the server, and the nc fields are
- * written again in the server's spelling. Written only if the file still holds `expectedText` (the text the step read);
- * otherwise the metaHash stays and the next run retries (after a push it moves on: the server has the values already).
+ * Brings the metadata in line after a content step, with the decision the content gets (decideMeta): the server's values
+ * go into the nc fields, or the note's emoji and tags go to the server, or - changed on both sides - the strategy decides
+ * (conflictFile: the note keeps its values and the server's go into a conflict copy). Written only if the file still holds
+ * `expectedText` (the text the step read); otherwise the metaHash stays and the next run retries (after a push it moves on:
+ * the server has the values already).
  */
 async function applyMetaChange(op: ContentOp, state: PageState, expectedText: string, deps: ExecutorDeps, result?: SyncResult): Promise<PageState> {
-	if (op.metaChanged) {
-		await noteRemoteWins(op, expectedText, deps);
-		return writeMeta(op, { meta: op.meta, hash: op.metaHash }, state, expectedText, deps, false);
+	const { action, local } = await decideMeta(op, state, expectedText, deps);
+	switch (action) {
+		case 'none':
+			return state;
+		case 'push':
+			return local === null ? state : writeMeta(op, await pushLocalMeta(op, local, deps, result), state, expectedText, deps, true);
+		case 'conflict':
+			return state.status === 'synced' ? recordMetaConflict(op, state, toRemote(expectedText), deps, result) : state;
+		default:
+			return writeMeta(op, { meta: op.meta, hash: op.metaHash }, state, expectedText, deps, false);
 	}
-	const local = await readLocalMeta(op, expectedText, deps);
-	if (local === null) return state;
-	return writeMeta(op, await pushLocalMeta(op, local, deps, result), state, expectedText, deps, true);
+}
+
+/**
+ * Emoji or tags changed on both sides and the strategy is conflictFile: the note keeps its values, the server's go into a
+ * conflict copy (remote text with nc_emoji/nc_tags), the page waits as 'conflict'. The metaHash moves on to the server's
+ * values, so "keep local" pushes the note's values and "take remote" (which sets the metaHash to the note's) takes the server's.
+ * `remoteText` is the text both sides hold (the content step is done).
+ */
+async function recordMetaConflict(op: ContentOp, state: PageState, remoteText: string, deps: ExecutorDeps, result?: SyncResult): Promise<PageState> {
+	const copyPath = conflictPath(op.path, deps.conflictLabel, deps.now(), deps.occupied);
+	await deps.vault.create(copyPath, withMetaOnly(remoteText, op.meta));
+	deps.occupied.add(pathKey(copyPath));
+	deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
+	if (result) result.conflicts++;
+	return { ...state, status: 'conflict', conflictPath: copyPath, metaHash: op.metaHash };
 }
 
 async function writeMeta(op: ContentOp, meta: PushedMeta, state: PageState, expectedText: string, deps: ExecutorDeps, pushed: boolean): Promise<PageState> {

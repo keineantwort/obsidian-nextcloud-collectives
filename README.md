@@ -8,7 +8,7 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 
 ### Emoji und Tags
 
-Emoji (`nc_emoji`) und Tags (`nc_tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, gewinnt der Server. Die Einstellung „Eigenschaft für Tags“ schaltet auf Obsidians `tags` um (Leerzeichen werden zu `-`); diese Eigenschaft bleibt Teil des Seitentexts und erscheint daher auch in Collectives.
+Emoji (`nc_emoji`) und Tags (`nc_tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, verhält es sich wie bei einer Textänderung auf beiden Seiten: Je nach Einstellung „Konfliktstrategie“ entsteht eine Konfliktkopie (die Notiz bleibt wie sie ist, die Werte des Servers stehen in der Kopie) oder die lokale bzw. die Server-Fassung gewinnt. Die Einstellung „Eigenschaft für Tags“ schaltet auf Obsidians `tags` um (Leerzeichen werden zu `-`); diese Eigenschaft bleibt Teil des Seitentexts und erscheint daher auch in Collectives.
 
 ### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
 

@@ -9,7 +9,7 @@ import { metaHash, sha256Hex } from '../util/hash';
 import { applyContentOp, fetchPage, readLocal, requireMtime, requireState, uploadLocal, writeIfUnchanged } from './executorContent';
 import type { ContentOp } from './executorContent';
 import type { ExecutorDeps, StructureApi } from './executorDeps';
-import { localMetaOf, pushLocalMeta, reassignTags } from './executorMeta';
+import { localMetaFromFields, pushLocalMeta, reassignTags } from './executorMeta';
 import { noteCreated, scratchOf } from './executorScratch';
 import { metaFor, newPageState, remoteFields, unconfirmedRemote } from './pageState';
 import type { ParentRef, SyncOp } from './plannerTypes';
@@ -63,7 +63,7 @@ async function metaForPage(deps: ExecutorDeps, page: PageInfo, collectiveId: Col
 		tags,
 		...(deps.tagsProperty === 'tags' ? { tagsProperty: deps.tagsProperty } : {}),
 	};
-	return { meta, hash: await metaHash(meta.title, meta.emoji, meta.tags) };
+	return { meta, hash: await metaHash(meta.emoji, meta.tags) };
 }
 
 function resolveParent(deps: ExecutorDeps, parent: ParentRef): PageId {
@@ -104,7 +104,7 @@ async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: Col
 	// A new note may carry tags (or an emoji) already: they become the page's, instead of being dropped by the nc fields.
 	const fields = readLocalFields(await deps.vault.read(path), deps.tagsProperty ?? 'nc_tags');
 	if (fields !== null && (fields.emoji !== null || fields.tags.length > 0)) {
-		const pushed = await pushLocalMeta({ page, meta, metaHash: hash }, localMetaOf(fields, collectiveId, deps), deps, result);
+		const pushed = await pushLocalMeta({ page, meta, metaHash: hash }, localMetaFromFields(fields, collectiveId, deps), deps, result);
 		({ meta, hash } = pushed);
 	}
 	await deps.vault.process(path, (current) => replaceNcMeta(current, metaFor(page, meta, path)));

@@ -9,7 +9,9 @@ import { isRunFatal } from '../util/errors';
 import { metaHash } from '../util/hash';
 import type { ExecutorDeps, StructureApi } from './executorDeps';
 import { livePage } from './executorScratch';
-import type { SyncState } from './state';
+import { decideContent } from './decide';
+import type { ContentAction } from './decide';
+import type { PageState, SyncState } from './state';
 import type { SyncResult } from './types';
 
 /** What the metadata steps need of a page operation. */
@@ -53,35 +55,39 @@ function storeTags(deps: ExecutorDeps, collectiveId: CollectiveId, tags: readonl
 	return entries;
 }
 
-/**
- * Emoji and tags the note at `text` carries when they differ from the metadata the sync last agreed on (`op.metaHash`),
- * else null. Null too if the text has no frontmatter (nothing to read). Only meaningful if the server did not change the
- * metadata since: when it did, the server wins (see noteRemoteWins).
- */
-export async function readLocalMeta(op: MetaOp, text: string, deps: ExecutorDeps): Promise<LocalMeta | null> {
+/** Emoji and tags the note holds, as the server's tags (resolveTagNames), with their hash. */
+async function localMetaOf(text: string, collectiveId: CollectiveId, deps: ExecutorDeps): Promise<(LocalMeta & { hash: string }) | null> {
 	const property = propertyOf(deps);
 	const fields = readLocalFields(text, property);
 	if (fields === null) return null;
-	const known = tagCache(deps, op.meta.collectiveId).map((tag) => tag.name);
-	const local: LocalMeta = { emoji: fields.emoji, tags: resolveTagNames(fields.tags, known, property) };
-	return (await metaHash(op.meta.title, local.emoji, local.tags)) === op.metaHash ? null : local;
+	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
+	const tags = resolveTagNames(fields.tags, known, property);
+	return { emoji: fields.emoji, tags, hash: await metaHash(fields.emoji, tags) };
+}
+
+/**
+ * What to do with the metadata of a page whose text is `text`: the same decision as for the content (PLAN §7.3, decideContent)
+ * on the hashes of emoji and tags: base = the state's metaHash, local = the note's fields, remote = `op.metaHash`.
+ * 'adoptBase' counts as 'pull' (the nc fields are written in the server's spelling). An unknown base ('') and a note without
+ * frontmatter take the server's values. `local` is null for those.
+ */
+export async function decideMeta(op: MetaOp, state: PageState, text: string, deps: ExecutorDeps): Promise<{ action: ContentAction; local: LocalMeta | null }> {
+	if (state.metaHash === '') return { action: 'pull', local: null };
+	const local = await localMetaOf(text, op.meta.collectiveId, deps);
+	const action = decideContent({
+		baseHash: state.metaHash,
+		localHash: local?.hash ?? state.metaHash,
+		remoteHash: op.metaHash,
+		status: state.status,
+		strategy: deps.strategy,
+	});
+	return { action: action === 'adoptBase' ? 'pull' : action, local: local === null ? null : { emoji: local.emoji, tags: local.tags } };
 }
 
 /** Fields of a note that has no nc fields yet, as the tags the server knows (a new page: its tags are created). */
-export function localMetaOf(fields: LocalFields, collectiveId: CollectiveId, deps: ExecutorDeps): LocalMeta {
+export function localMetaFromFields(fields: LocalFields, collectiveId: CollectiveId, deps: ExecutorDeps): LocalMeta {
 	const known = tagCache(deps, collectiveId).map((tag) => tag.name);
 	return { emoji: fields.emoji, tags: resolveTagNames(fields.tags, known, propertyOf(deps)) };
-}
-
-/** Logs that the server's metadata replaces differing changes in the note (PLAN §7.5: the server wins). */
-export async function noteRemoteWins(op: MetaOp, text: string, deps: ExecutorDeps): Promise<void> {
-	const fields = readLocalFields(text, propertyOf(deps));
-	if (fields === null) return;
-	const known = tagCache(deps, op.meta.collectiveId).map((tag) => tag.name);
-	const tags = resolveTagNames(fields.tags, known, propertyOf(deps));
-	if ((await metaHash(op.meta.title, fields.emoji, tags)) !== op.metaHash) {
-		deps.log.info('Metadata changed on the server: it replaces the metadata of the note', { pageId: op.page.id });
-	}
 }
 
 /** The tag for a name: from the cache, else created on the server. A duplicate error is settled by reading the tags again. */
@@ -127,7 +133,7 @@ export async function pushLocalMeta(op: MetaOp, local: LocalMeta, deps: Executor
 	const meta: NcMeta = { ...op.meta, emoji: local.emoji, tags };
 	if (result) result.metaPushed++;
 	deps.log.info('Emoji/tags sent to the server', { pageId: page.id });
-	return { meta, hash: await metaHash(meta.title, meta.emoji, tags) };
+	return { meta, hash: await metaHash(meta.emoji, tags) };
 }
 
 /**

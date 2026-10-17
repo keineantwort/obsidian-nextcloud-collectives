@@ -140,7 +140,7 @@ describe('vault to server', () => {
 		expect(await tagNames(ctx, now)).toEqual(['Neu']);
 	}, 60_000);
 
-	it('lets the server win when emoji changed on both sides, and keeps the text change', async () => {
+	it('treats an emoji changed on both sides like a changed text: conflict copy, the note stays, the text change is still sent', async () => {
 		const { h, collective, page, path } = ctx;
 		await waitPastSecondBoundary();
 		await userSets(ctx, { emoji: '🅰️' });
@@ -150,10 +150,13 @@ describe('vault to server', () => {
 
 		const outcome = await h.sync();
 
-		expect(outcome.result.failed).toBe(0);
+		expect(outcome.result).toMatchObject({ conflicts: 1, failed: 0 });
+		expect(outcome.openConflicts).toBe(1);
 		expect((await current(ctx)).emoji).toBe('🅱️');
-		expect(readLocalFields(await h.vault.read(path))?.emoji).toBe('🅱️');
+		expect(readLocalFields(await h.vault.read(path))?.emoji).toBe('🅰️');
 		expect(await remoteTextOf(ctx)).toContain('Zusatz');
+		const copy = required(h.paths(`${ctx.name}/`).find((p) => p.includes('Konflikt') || p.includes('Conflict')), 'conflict copy');
+		expect(await h.vault.read(copy)).toContain('nc_emoji: "🅱️"');
 	}, 60_000);
 });
 

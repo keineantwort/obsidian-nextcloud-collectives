@@ -22,8 +22,8 @@ import { MemoryVault } from '../fakes/memoryVault';
 const SERVER = 'https://cloud.example.com';
 const NOW = new Date(2026, 9, 16, 14, 30);
 const CONFLICT_SUFFIX = ' (Konflikt 2026-10-16 1430)';
-/** metaHash(null, null, []): the hash of metaOf() without emoji and tags, so a note without nc_emoji/nc_tags counts as unchanged. */
-const META_HASH = '2dac76d521b05be957abcd098ba29501bb065127122504cc5187172199833460';
+/** metaHash(null, []): the hash of metaOf() without emoji and tags, so a note without nc_emoji/nc_tags counts as unchanged. */
+const META_HASH = '97294f05c3603881a6466e787eb8726dde04588d242bea02914b0f0a8e12bdb2';
 const META_HASH_2 = 'meta-2';
 
 const REMOTE_V1 = '# Notiz\n\nErste Fassung\n';

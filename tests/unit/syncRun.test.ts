@@ -307,7 +307,7 @@ describe('runSync: first sync into an empty vault', () => {
 
 		await runSync(makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile));
 
-		expect(storedState(stateFile).pages['92']?.metaHash).toBe(await metaHash('Landing page', null, []));
+		expect(storedState(stateFile).pages['92']?.metaHash).toBe(await metaHash(null, []));
 	});
 
 	it('uses the Nextcloud user ID in every WebDAV path, not the login name', async () => {

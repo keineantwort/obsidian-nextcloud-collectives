@@ -2,9 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';
-import { readLocalFields, readNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { readLocalFields, readNcMeta, readPageId, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 import type { TagsProperty } from '../../src/mapping/tags';
+import { applyResolution } from '../../src/sync/conflicts';
 import { executeSync } from '../../src/sync/executor';
 import type { ExecutorDeps } from '../../src/sync/executor';
 import type { SyncOp, SyncPlan } from '../../src/sync/planner';
@@ -105,7 +106,7 @@ interface Synced {
 async function synced(h: H, over: { emoji?: string | null; tagNames?: string[]; tagIds?: number[]; tagsProperty?: TagsProperty } = {}): Promise<Synced> {
 	const page = h.api.addPage(1, { title: 'Notiz', parentId: LANDING, emoji: over.emoji ?? null, tags: (over.tagIds ?? []).map(asTagId) });
 	const meta = metaOf(page, { emoji: over.emoji ?? null, tags: over.tagNames ?? [], ...(over.tagsProperty === 'tags' ? { tagsProperty: 'tags' as const } : {}) });
-	const hash = await metaHash(meta.title, meta.emoji, meta.tags);
+	const hash = await metaHash(meta.emoji, meta.tags);
 	h.vault.seed(PATH, toLocal(TEXT, meta));
 	h.dav.serve(page, TEXT, '"e1"');
 	h.state.pages[String(page.id)] = {
@@ -153,7 +154,7 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
 		expect(h.dav.puts()).toEqual([]);
 		expect(result).toEqual({ ...emptyResult(), unchanged: 1, metaPushed: 1 });
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', '🚀', []));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('🚀', []));
 	});
 
 	it('removes the emoji when the nc_emoji line is gone', async () => {
@@ -164,7 +165,7 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 		await executeSync(plan([push(s)]), h.deps);
 
 		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} null`);
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', null, []));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash(null, []));
 	});
 
 	it('creates a missing tag once, with the default color, and adds it to the page', async () => {
@@ -179,7 +180,7 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 		expect(created).toBeDefined();
 		expect(h.api.calls).toContain(`addPageTag 1 ${s.page.id} ${created?.id}`);
 		expect(h.api.entries.get(s.page.id)?.page.tags).toEqual([created?.id]);
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', null, ['Neu']));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash(null, ['Neu']));
 	});
 
 	it('creates no duplicate tag for a name that differs in case, and writes the server spelling into the note', async () => {
@@ -193,7 +194,7 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 		expect(h.api.calls.some((c) => c.startsWith('createTag'))).toBe(false);
 		expect(h.api.entries.get(s.page.id)?.page.tags).toEqual([tagId]);
 		expect(readLocalFields(await h.vault.read(PATH))?.tags).toEqual(['Projekt']);
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', null, ['Projekt']));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash(null, ['Projekt']));
 	});
 
 	it('removes a tag the user took out and keeps the others', async () => {
@@ -258,25 +259,114 @@ describe('emoji and tags changed in the vault go to the server (push)', () => {
 		expect(h.dav.puts()).toHaveLength(1);
 		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
 		expect(result).toMatchObject({ pushed: 1, metaPushed: 1 });
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', '🚀', []));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('🚀', []));
 	});
 });
 
-describe('the server wins when it changed the metadata too', () => {
-	it('writes the server values into the note, calls no metadata endpoint and logs a hint', async () => {
-		const h = harness();
+describe('emoji changed on both sides: the same strategies as for the content (PLAN §7.3)', () => {
+	/** Note says 🚀, the server says 🎯, the state still knows no emoji. Returns the op the planner would plan. */
+	async function bothChanged(h: H): Promise<{ s: Synced; op: SyncOp; remoteHash: string }> {
 		const s = await synced(h);
 		userSetsFields(h, s.page, { emoji: '🚀' });
+		const remoteHash = await metaHash('🎯', []);
 		const remoteMeta = metaOf(s.page, { emoji: '🎯' });
-		const remoteHash = await metaHash('Notiz', '🎯', []);
+		return { s, remoteHash, op: { kind: 'push', page: { ...s.page, emoji: '🎯' }, path: PATH, meta: remoteMeta, metaHash: remoteHash, metaChanged: true } };
+	}
 
-		const result = await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: remoteMeta, metaHash: remoteHash, metaChanged: true }]), h.deps);
+	it('conflictFile: keeps the emoji of the note, saves the server\'s in a conflict copy and waits as a conflict', async () => {
+		const h = harness();
+		const { s, op, remoteHash } = await bothChanged(h);
+
+		const result = await executeSync(plan([op]), h.deps);
+
+		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
+		expect(h.dav.puts()).toEqual([]);
+		expect(readNcMeta(await h.vault.read(PATH))?.emoji).toBe('🚀');
+		const entry = stateOf(h, s.page);
+		expect(entry).toMatchObject({ status: 'conflict', metaHash: remoteHash });
+		const copy = await h.vault.read(entry.conflictPath as string);
+		expect(copy).toContain('nc_emoji: "🎯"');
+		expect(readPageId(copy)).toBeNull();
+		expect(result).toMatchObject({ conflicts: 1, metaPushed: 0, failed: 0 });
+	});
+
+	it('preferRemote: the note takes the server\'s emoji', async () => {
+		const h = harness();
+		h.deps.strategy = 'preferRemote';
+		const { s, op, remoteHash } = await bothChanged(h);
+
+		const result = await executeSync(plan([op]), h.deps);
 
 		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
 		expect(readNcMeta(await h.vault.read(PATH))?.emoji).toBe('🎯');
-		expect(stateOf(h, s.page).metaHash).toBe(remoteHash);
-		expect(result.metaPushed).toBe(0);
-		expect(h.infos).toContain('Metadata changed on the server: it replaces the metadata of the note');
+		expect(stateOf(h, s.page)).toMatchObject({ status: 'synced', metaHash: remoteHash });
+		expect(result.conflicts).toBe(0);
+	});
+
+	it('preferLocal: the emoji of the note goes to the server', async () => {
+		const h = harness();
+		h.deps.strategy = 'preferLocal';
+		const { s, op } = await bothChanged(h);
+
+		const result = await executeSync(plan([op]), h.deps);
+
+		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
+		expect(stateOf(h, s.page)).toMatchObject({ status: 'synced', metaHash: await metaHash('🚀', []) });
+		expect(result).toMatchObject({ metaPushed: 1, conflicts: 0 });
+	});
+
+	it('both sides made the same change: no conflict', async () => {
+		const h = harness();
+		const s = await synced(h);
+		userSetsFields(h, s.page, { emoji: '🎯' });
+		const remoteHash = await metaHash('🎯', []);
+
+		const result = await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: metaOf(s.page, { emoji: '🎯' }), metaHash: remoteHash, metaChanged: true }]), h.deps);
+
+		expect(result.conflicts).toBe(0);
+		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
+		expect(stateOf(h, s.page)).toMatchObject({ status: 'synced', metaHash: remoteHash });
+	});
+
+	it('a page that waits as a conflict is not touched again', async () => {
+		const h = harness();
+		const { s, op } = await bothChanged(h);
+		await executeSync(plan([op]), h.deps);
+		const copies = h.vault.listFiles().length;
+
+		const again = await executeSync(plan([{ ...op, metaHash: await metaHash('🎯', ['x']), metaChanged: true } as SyncOp]), h.deps);
+
+		expect(h.vault.listFiles().length).toBe(copies);
+		expect(again.conflicts).toBe(0);
+		expect(stateOf(h, s.page).status).toBe('conflict');
+	});
+
+	/** Resolves the conflict like the dialog does, then runs the next sync with the server's metadata. */
+	async function resolved(choice: 'keepLocal' | 'takeRemote'): Promise<{ h: H; s: Synced }> {
+		const h = harness();
+		const { s, op } = await bothChanged(h);
+		await executeSync(plan([op]), h.deps);
+		const ok = await applyResolution({ vault: { read: (p) => h.vault.read(p), process: (p, f) => h.vault.process(p, f), exists: (p) => h.vault.exists(p), trash: (p) => h.vault.trash(p) }, state: h.state, log: new Logger() }, s.page.id, choice);
+		expect(ok).toBe(true);
+		h.api.calls.length = 0;
+		const next: SyncOp = { kind: 'push', page: { ...s.page, emoji: '🎯' }, path: PATH, meta: metaOf(s.page, { emoji: '🎯' }), metaHash: await metaHash('🎯', []), metaChanged: false };
+		await executeSync(plan([next]), h.deps);
+		return { h, s };
+	}
+
+	it('resolving with "keep local" sends the note\'s emoji', async () => {
+		const { h, s } = await resolved('keepLocal');
+
+		expect(h.api.calls).toContain(`setPageEmoji 1 ${s.page.id} 🚀`);
+		expect(stateOf(h, s.page)).toMatchObject({ status: 'synced', metaHash: await metaHash('🚀', []) });
+	});
+
+	it('resolving with "take remote" writes the server\'s emoji into the note', async () => {
+		const { h, s } = await resolved('takeRemote');
+
+		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
+		expect(readNcMeta(await h.vault.read(PATH))?.emoji).toBe('🎯');
+		expect(stateOf(h, s.page)).toMatchObject({ status: 'synced', metaHash: await metaHash('🎯', []) });
 	});
 });
 
@@ -295,7 +385,7 @@ describe('remote text pulled while the note has own metadata changes', () => {
 		expect(readNcMeta(text)?.emoji).toBe('🚀');
 		expect(toRemote(text)).toBe('Remote neu');
 		expect(result).toMatchObject({ updated: 1, metaPushed: 1 });
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', '🚀', []));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('🚀', []));
 	});
 });
 
@@ -344,7 +434,7 @@ describe('a new local note with tags becomes a page with these tags', () => {
 		expect(h.api.calls.filter((c) => c.startsWith('createTag'))).toEqual(['createTag 1 frisch 0082c9']);
 		const text = await h.vault.read('Coll/Neu.md');
 		expect(readLocalFields(text, 'tags')?.tags).toEqual(['Vorhanden', 'frisch']);
-		expect(h.state.pages[String(page.id)]?.metaHash).toBe(await metaHash('Neu', null, ['Vorhanden', 'frisch']));
+		expect(h.state.pages[String(page.id)]?.metaHash).toBe(await metaHash(null, ['Vorhanden', 'frisch']));
 		expect(h.dav.content(page)).toBe('---\ntags: ["Vorhanden","frisch"]\n---\n\nText');
 	});
 
@@ -380,6 +470,6 @@ describe('page moved into another collective', () => {
 		expect(b).toBeDefined();
 		expect(moved?.page.tags).toEqual([targetA, b?.id]);
 		expect(h.api.calls.filter((c) => c.startsWith('createTag'))).toEqual(['createTag 2 B 0082c9']);
-		expect(stateOf(h, s.page).metaHash).toBe(await metaHash('Notiz', null, ['a', 'B']));
+		expect(stateOf(h, s.page).metaHash).toBe(await metaHash(null, ['a', 'B']));
 	});
 });

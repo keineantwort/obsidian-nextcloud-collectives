@@ -15,22 +15,18 @@ describe('sha256Hex', () => {
 
 describe('metaHash', () => {
 	it('does not depend on the order of the tag names', async () => {
-		expect(await metaHash('A', null, ['b', 'a'])).toBe(await metaHash('A', null, ['a', 'b']));
+		expect(await metaHash(null, ['b', 'a'])).toBe(await metaHash(null, ['a', 'b']));
 	});
 
 	it('equals the hash of the JSON of title, emoji and sorted tags', async () => {
-		expect(await metaHash('A', '📘', ['b', 'a'])).toBe(await sha256Hex(JSON.stringify(['A', '📘', ['a', 'b']])));
+		expect(await metaHash('📘', ['b', 'a'])).toBe(await sha256Hex(JSON.stringify(['📘', ['a', 'b']])));
 	});
 
 	it('changes when the emoji changes', async () => {
-		expect(await metaHash('A', '📘', [])).not.toBe(await metaHash('A', '📗', []));
-	});
-
-	it('changes when the title changes', async () => {
-		expect(await metaHash('A', null, [])).not.toBe(await metaHash('B', null, []));
+		expect(await metaHash('📘', [])).not.toBe(await metaHash('📗', []));
 	});
 
 	it('changes when a tag is added', async () => {
-		expect(await metaHash('A', null, [])).not.toBe(await metaHash('A', null, ['a']));
+		expect(await metaHash(null, [])).not.toBe(await metaHash(null, ['a']));
 	});
 });

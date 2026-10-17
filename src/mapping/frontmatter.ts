@@ -247,6 +247,20 @@ export function readNcMeta(local: string, tagsProperty: TagsProperty = 'nc_tags'
 	};
 }
 
+/**
+ * Remote text with the server's emoji and tags as `nc_emoji` / `nc_tags` (no page id): the conflict copy of a metadata
+ * conflict shows what the server has. Such a file is not linked to a page and is never synced.
+ */
+export function withMetaOnly(remote: string, meta: Pick<NcMeta, 'emoji' | 'tags'>): string {
+	const block = splitBlock(remote);
+	const { bom, body, eol } = textParts(remote);
+	const fields = `nc_emoji: ${JSON.stringify(meta.emoji)}${eol}nc_tags: ${JSON.stringify(meta.tags)}${eol}`;
+	if (!block) return `${bom}---${eol}${fields}---${eol}${body}`;
+	const userLines = withoutNcLines(block.yamlLines);
+	const userYaml = userLines.length > 0 ? `${userLines.join(eol)}${eol}` : '';
+	return `${bom}---${eol}${fields}${userYaml}---${eol}${block.rest}`;
+}
+
 /** Removes the nc_* fields; the user's YAML and the body stay byte-identical. An empty block is dropped. */
 export function stripNcMeta(local: string): string {
 	const block = splitBlock(local);
