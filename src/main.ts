@@ -151,8 +151,10 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	 * The secret is only written under an ID this plugin generated; any other ID in the settings
 	 * (e.g. one chosen earlier in the Obsidian UI or planted in data.json) is replaced by a new one.
 	 */
-	storeAppPassword(password: string): Promise<void> {
-		return this.credentials.store(password);
+	async storeAppPassword(password: string): Promise<void> {
+		await this.credentials.store(password);
+		// A new password may fix what paused the automatic runs.
+		this.sync?.settingsChanged();
 	}
 
 	/** True if a non-empty app password is stored for the current secret ID. */
@@ -367,11 +369,11 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		}));
 		this.registerEvent(vault.on('rename', (file, oldPath) => {
 			queue.noteRenamed(oldPath, file.path);
-			if (file instanceof TFile && (synced(file.path) || synced(oldPath))) sync.noteUserChange();
+			if (file instanceof TFile && queue.isUserWrite(file.path) && (synced(file.path) || synced(oldPath))) sync.noteUserChange();
 		}));
 		this.registerEvent(vault.on('delete', (file) => {
 			queue.noteDeleted(file.path);
-			if (file instanceof TFile && synced(file.path)) sync.noteUserChange();
+			if (file instanceof TFile && queue.isUserWrite(file.path) && synced(file.path)) sync.noteUserChange();
 		}));
 	}
 

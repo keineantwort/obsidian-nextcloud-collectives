@@ -1,6 +1,6 @@
 // Nextcloud Login Flow v2 (PLAN §10.1): the user signs in in the browser, the plugin polls for the app password.
 // Uses RequestFn directly: the poll endpoint is an absolute URL and no Basic auth exists yet.
-import { ApiChangedError, NetworkError } from '../util/errors';
+import { ApiChangedError, NetworkError, ServerError } from '../util/errors';
 import { errorForStatus } from './http';
 import type { RequestFn } from './http';
 import { isRecord } from '../util/isRecord';
@@ -126,8 +126,9 @@ export async function awaitLoginFlow(start: LoginFlowStart, options: AwaitLoginF
 			networkFailures = 0;
 			if (credentials !== null) return { kind: 'done', credentials };
 		} catch (err) {
-			// A dropped connection (phone in a tunnel, browser in front) is no reason to lose the flow.
-			if (!(err instanceof NetworkError) || ++networkFailures >= MAX_POLL_NETWORK_FAILURES) throw err;
+			// A dropped connection or a short 5xx (phone in a tunnel, proxy restart) is no reason to lose the flow.
+			const transient = err instanceof NetworkError || (err instanceof ServerError && err.status >= 500);
+			if (!transient || ++networkFailures >= MAX_POLL_NETWORK_FAILURES) throw err;
 		}
 	}
 	return { kind: 'cancelled' };

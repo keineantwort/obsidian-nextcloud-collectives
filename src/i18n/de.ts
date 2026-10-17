@@ -35,7 +35,6 @@ export const de: Record<MessageKey, string> = {
 	'ribbon.syncNow': 'Mit Nextcloud Collectives synchronisieren',
 	'sync.conflictFileLabel': 'Konflikt',
 	'sync.running': 'Synchronisierung mit Nextcloud läuft …',
-	'sync.alreadyRunning': 'Es läuft bereits eine Synchronisierung.',
 	'sync.cancelled': 'Synchronisierung abgebrochen. Es wurde nichts geändert.',
 	'sync.serverMismatch': 'Dieser Vault wird bereits mit einem anderen Server synchronisiert ({server}). Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen. Es wurde nichts geändert.',
 	'sync.accountMismatch': 'Dieser Vault wird bereits mit einem anderen Nextcloud-Konto ({user}) auf diesem Server synchronisiert. Ein Vault ist fest an ein Konto gebunden – für ein anderes Konto bitte einen neuen Vault anlegen. Es wurde nichts geändert.',
@@ -234,4 +233,5 @@ export const de: Record<MessageKey, string> = {
 	'sync.rerunQueued': 'Es läuft bereits eine Synchronisierung. Sie läuft danach noch einmal.',
 	'sync.auto.questionsPending': 'Einige Änderungen brauchen deine Entscheidung. Starte „Jetzt synchronisieren“, um zu antworten.',
 	'settings.login.insecure': 'Die Anmeldung im Browser braucht https:// – mit http:// würde das App-Passwort unverschlüsselt übertragen. Nutze https:// oder gib ein App-Passwort von Hand ein.',
+	'sync.auto.initialPending': 'Die automatische Synchronisierung wartet auf die erste Synchronisierung dieses Vaults. Starte einmal „Jetzt synchronisieren“.',
 };

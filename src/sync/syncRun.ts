@@ -106,7 +106,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	const skips: Skip[] = [];
 	const decisions = new Map<string, Decision>();
 	let first = true;
-	const saver = createThrottledPersist((current) => deps.stateStore.save(current));
+	const saver = createThrottledPersist((current) => deps.stateStore.save(current), () => (deps.now?.() ?? new Date()).getTime());
 	try {
 		for (let pass = 0; pass < MAX_PASSES; pass++) {
 			const remote = await scanRemote(clients.collectives);
@@ -169,10 +169,12 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			// Another pass finds what depended on this one (a new collective's pages, a folder page's moved note). A failure ends the loop.
 			if (!plan.followUp || result.failed > 0) break;
 		}
-	} finally {
-		// Also on an abort: lazy saves still pending must reach the disk.
-		await saver.flush();
+	} catch (err) {
+		// Also on an abort: lazy saves still pending must reach the disk. A failing flush must not hide the abort reason.
+		await saver.flush().catch(() => undefined);
+		throw err;
 	}
+	await saver.flush();
 	return { kind: 'done', result: total, skips, openConflicts: countConflicts(state), pages: Object.keys(state.pages).length };
 }
 

@@ -163,6 +163,11 @@ describe('awaitLoginFlow', () => {
 		expect(l.polls()).toBe(5);
 	});
 
+	it('survives a short 5xx from a proxy', async () => {
+		const l = loop([res(502), res(503), done]);
+		await expect(l.run()).resolves.toMatchObject({ kind: 'done' });
+	});
+
 	it('does not swallow other errors', async () => {
 		const l = loop([res(401)]);
 		await expect(l.run()).rejects.toBeInstanceOf(AuthError);

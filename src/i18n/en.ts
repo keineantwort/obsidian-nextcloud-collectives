@@ -33,7 +33,6 @@ export const en = {
 	'ribbon.syncNow': 'Sync with Nextcloud Collectives',
 	'sync.conflictFileLabel': 'Conflict',
 	'sync.running': 'Syncing with Nextcloud …',
-	'sync.alreadyRunning': 'A sync is already running.',
 	'sync.cancelled': 'Sync cancelled. Nothing was changed.',
 	'sync.serverMismatch': 'This vault is already synced with another server ({server}). A vault is bound to one server – to use a different server, create a new vault. Nothing was changed.',
 	'sync.accountMismatch': 'This vault is already synced with another Nextcloud account ({user}) on this server. A vault is bound to one account – to use a different account, create a new vault. Nothing was changed.',
@@ -232,5 +231,6 @@ export const en = {
 	'sync.rerunQueued': 'A sync is already running. It will run once more afterwards.',
 	'sync.auto.questionsPending': 'Some changes need your decision. Run “Sync now” to answer.',
 	'settings.login.insecure': 'Sign-in in the browser needs https:// – with http:// the app password would travel unencrypted. Use https:// or enter an app password by hand.',
+	'sync.auto.initialPending': 'Automatic sync is waiting for the first sync of this vault. Run “Sync now” once to start it.',
 } as const;
 export type MessageKey = keyof typeof en;

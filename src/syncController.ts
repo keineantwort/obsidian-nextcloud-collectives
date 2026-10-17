@@ -123,7 +123,8 @@ export class SyncController {
 	}
 
 	private async runLoop(first: RunKind): Promise<void> {
-		let next: RunKind | null = first;
+		// A manual request that came in while this run was queued must not be lost to the flag reset below.
+		let next: RunKind | null = this.rerun === 'manual' ? 'manual' : first;
 		while (next !== null) {
 			this.rerun = null;
 			await this.runOnce(next);
@@ -145,6 +146,7 @@ export class SyncController {
 	/** Settings changed: new timer values, and a login problem may be fixed now. */
 	settingsChanged(): void {
 		this.paused = false;
+		this.lastAutoNotice = null;
 		this.applySettings();
 	}
 
@@ -222,7 +224,11 @@ export class SyncController {
 				showSyncNotice(notice);
 				this.lastAutoNotice = null;
 			} else {
-				if (outcome.kind === 'cancelled') return;
+				if (outcome.kind === 'cancelled') {
+					// The first sync of a vault with notes needs the user's decision; tell them once.
+					this.showAutoNotice({ lines: [t('sync.auto.initialPending')], level: 'warning' });
+					return;
+				}
 				if (questionsDeferred) {
 					notice.lines.push(t('sync.auto.questionsPending'));
 					notice.level = notice.level === 'error' ? 'error' : 'warning';

@@ -79,10 +79,13 @@ export function suppressingWriter<T extends VaultWriter>(vault: T, queue: DirtyQ
 		get(target, prop) {
 			const value: unknown = Reflect.get(target, prop, target);
 			if (typeof value !== 'function') return value;
-			const writes = prop === 'create' || prop === 'process';
+			// Writes name one path; a rename names two, and the events of both ends are the plugin's own.
+			const writes = prop === 'create' || prop === 'process' || prop === 'trash';
+			const renames = prop === 'rename';
 			return (...args: unknown[]) => {
 				const path = args[0];
-				if (writes && typeof path === 'string') queue.suppress(path);
+				if ((writes || renames) && typeof path === 'string') queue.suppress(path);
+				if (renames && typeof args[1] === 'string') queue.suppress(args[1]);
 				return Reflect.apply(value, target, args) as unknown;
 			};
 		},

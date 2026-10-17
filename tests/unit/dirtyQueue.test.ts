@@ -209,3 +209,21 @@ describe('DirtyQueue: user changes and requeue', () => {
 		expect(queue.drain()).toEqual(new Set(['a/b.md', 'a/c.md']));
 	});
 });
+
+describe('suppressingWriter: renames and trash of the plugin', () => {
+	it('marks both ends of a rename and a trashed path as the plugin\'s own', async () => {
+		const queue = new DirtyQueue(() => 0, TTL);
+		const vault = new MemoryVault();
+		vault.seed('A/old.md', 'x');
+		vault.seed('A/gone.md', 'y');
+		const writer = suppressingWriter(vault, queue);
+
+		await writer.rename('A/old.md', 'A/new.md');
+		await writer.trash('A/gone.md');
+
+		expect(queue.isUserWrite('A/old.md')).toBe(false);
+		expect(queue.isUserWrite('A/new.md')).toBe(false);
+		expect(queue.isUserWrite('A/gone.md')).toBe(false);
+		expect(queue.isUserWrite('A/other.md')).toBe(true);
+	});
+});

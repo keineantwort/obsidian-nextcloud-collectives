@@ -215,12 +215,16 @@ describe('SyncController: automatic runs', () => {
 		expect(dialogs.confirm).toHaveBeenCalledTimes(1);
 	});
 
-	it('is quiet about a cancelled automatic initial sync', async () => {
+	it('tells once that the first sync of the vault must be started by hand, and opens no dialog', async () => {
 		runSyncMock.mockResolvedValue({ kind: 'cancelled' });
 		const { controller } = setup();
 		controller.startAutomation();
+
 		await auto(controller);
-		expect(shown.notices).toEqual([]);
+		await auto(controller);
+
+		expect(texts()).toEqual([t('sync.auto.initialPending')]);
+		expect(dialogs.initial).not.toHaveBeenCalled();
 	});
 
 	it('stays quiet without a network and keeps running', async () => {
@@ -283,6 +287,60 @@ describe('SyncController: automatic runs', () => {
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(runSyncMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('SyncController: queued requests', () => {
+	it('keeps a manual request that arrives while an automatic run is still queued behind the lock', async () => {
+		const held = gate();
+		const kinds: string[] = [];
+		runSyncMock.mockImplementation(async (deps: SyncRunDeps) => {
+			// A manual run may ask; an automatic one defers.
+			kinds.push((await deps.confirmInitialSync()) ? 'manual' : 'auto');
+			return done();
+		});
+		dialogs.initial.mockResolvedValue(true);
+		const { controller } = setup();
+		controller.startAutomation();
+		// Occupy the lock the way a conflict resolution does.
+		const blocker = (controller as unknown as { lock: { run: (task: () => Promise<unknown>) => Promise<unknown> } }).lock.run(() => held.promise);
+		controller.noteUserChange();
+		await vi.advanceTimersByTimeAsync(10_000);
+		void controller.runFromUi();
+
+		held.release(done());
+		await blocker;
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(kinds[0]).toBe('manual');
+	});
+
+	it('a new app password ends the pause like a settings change', async () => {
+		runSyncMock.mockRejectedValueOnce(new AuthError(401)).mockResolvedValue(done());
+		const { controller } = setup();
+		controller.startAutomation();
+		controller.noteUserChange();
+		await vi.advanceTimersByTimeAsync(10_000);
+		expect(runSyncMock).toHaveBeenCalledTimes(1);
+
+		controller.settingsChanged();
+		controller.noteUserChange();
+		await vi.advanceTimersByTimeAsync(10_000);
+
+		expect(runSyncMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('shows the same login error again after the pause was lifted', async () => {
+		runSyncMock.mockRejectedValue(new AuthError(401));
+		const { controller } = setup();
+		controller.startAutomation();
+		controller.noteUserChange();
+		await vi.advanceTimersByTimeAsync(10_000);
+		controller.settingsChanged();
+		controller.noteUserChange();
+		await vi.advanceTimersByTimeAsync(10_000);
+
+		expect(shown.notices).toHaveLength(2);
 	});
 });
 

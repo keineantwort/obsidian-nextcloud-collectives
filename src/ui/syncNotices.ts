@@ -85,10 +85,6 @@ export function describeSyncError(err: unknown, t: Translator): SyncNoticeSpec {
 	return { lines, level: 'error' };
 }
 
-export function alreadyRunningNotice(t: Translator): SyncNoticeSpec {
-	return { lines: [t('sync.alreadyRunning')], level: 'info' };
-}
-
 /** Idle run: every page in the state is up to date, so the count is the number of linked pages, not the unchanged counter. */
 function upToDate(count: number, t: Translator): string {
 	if (count === 0) return t('sync.result.upToDate.none');
