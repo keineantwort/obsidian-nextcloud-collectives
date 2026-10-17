@@ -389,6 +389,116 @@ describe('attachments: deletion', () => {
 	});
 });
 
+describe('attachments: scope and limits (security)', () => {
+	it('never uploads a file outside the collective folder that server text embeds', async () => {
+		const h = new Harness();
+		h.dav.serve(PAGE, 'Text\n', '"e1"');
+		await h.create();
+		h.vault.seedBinary('Privat/steuer.pdf', bytes('GEHEIM'));
+		await h.edit('![](Privat/steuer.pdf) ![[steuer.pdf]]\n');
+
+		await h.push();
+
+		expect(h.att.count('PUT')).toBe(0);
+		expect(h.att.files.size).toBe(0);
+	});
+
+	it('does not trash or overwrite a vault file outside the collective folder named by the state', async () => {
+		const h = await pulledPage();
+		h.vault.seedBinary('Privat/x.png', bytes('MEIN'));
+		const rec = h.state().attachments[0];
+		if (rec === undefined) throw new Error('no attachment');
+		h.deps.state.pages['10'] = { ...h.state(), attachments: [{ ...rec, localPath: 'Privat/x.png', hash: await sha256HexBytes(bytes('MEIN')) }] };
+		h.att.remove(REMOTE_FOLDER, 'bild.png');
+
+		await h.idle();
+
+		expect(await h.text('Privat/x.png')).toBe('MEIN');
+	});
+
+	it('does not download a file when the server reports no size', async () => {
+		const h = new Harness();
+		h.dav.serve(PAGE, '![bild.png](.attachments.10/bild.png)\n', '"e1"');
+		h.att.serve(REMOTE_FOLDER, 'bild.png', 'PNG-1');
+		const original = h.att.webdav.propfind.bind(h.att.webdav);
+		h.att.webdav.propfind = async (path, depth) => (await original(path, depth)).map((e) => ({ ...e, contentLength: null }));
+
+		await h.create();
+
+		expect(h.att.count('GET')).toBe(0);
+	});
+
+	it('does not write a file that is larger than reported', async () => {
+		const h = new Harness({ maxBytes: 8 });
+		h.dav.serve(PAGE, '![bild.png](.attachments.10/bild.png)\n', '"e1"');
+		h.att.serve(REMOTE_FOLDER, 'bild.png', 'PNG-1');
+		const original = h.att.webdav.propfind.bind(h.att.webdav);
+		h.att.webdav.propfind = async (path, depth) => (await original(path, depth)).map((e) => ({ ...e, contentLength: e.isCollection ? null : 1 }));
+		h.att.serve(REMOTE_FOLDER, 'bild.png', 'ZEHN-BYTES-UND-MEHR');
+
+		await h.create();
+
+		expect(h.vault.exists(`${FOLDER}/bild.png`)).toBe(false);
+	});
+});
+
+describe('attachments: review findings', () => {
+	it('uploads an image pasted into the vault root, but not other files there', async () => {
+		const h = new Harness();
+		h.dav.serve(PAGE, 'Text\n', '"e1"');
+		await h.create();
+		h.vault.seedBinary('Pasted image 1.png', bytes('PNG'));
+		h.vault.seedBinary('steuer.pdf', bytes('GEHEIM'));
+		await h.edit('![[Pasted image 1.png]] ![[steuer.pdf]]\n');
+
+		await h.push();
+
+		expect([...h.att.files.keys()]).toEqual([`${REMOTE_FOLDER}/Pasted image 1.png`]);
+	});
+
+	it('never trashes a vault-root image because the server deleted it', async () => {
+		const h = new Harness();
+		h.dav.serve(PAGE, 'Text\n', '"e1"');
+		await h.create();
+		h.vault.seedBinary('Pasted image 1.png', bytes('PNG'));
+		await h.edit('![[Pasted image 1.png]]\n');
+		await h.push();
+		h.att.remove(REMOTE_FOLDER, 'Pasted image 1.png');
+
+		await h.idle();
+
+		expect(h.vault.exists('Pasted image 1.png')).toBe(true);
+	});
+
+	it('deletes nothing on either side for a page in conflict', async () => {
+		const h = await pulledPage();
+		h.deps.state.pages['10'] = { ...h.state(), status: 'conflict' };
+		await h.vault.remove(`${FOLDER}/bild.png`);
+		await h.edit('Kein Bild mehr\n');
+
+		await h.idle();
+
+		expect(h.att.deleted).toHaveLength(0);
+		expect(h.state().attachments).toHaveLength(1);
+		const gone = await pulledPage();
+		gone.deps.state.pages['10'] = { ...gone.state(), status: 'conflict' };
+		gone.att.remove(REMOTE_FOLDER, 'bild.png');
+		await gone.idle();
+		expect(gone.vault.exists(`${FOLDER}/bild.png`)).toBe(true);
+	});
+
+	it('keeps resolving a short embed name when a second file of that name appears', async () => {
+		const h = await pulledPage();
+		await h.edit('Bild: ![[bild.png]]\n');
+		h.vault.seedBinary('Coll/Anderes/bild.png', bytes('ANDERS'));
+
+		const result = await h.push();
+
+		expect(result.pushed).toBe(0);
+		expect(h.dav.puts()).toHaveLength(0);
+	});
+});
+
 describe('attachments: not configured', () => {
 	it('does nothing without attachment dependencies', async () => {
 		const h = new Harness();

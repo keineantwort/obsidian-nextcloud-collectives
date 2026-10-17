@@ -27,6 +27,13 @@ M8 bringt Bilder und Dateien in beide Richtungen: Collectives schreibt `![name](
 - **Größenlimit.** `maxAttachmentSizeMb` (1–1000, Standard 20). Größere Dateien werden weder hoch- noch heruntergeladen; eine zu große lokale Datei wird nicht umgewandelt (die Einbettung bleibt `![[…]]` im Seitentext).
 - **Transport.** `HttpRequest.body` darf ein `ArrayBuffer` sein, `binaryResponse` liefert `HttpResponse.data`, `timeoutMs` pro Request (Anhänge 180 s statt 30 s). `WebdavClient.getBinary`/`putBinary`. Schreibende Requests werden weiterhin nie wiederholt.
 
+## Sicherheit (Review ONC-9)
+
+- Der Seitentext kommt vom Server und darf das Plugin nicht dazu bringen, Dateien des Vaults hochzuladen. Hochgeladen werden nur Dateien unterhalb des Ordners des eigenen Collectives sowie Bilder direkt im Vault-Wurzelordner (dorthin legt Obsidian eingefügte Bilder standardmäßig). Andere Anhang-Ordner von Obsidian müssen im Collective-Ordner liegen (z. B. „im Ordner der Notiz“).
+- Verschoben, ersetzt oder in den Papierkorb gelegt wird auf Veranlassung des Servers nur unterhalb des Collective-Ordners; Dateinamen vom Server sind einfache Namen (keine Trenner, Steuerzeichen, führender Punkt, in Obsidian verbotene Zeichen).
+- Ohne gemeldete Größe (`getcontentlength`) wird nicht heruntergeladen; die Größe der Bytes wird vor jedem Schreiben erneut geprüft.
+- Eine Seite im Zustand `conflict` löscht keine Anhänge, weder im Vault noch auf dem Server.
+
 ## Betrachtete Alternativen
 
 - **OCS-Multipart-Upload** – siehe ADR 0009 (Umbenennung bei Kollision).
@@ -46,5 +53,8 @@ M8 bringt Bilder und Dateien in beide Richtungen: Collectives schreibt `![name](
 - Dateien, deren Name `[ ] | # ^` enthält, werden heruntergeladen, aber nicht als Wikilink eingebettet.
 - Nicht-Bild-Links (`[Name](.attachments.{id}/datei.pdf)`) werden nicht umgewandelt und nicht heruntergeladen.
 - Ist ein Anhang beim Pull einer neuen Seite schon durch eine fremde Datei am Zielpfad belegt, werden die Bytes verglichen (gleich: übernommen; verschieden: Konfliktdatei).
+- Seiten, die in einem State aus M7 ohne Anhänge stehen, holen vorhandene Anhänge erst, wenn sich ihr Text auf dem Server ändert; Dateien über dem Limit werden nicht gemerkt und nach einer Erhöhung des Limits erst bei der nächsten Textänderung geholt.
+- Schlägt ein Transfer dauerhaft fehl (z. B. Quota), wird er in jedem Lauf neu versucht.
+- Eine neue lokale Notiz mit Bild geht zuerst mit `![[…]]` zum Server; Umwandlung und Upload folgen im nächsten Lauf.
 - Anhänge werden beim Umbenennen oder Verschieben der Notiz nicht mitgezogen.
 - Der Seitentext einer Seite im Zustand `conflict` verweist nur auf Anhänge, die die Notiz selbst einbettet; Anhänge, die nur in der Serverfassung stehen, kommen nach der Auflösung.

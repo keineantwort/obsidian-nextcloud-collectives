@@ -3,7 +3,7 @@
 import type { DavEntry } from '../api/webdavClient';
 import type { PageId, PageInfo } from '../api/types';
 import { asAttachmentId } from '../api/types';
-import { baseName, mimeTypeOf } from '../mapping/attachments';
+import { baseName, isInCollectiveFolder, isSafeAttachmentName, isUploadable, mimeTypeOf } from '../mapping/attachments';
 import { toRemote } from '../mapping/frontmatter';
 import { attachmentRefs, embeddedFiles } from '../mapping/links';
 import { conflictPath, pathKey } from '../mapping/paths';
@@ -28,6 +28,7 @@ interface PageRun {
 	att: AttachmentDeps;
 	result: SyncResult;
 	pageId: PageId;
+	notePath: string;
 	collectiveId: PageState['collectiveId'];
 	/** User-relative WebDAV folder `.attachments.{id}` of the page. */
 	folder: string;
@@ -35,6 +36,8 @@ interface PageRun {
 	listing: Map<string, DavEntry> | null;
 	/** Names the page text embeds. */
 	refs: ReadonlySet<string>;
+	/** False for a page in conflict: its text differs from the server's, so nothing is deleted on either side. */
+	synced: boolean;
 	/** True once the folder is known to exist. */
 	folderReady: boolean;
 	/** True if a file was uploaded or deleted: etags and ids are read again. */
@@ -69,15 +72,19 @@ export async function syncAttachments(op: AttachmentOp, deps: ExecutorDeps, resu
 		return false;
 	}
 	const run: PageRun = {
-		deps, att, result, pageId: page.id, collectiveId: s.collectiveId, folder, listing, refs,
-		folderReady: listing !== null, touchedRemote: false,
+		deps, att, result, pageId: page.id, notePath: op.path, collectiveId: s.collectiveId, folder, listing, refs,
+		folderReady: listing !== null, touchedRemote: false, synced: s.status === 'synced',
 	};
 
 	const next = new Map<string, AttachmentState>();
 	for (const name of names) {
 		const rec = known.get(name);
 		const path = embedded.get(name) ?? deps.links?.attachments?.localPath(page.id, name) ?? rec?.localPath;
-		if (path === undefined) continue;
+		// Nothing is written, replaced or trashed outside the collective's folder, whatever the state or the server says.
+		if (path === undefined || !isSafeAttachmentName(name) || !isUploadable(path, op.path)) {
+			if (rec !== undefined) next.set(name, rec);
+			continue;
+		}
 		try {
 			const kept = await reconcile(run, name, rec, path);
 			if (kept !== null) next.set(name, kept);
@@ -106,7 +113,7 @@ function pending(name: string, localPath: string): AttachmentState {
 async function listFolder(att: AttachmentDeps, folder: string): Promise<Map<string, DavEntry> | null> {
 	try {
 		const entries = await att.webdav.propfind(folder, 1);
-		return new Map(entries.filter((entry) => !entry.isCollection).map((entry) => [baseName(entry.path), entry]));
+		return new Map(entries.filter((entry) => !entry.isCollection && isSafeAttachmentName(baseName(entry.path))).map((entry) => [baseName(entry.path), entry]));
 	} catch (err) {
 		if (err instanceof NotFoundError) return null;
 		throw err;
@@ -120,12 +127,12 @@ async function reconcile(run: PageRun, name: string, rec: AttachmentState | unde
 	const exists = deps.vault.exists(path);
 
 	if (remote === undefined) {
-		if (rec !== undefined && rec.etag !== '') return removedOnServer(run, rec, path);
+		if (rec !== undefined && rec.etag !== '') return run.synced ? removedOnServer(run, rec, path) : rec;
 		// Never on the server: a local file the page embeds is uploaded; without the file there is nothing to do.
 		return exists ? upload(run, name, path) : null;
 	}
 	if (!exists) {
-		if (rec !== undefined && rec.etag !== '' && !run.refs.has(name)) return deletedLocally(run, rec);
+		if (rec !== undefined && rec.etag !== '' && !run.refs.has(name)) return run.synced ? deletedLocally(run, rec) : rec;
 		return download(run, name, remote, path, rec);
 	}
 	if (rec === undefined || rec.hash === '') return compareExisting(run, name, remote, path, rec);
@@ -133,10 +140,16 @@ async function reconcile(run: PageRun, name: string, rec: AttachmentState | unde
 	return updateFromServer(run, name, remote, path, rec);
 }
 
+/** True if the server did not report a size or reports one above the limit: such a file is not downloaded. */
+function tooBig(run: PageRun, remote: DavEntry): boolean {
+	return remote.contentLength === null || remote.contentLength > run.att.options.maxBytes;
+}
+
 /** The server no longer has a file we synced: it leaves the vault (to Obsidian's trash) unless the user changed it. */
 async function removedOnServer(run: PageRun, rec: AttachmentState, path: string): Promise<AttachmentState | null> {
 	const { deps } = run;
-	if (!deps.vault.exists(path)) return null;
+	// A file outside the collective folder (a pasted image in the vault root) is never trashed because of the server.
+	if (!deps.vault.exists(path) || !isInCollectiveFolder(path, run.notePath)) return null;
 	if (run.att.remoteDelete === 'keepUnlinked') return null;
 	if ((await sha256HexBytes(await deps.vault.readBinary(path))) !== rec.hash) {
 		deps.log.info('Attachment deleted on the server but changed here: kept', { pageId: run.pageId });
@@ -163,7 +176,7 @@ async function deletedLocally(run: PageRun, rec: AttachmentState): Promise<Attac
 /** Writes the file from the server into the vault (new file, or a lost one restored). */
 async function download(run: PageRun, name: string, remote: DavEntry, path: string, rec: AttachmentState | undefined): Promise<AttachmentState | null> {
 	const { deps } = run;
-	if (remote.contentLength !== null && remote.contentLength > run.att.options.maxBytes) {
+	if (tooBig(run, remote)) {
 		deps.log.info('Attachment above the size limit not downloaded', { pageId: run.pageId });
 		return rec ?? null;
 	}
@@ -183,8 +196,9 @@ async function download(run: PageRun, name: string, remote: DavEntry, path: stri
  */
 async function compareExisting(run: PageRun, name: string, remote: DavEntry, path: string, rec: AttachmentState | undefined): Promise<AttachmentState | null> {
 	const { deps } = run;
-	if (remote.contentLength !== null && remote.contentLength > run.att.options.maxBytes) return rec ?? null;
+	if (tooBig(run, remote)) return rec ?? null;
 	const file = await run.att.webdav.getBinary(remotePath(run, name));
+	if (file.data.byteLength > run.att.options.maxBytes) return rec ?? null;
 	const remoteHash = await sha256HexBytes(file.data);
 	const localHash = await sha256HexBytes(await deps.vault.readBinary(path));
 	if (localHash !== remoteHash) await writeConflictCopy(run, path, file.data);
@@ -194,8 +208,9 @@ async function compareExisting(run: PageRun, name: string, remote: DavEntry, pat
 /** The server file changed: the vault file takes it if the user did not change it, else the server's bytes become a conflict copy. */
 async function updateFromServer(run: PageRun, name: string, remote: DavEntry, path: string, rec: AttachmentState): Promise<AttachmentState | null> {
 	const { deps } = run;
-	if (remote.contentLength !== null && remote.contentLength > run.att.options.maxBytes) return rec;
+	if (tooBig(run, remote) || !isInCollectiveFolder(path, run.notePath)) return rec;
 	const file = await run.att.webdav.getBinary(remotePath(run, name));
+	if (file.data.byteLength > run.att.options.maxBytes) return rec;
 	const remoteHash = await sha256HexBytes(file.data);
 	const localHash = await sha256HexBytes(await deps.vault.readBinary(path));
 	if (localHash === remoteHash) return entryOf(name, remote, path, remoteHash);

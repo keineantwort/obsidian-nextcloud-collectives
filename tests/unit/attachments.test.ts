@@ -176,3 +176,19 @@ describe('attachmentRefs and embeddedFiles', () => {
 		expect([...found]).toEqual([['Pasted image 1.png', 'Coll/Pasted image 1.png'], ['neu.png', null]]);
 	});
 });
+
+describe('attachment scope (security)', () => {
+	it('does not resolve files outside the collective folder of the note, so server text cannot make them upload', () => {
+		const index = attachmentIndex([{ path: 'Privat/steuer.pdf', size: 5 }, { path: 'Coll/ok.png', size: 5 }]);
+		expect(index.resolve('Privat/steuer.pdf', NOTE, PAGE)).toBeUndefined();
+		expect(index.resolve('steuer.pdf', NOTE, PAGE)).toBeUndefined();
+		expect(index.resolve('../Privat/steuer.pdf', NOTE, PAGE)).toBeUndefined();
+		expect(index.resolve('ok.png', NOTE, PAGE)?.path).toBe('Coll/ok.png');
+	});
+
+	it('rejects unsafe attachment names', () => {
+		for (const name of ['..%2Fx.png', 'a%5Cb.png', '.hidden.png', 'a%00b.png', 'a%3Fb.png']) {
+			expect(parseAttachmentUrl(`.attachments.10/${name}`)).toBeNull();
+		}
+	});
+});

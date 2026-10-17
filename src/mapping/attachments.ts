@@ -1,6 +1,6 @@
 // Attachments of pages (PLAN §9.4, ADR 0021). Pure: no Obsidian, no network imports.
 import type { PageId } from '../api/types';
-import { pathKey } from './paths';
+import { pathKey, sanitizeName } from './paths';
 
 /** Default of the setting `attachmentFolderPattern`: relative to the folder of the note, `{title}` = file name of the note. */
 export const DEFAULT_ATTACHMENT_PATTERN = '_attachments/{title}';
@@ -47,13 +47,38 @@ export function attachmentFolderFor(notePath: string, pattern: string): string {
 	const folder = slash === -1 ? '' : notePath.slice(0, slash);
 	const file = notePath.slice(slash + 1);
 	const title = file.toLowerCase().endsWith('.md') ? file.slice(0, -'.md'.length) : file;
-	const relative = pattern.replace(/\{title\}/g, title).replace(/^\/+|\/+$/g, '');
+	const relative = pattern.replace(/\{title\}/g, () => sanitizeName(title)).replace(/^\/+|\/+$/g, '');
 	return folder === '' ? relative : `${folder}/${relative}`;
 }
 
 /** Last path segment. */
 export function baseName(path: string): string {
 	return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/** True for a plain file name: no separators, control characters, leading dot or characters Obsidian forbids in names. */
+export function isSafeAttachmentName(name: string): boolean {
+	// eslint-disable-next-line no-control-regex -- control characters are exactly what is rejected
+	return name !== '' && !name.startsWith('.') && !/[\u0000-\u001f\u007f/\\*"<>:|?#^[\]]/.test(name);
+}
+
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp']);
+
+/**
+ * True if the file may be uploaded from a note at `notePath`: any file below the note's collective folder, and images directly
+ * in the vault root (where Obsidian puts pasted images by default). Text from the server must not make the plugin upload
+ * other files of the vault.
+ */
+export function isUploadable(path: string, notePath: string): boolean {
+	if (isInCollectiveFolder(path, notePath)) return true;
+	const dot = path.lastIndexOf('.');
+	return !path.includes('/') && dot > 0 && IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
+}
+
+/** True if `path` lies below the top-level folder (the collective's folder) of the note at `notePath`. */
+export function isInCollectiveFolder(path: string, notePath: string): boolean {
+	const top = notePath.split('/')[0] ?? '';
+	return top !== '' && notePath.includes('/') && pathKey(path).startsWith(`${pathKey(top)}/`) && !path.split('/').includes('..');
 }
 
 /** `.attachments.{pageId}/{name}` as page text links it (name URL-encoded). */
@@ -71,7 +96,7 @@ export function parseAttachmentUrl(url: string): { pageId: PageId; name: string 
 	} catch {
 		name = match[2];
 	}
-	return { pageId: Number(match[1]) as PageId, name };
+	return isSafeAttachmentName(name) ? { pageId: Number(match[1]) as PageId, name } : null;
 }
 
 /** What `AttachmentIndex` is built from. */
@@ -127,20 +152,24 @@ export class AttachmentIndex {
 	resolve(target: string, fromPath: string, pageId: PageId): ResolvedEmbed | undefined {
 		const wanted = normalizePath(target.trim());
 		if (wanted === '') return undefined;
-		const file = this.findFile(wanted, fromPath);
-		if (file !== undefined) return file.size > this.maxBytes ? undefined : { name: baseName(file.path), path: file.path };
+		const file = this.findFile(wanted, fromPath, pageId);
+		// Only files of the note's own collective: text from the server must not make the plugin upload files from elsewhere.
+		if (file !== undefined) {
+			const name = baseName(file.path);
+			return file.size > this.maxBytes || !isUploadable(file.path, fromPath) || !isSafeAttachmentName(name) ? undefined : { name, path: file.path };
+		}
 		const key = pathKey(wanted);
 		const known = this.known.get(pageId)?.find((entry) => pathKey(entry.localPath) === key);
 		if (known !== undefined) return { name: known.name, path: null };
 		const folder = this.folders.get(pageId);
 		if (folder !== undefined && key.startsWith(`${pathKey(folder)}/`)) {
 			const name = wanted.slice(folder.length + 1);
-			if (name !== '' && !name.includes('/')) return { name, path: null };
+			if (isSafeAttachmentName(name)) return { name, path: null };
 		}
 		return undefined;
 	}
 
-	private findFile(wanted: string, fromPath: string): AttachmentFile | undefined {
+	private findFile(wanted: string, fromPath: string, pageId: PageId): AttachmentFile | undefined {
 		const direct = this.byPath.get(pathKey(wanted));
 		if (direct !== undefined) return direct;
 		const slash = fromPath.lastIndexOf('/');
@@ -148,7 +177,11 @@ export class AttachmentIndex {
 		if (relative !== undefined) return relative;
 		if (wanted.includes('/')) return undefined;
 		const named = this.byBase.get(pathKey(wanted));
-		return named !== undefined && named.length === 1 ? named[0] : undefined;
+		if (named === undefined) return undefined;
+		if (named.length === 1) return named[0];
+		// Several files share the name: the one this page synced wins, so a second file of that name changes nothing.
+		const synced = this.known.get(pageId)?.find((entry) => pathKey(baseName(entry.localPath)) === pathKey(wanted));
+		return synced === undefined ? undefined : named.find((file) => pathKey(file.path) === pathKey(synced.localPath));
 	}
 }
 

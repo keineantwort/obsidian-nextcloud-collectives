@@ -138,14 +138,15 @@ describe('attachments', () => {
 		expect(textOf(await h.vault.readBinary(copies[0] ?? ''))).toBe('NOCHMAL-NEU');
 	}, 90_000);
 
-	it('removes a file from the vault that was deleted in Collectives', async () => {
+	it('forgets an attachment deleted in Collectives, and keeps a vault-root file the server cannot take away', async () => {
 		const target = (await h.clients.collectives.listAttachments(collective.id, page.id)).find((a) => a.name === 'Pasted image 1.png');
 		await h.clients.collectives.deleteAttachment(collective.id, page.id, required(target, 'attachment').id);
 
 		const synced = await h.sync();
 
-		expect(synced.result).toMatchObject({ attachments: 1, failed: 0 });
-		expect(h.vault.exists('Pasted image 1.png')).toBe(false);
+		expect(synced.result).toMatchObject({ failed: 0 });
+		expect(h.vault.exists('Pasted image 1.png')).toBe(true);
+		expect(required(h.state().pages[String(page.id)], 'page state').attachments.map((a) => a.name)).toEqual(['server.png']);
 	}, 60_000);
 
 	it('deletes the server file of an attachment the user deleted and no longer uses', async () => {
@@ -155,8 +156,9 @@ describe('attachments', () => {
 
 		const synced = await h.sync();
 
-		expect(synced.result).toMatchObject({ pushed: 1, attachments: 1, failed: 0 });
-		expect(await listed()).toEqual([]);
+		// The pasted root image that the server lost is still embedded and still in the vault, so it is uploaded again.
+		expect(synced.result).toMatchObject({ pushed: 1, attachments: 2, failed: 0 });
+		expect(await listed()).toEqual(['Pasted image 1.png']);
 		expect(await remoteText()).not.toContain('server.png');
 	}, 60_000);
 });
