@@ -187,6 +187,17 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName(t('settings.emojiTitles.name'))
+			.setDesc(t('settings.emojiTitles.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.showEmojiInTitles).onChange(async (value) => {
+					settings.showEmojiInTitles = value;
+					await plugin.saveSettings();
+					plugin.refreshEmojiTitles();
+				});
+			});
+
+		new Setting(containerEl)
 			.setName(t('settings.tagsProperty.name'))
 			.setDesc(t('settings.tagsProperty.desc'))
 			.addDropdown((dd) => {

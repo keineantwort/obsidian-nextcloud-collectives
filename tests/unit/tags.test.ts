@@ -1,6 +1,6 @@
 // M6 (PLAN §7.5): names of tags between the server and a note.
 import { describe, expect, it } from 'vitest';
-import { findTagByName, resolveTagNames, toObsidianTag } from '../../src/mapping/tags';
+import { findTagByName, inlineTags, resolveTagNames, toObsidianTag } from '../../src/mapping/tags';
 
 describe('toObsidianTag', () => {
 	it('turns white space into dashes and drops a leading #', () => {
@@ -43,5 +43,19 @@ describe('resolveTagNames', () => {
 
 	it('maps dashed Obsidian tags to the server names and writes unknown ones in Obsidian form', () => {
 		expect(resolveTagNames(['mein-tag', '#neu tag'], ['Mein Tag'], 'tags')).toEqual(['Mein Tag', 'neu-tag']);
+	});
+});
+
+describe('inlineTags', () => {
+	it('finds #tags in running text, with nesting and non-ASCII letters, without repeats', () => {
+		expect(inlineTags('Text #Projekt und #a/b, dann #Ärger und #projekt.\n#zweite Zeile')).toEqual(['Projekt', 'a/b', 'Ärger', 'zweite']);
+	});
+
+	it('ignores headings, numbers, links, URLs and anchors', () => {
+		expect(inlineTags('# Titel\n## Noch einer\n#123 [[Notiz#Abschnitt]] https://x.de/#frag a#b')).toEqual([]);
+	});
+
+	it('ignores fenced and inline code', () => {
+		expect(inlineTags('```js\n#nope\n```\nText `#auch-nicht` #ja\n~~~\n#nein\n~~~\n#doch')).toEqual(['ja', 'doch']);
 	});
 });

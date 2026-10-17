@@ -1,6 +1,6 @@
 import { asCollectiveId, asPageId } from '../api/types';
 import type { CollectiveId, PageId } from '../api/types';
-import { toObsidianTag } from './tags';
+import { inlineTags, toObsidianTag } from './tags';
 import type { TagsProperty } from './tags';
 
 /** Plugin fields stored as flat top-level keys in the frontmatter of a local file (PLAN §6.2). */
@@ -211,16 +211,20 @@ function readTagsProperty(lines: readonly string[]): string[] | undefined {
 
 /**
  * Emoji and tags a note carries: `nc_emoji` and `nc_tags`, and with tagsProperty = tags the `tags` property in
- * place of `nc_tags` (`nc_tags` is the fallback while the note has no `tags` yet, e.g. after the setting changed).
- * null if the text has no frontmatter block.
+ * place of `nc_tags` (`nc_tags` is the fallback while the note has no `tags` yet, e.g. after the setting changed), plus the
+ * `#tags` in the text. null if the text has no frontmatter block (with nc_tags).
  */
 export function readLocalFields(local: string, tagsProperty: TagsProperty = 'nc_tags'): LocalFields | null {
 	const block = splitBlock(local);
-	if (!block) return null;
+	// A note without frontmatter can still carry #tags (a new note); with nc_tags it has nothing to read.
+	if (!block) return tagsProperty === 'tags' ? { emoji: null, tags: inlineTags(textParts(local).body) } : null;
 	const values = ncValues(block);
 	const emoji = parseJson(values.get('nc_emoji') ?? '');
 	let tags = stringList(parseJson(values.get('nc_tags') ?? ''));
-	if (tagsProperty === 'tags') tags = readTagsProperty(block.yamlLines) ?? tags;
+	if (tagsProperty === 'tags') {
+		tags = readTagsProperty(block.yamlLines) ?? tags;
+		for (const name of inlineTags(block.rest)) if (!tags.some((known) => known.toLowerCase() === name.toLowerCase())) tags.push(name);
+	}
 	return { emoji: typeof emoji === 'string' && emoji !== '' ? emoji : null, tags };
 }
 

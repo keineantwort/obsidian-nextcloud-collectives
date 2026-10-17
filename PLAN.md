@@ -228,7 +228,7 @@ nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweich
 ```
 
 - Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
-- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives). Im Modus `tags` schreibt das Plugin die Eigenschaft `tags` zusätzlich zu `nc_tags`; sie bleibt Seiteninhalt und wird mit hochgeladen (M6, ADR 0019).
+- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives). Im Modus `tags` (Default) schreibt das Plugin die Eigenschaft `tags` zusätzlich zu `nc_tags`; sie bleibt Seiteninhalt und wird mit hochgeladen; `#Tags` im Text kommen hinzu (nur hinzufügend). Die Schlüssel bleiben technisch, die Eigenschaften-Ansicht zeigt lokalisierte Namen, das Emoji steht nur in der Anzeige vor dem Titel (M6, ADR 0019).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
 ### 6.3 Sync-State

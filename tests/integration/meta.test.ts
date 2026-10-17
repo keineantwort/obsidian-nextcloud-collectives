@@ -200,4 +200,17 @@ describe('tagsProperty = tags', () => {
 		await h.sync();
 		expect((await h.clients.collectives.listTags(collective.id)).length).toBe(before);
 	}, 90_000);
+
+	it('takes a #tag in the text as a tag of the page and keeps it in the property', async () => {
+		const { h, path } = ctx;
+		await h.sync();
+		await waitPastSecondBoundary();
+		h.edit(path, `${await h.vault.read(path)}\n\nNoch ein #Inline-Tag im Text\n`);
+
+		const outcome = await h.sync();
+
+		expect(outcome.result).toMatchObject({ failed: 0 });
+		expect(await tagNames(ctx, await current(ctx))).toContain('Inline-Tag');
+		expect(readLocalFields(await h.vault.read(path), 'tags')?.tags).toContain('Inline-Tag');
+	}, 90_000);
 });

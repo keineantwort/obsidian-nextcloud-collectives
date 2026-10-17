@@ -336,6 +336,14 @@ describe('tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
 			expect(readLocalFields('---\ntags: []\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual([]);
 		});
 
+		it('adds the #tags of the text with tagsProperty = tags, also for a note without frontmatter, but not with nc_tags', () => {
+			const text = '---\ntags: [a]\n---\nText #B und #a und `#c`\n';
+			expect(readLocalFields(text, 'tags')?.tags).toEqual(['a', 'B']);
+			expect(readLocalFields(text)?.tags).toEqual([]);
+			expect(readLocalFields('Nur #Text', 'tags')).toEqual({ emoji: null, tags: ['Text'] });
+			expect(readLocalFields('Nur #Text')).toBeNull();
+		});
+
 		it('falls back to nc_tags while the note has no tags property', () => {
 			expect(readLocalFields('---\nnc_tags: ["x"]\n---\n', 'tags')?.tags).toEqual(['x']);
 		});

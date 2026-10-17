@@ -406,6 +406,25 @@ describe('tagsProperty = tags', () => {
 		expect(text).toContain('nc_tags: ["Mein Tag","neu"]');
 	});
 
+	it('sends #tags of the text as tags, keeps them in the property, and does not remove a tag when the #tag leaves the text', async () => {
+		const h = harness('tags');
+		const s = await synced(h, { tagsProperty: 'tags' });
+		h.vault.userEdit(PATH, `---\nnc_page_id: ${s.page.id}\nnc_collective_id: 1\n---\n${TEXT} #Inline\n`);
+
+		await executeSync(plan([{ kind: 'push', page: s.page, path: PATH, meta: s.meta, metaHash: s.hash, metaChanged: false }]), h.deps);
+
+		const tag = h.state.tags['1']?.find((t) => t.name === 'Inline');
+		expect(h.api.entries.get(s.page.id)?.page.tags).toEqual([tag?.id]);
+		expect(await h.vault.read(PATH)).toContain('tags: ["Inline"]');
+
+		// The #tag is deleted from the text; the property still names it, so nothing is removed.
+		const next = { ...s, page: h.api.entries.get(s.page.id)?.page as PageInfo, hash: await metaHash(null, ['Inline']) };
+		h.vault.userEdit(PATH, (await h.vault.read(PATH)).replace(' #Inline', ''));
+		h.api.calls.length = 0;
+		await executeSync(plan([{ kind: 'push', page: next.page, path: PATH, meta: { ...s.meta, tags: ['Inline'], tagsProperty: 'tags' }, metaHash: next.hash, metaChanged: false }]), h.deps);
+		expect(h.api.calls.filter((c) => /Emoji|Tag/.test(c))).toEqual([]);
+	});
+
 	it('does not touch the tags of the server for a note that has only the old nc_tags', async () => {
 		const h = harness('tags');
 		const tagId = serverTag(h, 1, 'A');

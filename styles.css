@@ -104,3 +104,22 @@
 .nc-confirm-label { font-weight: var(--font-semibold); }
 .nc-confirm-warning { color: var(--text-error); margin-top: var(--size-4-1); }
 .nc-confirm-detail { color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: var(--size-4-1); }
+
+/* Page emoji in front of note titles (display only, src/ui/emojiTitles.ts). */
+.nav-file-title-content[data-nc-emoji]::before,
+.inline-title[data-nc-emoji]::before,
+.view-header-title[data-nc-emoji]::before { content: attr(data-nc-emoji) ' '; }
+
+/* Readable names for the plugin's properties (labels come from src/ui/propertyLabels.ts). The key input is hidden, so the
+   key of these technical properties cannot be renamed by accident; the value stays editable. */
+.metadata-property[data-property-key='nc_page_id'] .metadata-property-key-input,
+.metadata-property[data-property-key='nc_collective_id'] .metadata-property-key-input,
+.metadata-property[data-property-key='nc_emoji'] .metadata-property-key-input,
+.metadata-property[data-property-key='nc_tags'] .metadata-property-key-input,
+.metadata-property[data-property-key='nc_title'] .metadata-property-key-input { display: none; }
+.metadata-property[data-property-key='nc_page_id'] .metadata-property-key::after { content: var(--nc-label-nc-page-id); }
+.metadata-property[data-property-key='nc_collective_id'] .metadata-property-key::after { content: var(--nc-label-nc-collective-id); }
+.metadata-property[data-property-key='nc_emoji'] .metadata-property-key::after { content: var(--nc-label-nc-emoji); }
+.metadata-property[data-property-key='nc_tags'] .metadata-property-key::after { content: var(--nc-label-nc-tags); }
+.metadata-property[data-property-key='nc_title'] .metadata-property-key::after { content: var(--nc-label-nc-title); }
+.metadata-property[data-property-key^='nc_'] .metadata-property-key::after { color: var(--text-muted); font-size: var(--font-ui-small); }

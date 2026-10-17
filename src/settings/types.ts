@@ -17,8 +17,10 @@ export interface NcSettings {
 	localDeleteBehaviour: PlannerBehaviour['localDelete'];
 	/** What happens to the local file of a page deleted on the server (PLAN §7.4). */
 	remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
-	/** Frontmatter key that carries the tags besides nc_tags (PLAN §6.2, §7.5). */
+	/** Frontmatter key that carries the tags: Obsidian's `tags` (default, with the #tags of the text) or the plugin's `nc_tags` (PLAN §6.2, §7.5). */
 	tagsProperty: TagsProperty;
+	/** Show the page emoji in front of note titles (display only). */
+	showEmojiInTitles: boolean;
 }
 
 export const DEFAULT_SETTINGS: NcSettings = {
@@ -29,7 +31,8 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	newFolderBehaviour: 'createCollective',
 	localDeleteBehaviour: 'ask',
 	remoteDeleteBehaviour: 'obsidianTrash',
-	tagsProperty: 'nc_tags',
+	tagsProperty: 'tags',
+	showEmojiInTitles: true,
 };
 
 export const CONFLICT_STRATEGIES = ['conflictFile', 'preferLocal', 'preferRemote'] as const;

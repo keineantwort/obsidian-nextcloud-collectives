@@ -50,3 +50,32 @@ export function resolveTagNames(names: readonly string[], remoteNames: readonly 
 	}
 	return out;
 }
+
+/** An Obsidian tag in running text: '#' after the start of a line or white space, letters/digits/_/-//, at least one non-digit. */
+const INLINE_TAG = /(?:^|\s)#([\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)/gu;
+
+/**
+ * The `#Tag`s in the text of a note (not its frontmatter), in order of appearance without repeats. Code (fenced blocks and
+ * `inline code`) and headings (`# Title`: no tag) are skipped, so are links (`[[Note#Heading]]`: '#' not after white space).
+ */
+export function inlineTags(body: string): string[] {
+	const found: string[] = [];
+	let fence: string | null = null;
+	for (const rawLine of body.split(/\r?\n/)) {
+		const marker = /^\s*(```+|~~~+)/.exec(rawLine)?.[1];
+		if (fence !== null) {
+			if (marker !== undefined && marker.startsWith(fence[0] ?? '')) fence = null;
+			continue;
+		}
+		if (marker !== undefined) {
+			fence = marker;
+			continue;
+		}
+		const line = rawLine.replace(/`[^`]*`/g, ' ');
+		for (const match of line.matchAll(INLINE_TAG)) {
+			const name = match[1];
+			if (name !== undefined && !found.some((known) => known.toLowerCase() === name.toLowerCase())) found.push(name);
+		}
+	}
+	return found;
+}

@@ -1,4 +1,4 @@
-import { Platform, Plugin, getLanguage, normalizePath } from 'obsidian';
+import { MarkdownView, Platform, Plugin, getLanguage, normalizePath } from 'obsidian';
 import { testConnection, type ConnectionResult } from './api/connection';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
@@ -10,6 +10,8 @@ import { CredentialsStore } from './settings/credentialsStore';
 import { StateStore, type StateFile } from './sync/stateStore';
 import { SyncController } from './syncController';
 import { StatusBar } from './ui/statusBar';
+import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from './ui/emojiTitles';
+import { applyPropertyLabels } from './ui/propertyLabels';
 import { Logger } from './util/logger';
 import { isRecord } from './util/isRecord';
 
@@ -63,7 +65,9 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			this.refreshStatusBar();
 		}
 		// Vault events during the initial vault load are not user changes, so they are only tracked once the layout is ready.
+		this.register(applyPropertyLabels(activeDocument.body, this.t));
 		this.app.workspace.onLayoutReady(() => {
+			this.registerEmojiTitles();
 			this.registerDirtyTracking(sync);
 			void sync.loadInitialState();
 		});
@@ -90,6 +94,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isRemoteDeleteBehaviour(remoteDelete)) loaded.remoteDeleteBehaviour = remoteDelete;
 			const tagsProperty = data['tagsProperty'];
 			if (isTagsProperty(tagsProperty)) loaded.tagsProperty = tagsProperty;
+			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 		}
 		this.settings = { ...DEFAULT_SETTINGS, ...loaded };
 	}
@@ -124,6 +129,55 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	}
 
 	/** Vault events that mark synced files as changed by the user. The plugin's own writes are filtered by suppressingWriter. */
+	/** Page emoji in front of the titles (display only): refreshed when notes, their metadata or the layout change. */
+	private registerEmojiTitles(): void {
+		let timer: number | null = null;
+		const schedule = (): void => {
+			if (timer !== null) return;
+			timer = window.setTimeout(() => {
+				timer = null;
+				this.refreshEmojiTitles();
+			}, 100);
+		};
+		let observers: MutationObserver[] = [];
+		const watchExplorers = (): void => {
+			for (const observer of observers) observer.disconnect();
+			observers = this.app.workspace.getLeavesOfType('file-explorer').map((leaf) => {
+				const observer = new MutationObserver(schedule);
+				observer.observe(leaf.view.containerEl, { childList: true, subtree: true });
+				return observer;
+			});
+			schedule();
+		};
+		const { workspace, metadataCache, vault } = this.app;
+		this.registerEvent(workspace.on('layout-change', watchExplorers));
+		this.registerEvent(workspace.on('active-leaf-change', schedule));
+		this.registerEvent(workspace.on('file-open', schedule));
+		this.registerEvent(metadataCache.on('changed', schedule));
+		this.registerEvent(vault.on('rename', schedule));
+		this.register(() => {
+			for (const observer of observers) observer.disconnect();
+			if (timer !== null) window.clearTimeout(timer);
+			clearEmoji(activeDocument.body);
+		});
+		watchExplorers();
+	}
+
+	/** Sets or removes the emoji marks on the file explorers and note views (setting showEmojiInTitles). */
+	refreshEmojiTitles(): void {
+		const { workspace, vault, metadataCache } = this.app;
+		const show = this.settings.showEmojiInTitles;
+		const emojiOf = (path: string): string | null => {
+			if (!show) return null;
+			const file = vault.getFileByPath(path);
+			return emojiFromFrontmatter(file === null ? undefined : metadataCache.getFileCache(file)?.frontmatter?.['nc_emoji']);
+		};
+		for (const leaf of workspace.getLeavesOfType('file-explorer')) decorateExplorer(leaf.view.containerEl, emojiOf);
+		workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView) decorateView(leaf.view.containerEl, emojiOf(leaf.view.file?.path ?? ''));
+		});
+	}
+
 	private registerDirtyTracking(sync: SyncController): void {
 		const { vault } = this.app;
 		const queue = sync.dirtyQueue;

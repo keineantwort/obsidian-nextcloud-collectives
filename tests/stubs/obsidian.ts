@@ -63,6 +63,8 @@ export class Notice {
 
 export class ButtonComponent {}
 
+export class MarkdownView {}
+
 export class PluginSettingTab {}
 
 export class Setting {}
