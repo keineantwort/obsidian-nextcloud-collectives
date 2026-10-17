@@ -66,6 +66,26 @@ describe('linksToLocal', () => {
 		expect(linksToLocal(`${text}[Urlaub](Prozesse/Urlaub.md?fileId=100)`, from(101))).toBe(`${text}[[Handbuch/Prozesse/Urlaub]]`);
 	});
 
+	it('does not reach other collectives with a bare fileId or a URL that does not name them', () => {
+		const crafted = ['[x](Server.md?fileId=201)', '[x](/apps/collectives/q-7/Server-201)', '[x](/apps/collectives/q-2)', '[x](/apps/collectives/Team%20Wiki-9/Server-201)'].join('\n');
+		expect(linksToLocal(crafted, from(101))).toBe(crafted);
+		expect(linksToLocal('[x](/apps/collectives/Team%20Wiki-2/Server-201)', from(101))).toBe('[[Wiki/Server|x]]');
+	});
+
+	it('treats absolute URLs of another host as external', () => {
+		const own = new LinkIndex(pages, 'https://cloud.example.test');
+		const ctx = { index: own, sourceId: asPageId(101) };
+		expect(linksToLocal('[a](https://evil.example/apps/collectives/Handbuch-1/Urlaub-100)', ctx)).toBe('[a](https://evil.example/apps/collectives/Handbuch-1/Urlaub-100)');
+		expect(linksToLocal('[Urlaub](https://CLOUD.example.test/apps/collectives/Handbuch-1/Urlaub-100)', ctx)).toBe('[[Handbuch/Prozesse/Urlaub]]');
+	});
+
+	it('handles a long line of brackets in linear time', () => {
+		const text = '['.repeat(200_000);
+		const start = Date.now();
+		expect(linksToLocal(text, from(101))).toBe(text);
+		expect(Date.now() - start).toBeLessThan(1000);
+	});
+
 	it('does nothing without a context', () => {
 		expect(linksToLocal('[Urlaub](Prozesse/Urlaub.md?fileId=100)', undefined)).toBe('[Urlaub](Prozesse/Urlaub.md?fileId=100)');
 	});

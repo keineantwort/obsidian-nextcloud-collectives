@@ -106,7 +106,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const links = buildLinkIndex(remote, local, paths);
+		const links = buildLinkIndex(remote, local, paths, serverUrl);
 		deps.onLinks?.(links);
 		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 		const input: PlannerInput = {

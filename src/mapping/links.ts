@@ -27,8 +27,11 @@ export class LinkIndex {
 	private readonly byRemoteKey = new Map<string, LinkTarget>();
 	private readonly byBase = new Map<string, LinkTarget[]>();
 	private readonly landings = new Map<number, LinkTarget>();
+	private readonly origin: string | null;
 
-	constructor(targets: readonly LinkTarget[]) {
+	/** `serverUrl`: absolute links count as internal only for this server (scheme and host, no path). */
+	constructor(targets: readonly LinkTarget[], serverUrl?: string) {
+		this.origin = serverUrl === undefined ? null : originOf(serverUrl);
 		for (const target of targets) {
 			this.byPageId.set(target.pageId, target);
 			this.byRemoteKey.set(`${target.collectiveId}/${target.remotePath}`, target);
@@ -39,6 +42,11 @@ export class LinkIndex {
 			const base = pathKey(stem.slice(stem.lastIndexOf('/') + 1));
 			this.byBase.set(base, [...(this.byBase.get(base) ?? []), target]);
 		}
+	}
+
+	/** True if an absolute URL points to the configured server (always true if none was given). */
+	isOwnOrigin(url: string): boolean {
+		return this.origin === null || originOf(url) === this.origin;
 	}
 
 	get(pageId: PageId): LinkTarget | undefined {
@@ -155,7 +163,7 @@ function closingRun(text: string, from: number, length: number): number {
 // ---------------------------------------------------------------------------
 
 /** `[text](url)` that is not an image. The url has no spaces and no parentheses (the plugin encodes both). */
-const MD_LINK = /(!?)\[([^\]\n]*)\]\(([^()\s]+)\)/g;
+const MD_LINK = /(!?)\[([^[\]\n]*)\]\(([^()\s]+)\)/g;
 
 /** Page links of the remote format → `[[Vault/Pfad/Seite|Linktext]]`. Links that cannot be resolved stay as they are. */
 export function linksToLocal(remote: string, links: LinkContext | undefined): string {
@@ -180,18 +188,20 @@ function resolveRemoteUrl(url: string, index: LinkIndex, source: LinkTarget | un
 	const [beforeAnchor = ''] = url.split('#');
 	const [path = '', query = ''] = beforeAnchor.split('?');
 	const urlPath = /^https?:\/\/[^/]+(\/.*)?$/i.exec(path);
+	if (urlPath !== null && !index.isOwnOrigin(path)) return undefined;
 	const absolute = urlPath !== null ? (urlPath[1] ?? '') : path.startsWith('/') ? path : null;
-	if (absolute !== null) return resolveCollectivesUrl(absolute, index);
+	if (absolute !== null) return resolveCollectivesUrl(absolute, index, source);
 	if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path === '') return undefined;
 	const fileId = /(?:^|&)fileId=(\d+)(?:&|$)/.exec(query)?.[1];
-	if (fileId !== undefined) return index.get(Number(fileId) as PageId);
+	// Relative links stay inside the collective: a crafted fileId must not reach the user's other collectives.
+	if (fileId !== undefined) return sameCollective(index.get(Number(fileId) as PageId), source);
 	if (source === undefined || !path.endsWith('.md')) return undefined;
 	const target = normalizePath(`${folderOf(source.remotePath)}/${safeDecode(path)}`);
 	return index.byRemotePath(source.collectiveId, target);
 }
 
 /** `/index.php/apps/collectives/{collective}/{parent}-{id}/{page}-{id}`: the page is the id after the last dash. */
-function resolveCollectivesUrl(path: string, index: LinkIndex): LinkTarget | undefined {
+function resolveCollectivesUrl(path: string, index: LinkIndex, source: LinkTarget | undefined): LinkTarget | undefined {
 	const match = /^\/(?:index\.php\/)?apps\/collectives\/(.+)$/.exec(path);
 	if (match?.[1] === undefined) return undefined;
 	const segments = match[1].split('/').filter((segment) => segment !== '');
@@ -199,9 +209,11 @@ function resolveCollectivesUrl(path: string, index: LinkIndex): LinkTarget | und
 	if (last === undefined) return undefined;
 	const id = /-(\d+)$/.exec(last)?.[1];
 	if (id === undefined) return undefined;
-	if (segments.length === 1) return index.landingOf(Number(id) as CollectiveId);
-	const target = index.get(Number(id) as PageId);
-	return target?.landing === true ? undefined : target;
+	const target = segments.length === 1 ? index.landingOf(Number(id) as CollectiveId) : index.get(Number(id) as PageId);
+	if (target === undefined || (segments.length > 1 && target.landing)) return undefined;
+	// Into another collective only if the URL names it right (`{slug}-{id}`), so ids alone cannot probe other collectives.
+	if (source?.collectiveId === target.collectiveId) return target;
+	return safeDecode(segments[0] ?? '') === `${target.collectiveSlug}-${target.collectiveId}` ? target : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,4 +329,14 @@ function safeDecode(text: string): string {
 	} catch {
 		return text;
 	}
+}
+
+function sameCollective(target: LinkTarget | undefined, source: LinkTarget | undefined): LinkTarget | undefined {
+	return target !== undefined && source !== undefined && target.collectiveId === source.collectiveId ? target : undefined;
+}
+
+/** Lower-case scheme and host (with port) of an absolute URL, or null. */
+function originOf(url: string): string | null {
+	const match = /^(https?):\/\/([^/?#]+)/i.exec(url);
+	return match?.[1] === undefined || match[2] === undefined ? null : `${match[1]}://${match[2]}`.toLowerCase();
 }

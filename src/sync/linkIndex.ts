@@ -10,7 +10,7 @@ import type { RemoteSnapshot } from './remoteScanner';
  * Every page of the remote listing, with the vault path of its note: the file that carries its nc_page_id, else the path the
  * plan gives it. Pages without a local path can be linked to from Collectives, but not from a note.
  */
-export function buildLinkIndex(remote: RemoteSnapshot, local: LocalSnapshot, paths: PathPlan): LinkIndex {
+export function buildLinkIndex(remote: RemoteSnapshot, local: LocalSnapshot, paths: PathPlan, serverUrl: string): LinkIndex {
 	const files = indexFiles(local.files);
 	const targets: LinkTarget[] = [];
 	for (const rc of remote.collectives) {
@@ -28,5 +28,5 @@ export function buildLinkIndex(remote: RemoteSnapshot, local: LocalSnapshot, pat
 			});
 		}
 	}
-	return new LinkIndex(targets);
+	return new LinkIndex(targets, serverUrl);
 }
