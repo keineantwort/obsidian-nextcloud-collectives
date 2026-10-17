@@ -204,3 +204,11 @@ MIT, „Copyright (c) 2026 Ismail Ivanov“ (Upstream-Autor des Kanban-Teils), C
 - **Reiner Mapper ohne Obsidian-Import** plus Baseline-Snapshot pro Objekt (`src/sync-mapper.js`, `conflict.js`). Das bestätigt unseren Schnitt `planner`/`mapping`.
 
 Nicht übernehmen: Credential-„Verschlüsselung“ mit Schlüssel im `localStorage` (faktisch Klartext); globales `reconciling`-Flag zur Event-Unterdrückung (verschluckt echte Nutzer-Edits, späte Events rutschen durch); Remote-IDs nur in `data.json` (bei uns im Frontmatter); Neu-Generieren ganzer Notizen über `vault.modify`/Adapter (Regel 2 und 4); Intervall-Timer ohne Plattformunterscheidung.
+
+## M9 – Login Flow v2 und Auslöser
+
+- `POST /index.php/login/v2` antwortet mit `{ poll: { token, endpoint }, login }`; das Plugin akzeptiert Antworten nur, wenn `login` und `endpoint` denselben Origin wie die Server-URL haben (Schutz davor, den Poll-Token an fremde Hosts zu senden). Hinter einem Reverse-Proxy mit abweichendem `overwritehost` scheitert der Login Flow deshalb mit „unerwartete Antwort“; App-Passwort von Hand eingeben bleibt möglich.
+- Poll: `POST <endpoint>` mit `token=<url-kodiert>` als Form-Body, ohne Authorization-Header. 404 = noch nicht bestätigt, 200 = `{ server, loginName, appPassword }`. Token-Lebensdauer 20 min.
+- **Gegen den echten Server und auf den Geräten noch nicht geprüft** (nur Unit-Tests mit Fake-Antworten): Verhalten von `requestUrl` bei Redirects (Authorization an fremde Hosts), Gerätenamen in der App-Passwort-Liste (`User-Agent` wird nicht auf jeder Plattform gesendet), `window.open` auf iOS.
+- Obsidian kennt kein „Speichern“-Ereignis; `vault.on('modify')` feuert beim automatischen Speichern während des Tippens. Darum Debounce statt Speicher-Trigger.
+

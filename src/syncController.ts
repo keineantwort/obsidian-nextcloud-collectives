@@ -12,6 +12,8 @@ import { applyResolution, countConflicts, listConflicts, withCurrentPaths } from
 import type { ConflictChoice, ConflictEntry, ResolutionVault } from './sync/conflicts';
 import { DirtyQueue, suppressingWriter } from './sync/dirtyQueue';
 import { createObsidianVault } from './sync/obsidianVault';
+import { SyncScheduler } from './sync/scheduler';
+import type { AutoTrigger, Timers } from './sync/scheduler';
 import type { SyncState } from './sync/state';
 import type { StateStore } from './sync/stateStore';
 import { runSync } from './sync/syncRun';
@@ -22,7 +24,9 @@ import { confirmProposals } from './ui/confirmModal';
 import { confirmInitialSync } from './ui/initialSyncModal';
 import { showSyncNotice } from './ui/showSyncNotice';
 import type { LastRun } from './ui/statusBar';
-import { alreadyRunningNotice, describeSyncError, describeSyncOutcome } from './ui/syncNotices';
+import { describeSyncError, describeSyncOutcome } from './ui/syncNotices';
+import type { SyncNoticeSpec } from './ui/syncNotices';
+import { AuthError, ApiChangedError, ConfigError, NetworkError } from './util/errors';
 import type { Logger } from './util/logger';
 
 /** What the controller needs from the plugin. */
@@ -44,6 +48,17 @@ export interface SyncStatus {
 	openConflicts: number;
 }
 
+/** Who asked for a run: the user (command, ribbon, conflict resolution) or one of the automatic triggers. */
+type RunKind = 'manual' | AutoTrigger;
+
+/** Browser timers; the scheduler is Obsidian-free and takes them as a parameter. */
+const windowTimers: Timers = {
+	setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+	clearTimeout: (handle) => { window.clearTimeout(handle as number); },
+	setInterval: (fn, ms) => window.setInterval(fn, ms),
+	clearInterval: (handle) => { window.clearInterval(handle as number); },
+};
+
 /** Runs async tasks one after another: a task starts only after the tasks queued before it have finished. */
 class SerialQueue {
 	private tail: Promise<unknown> = Promise.resolve();
@@ -61,8 +76,17 @@ export class SyncController {
 	private readonly lock = new SerialQueue();
 	/** Vault changes by the user since the last sync run; the input for pushing local changes (PLAN §7.2). */
 	readonly dirtyQueue = new DirtyQueue();
-	/** True from a command or ribbon sync request until its run has finished; a second request shows a notice. */
+	/** True from a sync request until its run has finished. Requests in that time only set `rerun` (mutex, PLAN §7.1). */
 	private syncRequested = false;
+	/** A trigger came in during a run: one more run follows. A manual request wins over automatic ones. */
+	private rerun: RunKind | null = null;
+	/** After a login failure automatic runs stop until the user runs a sync or changes the settings (PLAN §12). */
+	private paused = false;
+	/** Last automatic notice; the same text is not shown again until something else happened. */
+	private lastAutoNotice: string | null = null;
+	/** Keys that the running sync took from the dirty queue; they go back if the run does not finish cleanly. */
+	private takenDirty = new Set<string>();
+	private readonly scheduler = new SyncScheduler((trigger) => { void this.request(trigger); }, windowTimers);
 	private running = false;
 	private lastRun: LastRun = null;
 	/** Pages with an open conflict (PLAN §4); the status bar shows this number. */
@@ -78,18 +102,62 @@ export class SyncController {
 		return { running: this.running, lastRun: this.lastRun, openConflicts: this.openConflicts };
 	}
 
-	/**
-	 * Runs a sync from the UI (command or ribbon) and shows the outcome as notice.
-	 * A request while another one is queued or running shows a notice and does nothing.
-	 */
+	/** Runs a sync from the UI (command or ribbon) and shows the outcome as notice. */
 	runFromUi(): Promise<void> {
+		return this.request('manual');
+	}
+
+	/**
+	 * Asks for a run. A request while one is queued or running does not start a second run: it sets the re-run flag,
+	 * and one more run follows when the current one is done.
+	 */
+	private request(kind: RunKind): Promise<void> {
+		if (kind !== 'manual' && this.paused) return Promise.resolve();
 		if (this.syncRequested) {
-			showSyncNotice(alreadyRunningNotice(this.host.t));
+			if (this.rerun === null || kind === 'manual') this.rerun = kind;
+			if (kind === 'manual') showSyncNotice({ lines: [this.host.t('sync.rerunQueued')], level: 'info' });
 			return Promise.resolve();
 		}
 		this.syncRequested = true;
-		return this.lock.run(() => this.runOnce()).finally(() => { this.syncRequested = false; });
+		return this.lock.run(() => this.runLoop(kind)).finally(() => { this.syncRequested = false; });
 	}
+
+	private async runLoop(first: RunKind): Promise<void> {
+		let next: RunKind | null = first;
+		while (next !== null) {
+			this.rerun = null;
+			await this.runOnce(next);
+			next = this.rerun;
+			if (next !== null && next !== 'manual' && this.paused) next = null;
+		}
+	}
+
+	/** Arms the automatic triggers once the layout is ready. */
+	startAutomation(): void {
+		this.applySettings();
+		this.scheduler.start();
+	}
+
+	stopAutomation(): void {
+		this.scheduler.stop();
+	}
+
+	/** Settings changed: new timer values, and a login problem may be fixed now. */
+	settingsChanged(): void {
+		this.paused = false;
+		this.applySettings();
+	}
+
+	private applySettings(): void {
+		const { syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnSaveDebounceSec } = this.host.settings();
+		this.scheduler.configure({ intervalMinutes: syncIntervalMinutes, syncOnStartup, syncOnSave, debounceSec: syncOnSaveDebounceSec });
+	}
+
+	/** A synced note was changed, created, renamed or deleted by the user. */
+	noteUserChange(): void { this.scheduler.noteChanged(); }
+
+	/** The app became visible again (mobile: the user came back). */
+	noteForeground(): void { this.scheduler.noteForeground(); }
 
 	/** Reads the saved state once, so the status bar shows the open conflicts from the start. Errors are ignored. */
 	async loadInitialState(): Promise<void> {
@@ -97,12 +165,18 @@ export class SyncController {
 		this.host.onStatusChange();
 	}
 
-	/** One sync run, called under the lock: shows progress and the outcome, and keeps the status and state current. */
-	private async runOnce(): Promise<void> {
+	/**
+	 * One sync run, called under the lock: shows progress and the outcome, and keeps the status and state current.
+	 * An automatic run is quiet: no progress notice, no dialogs (questions wait for a manual run), and only news is shown.
+	 */
+	private async runOnce(kind: RunKind): Promise<void> {
 		const { app, t, log } = this.host;
+		const manual = kind === 'manual';
 		this.running = true;
+		this.takenDirty = new Set<string>();
+		let questionsDeferred = false;
 		this.host.onStatusChange();
-		let progress: Notice | null = new Notice(t('sync.running'), 0);
+		let progress: Notice | null = manual ? new Notice(t('sync.running'), 0) : null;
 		const hideProgress = (): void => {
 			progress?.hide();
 			progress = null;
@@ -120,31 +194,80 @@ export class SyncController {
 				readPassword: () => this.host.readPassword(),
 				request: obsidianRequest,
 				vault: suppressingWriter(createObsidianVault(app), this.dirtyQueue),
-				dirty: () => this.dirtyQueue.drain(),
+				dirty: () => {
+					const drained = this.dirtyQueue.drain();
+					for (const key of drained) this.takenDirty.add(key);
+					return drained;
+				},
 				stateStore: this.host.stateStore(),
 				t,
 				log,
 				onLinks: (links) => {
 					this.lastLinks = links;
 				},
-				confirmInitialSync: () => ask(() => confirmInitialSync(app, t)),
-				confirm: (proposals) => ask(() => confirmProposals(app, t, proposals)),
+				// An automatic run never opens a dialog: it cancels the initial sync and defers all questions.
+				confirmInitialSync: () => (manual ? ask(() => confirmInitialSync(app, t)) : Promise.resolve(false)),
+				confirm: (proposals) => {
+					if (manual) return ask(() => confirmProposals(app, t, proposals));
+					questionsDeferred = true;
+					return Promise.resolve(new Map());
+				},
 			});
 			hideProgress();
 			this.recordOutcome(outcome);
-			showSyncNotice(describeSyncOutcome(outcome, t));
+			if (outcome.kind === 'done' && outcome.result.failed === 0) this.paused = false;
+			if (outcome.kind !== 'done' || outcome.result.failed > 0) this.dirtyQueue.requeue(this.takenDirty);
+			const notice = describeSyncOutcome(outcome, t);
+			if (manual) {
+				showSyncNotice(notice);
+				this.lastAutoNotice = null;
+			} else {
+				if (outcome.kind === 'cancelled') return;
+				if (questionsDeferred) {
+					notice.lines.push(t('sync.auto.questionsPending'));
+					notice.level = notice.level === 'error' ? 'error' : 'warning';
+				}
+				this.showAutoNotice(notice);
+			}
 		} catch (err) {
 			hideProgress();
 			this.lastRun = { kind: 'failed', at: Date.now() };
+			this.dirtyQueue.requeue(this.takenDirty);
 			// Log only the error class, never the message (may contain credentials or URLs with secrets).
 			log.error('Sync failed', { error: err instanceof Error ? err.name : 'unknown' });
-			showSyncNotice(describeSyncError(err, t));
+			if (manual) {
+				showSyncNotice(describeSyncError(err, t));
+			} else {
+				this.handleAutoError(err);
+			}
 		} finally {
 			hideProgress();
 			this.running = false;
 			await this.refreshState();
 			this.host.onStatusChange();
 		}
+	}
+
+	/** An automatic notice: only warnings and errors, and the same text only once in a row. */
+	private showAutoNotice(notice: SyncNoticeSpec): void {
+		if (notice.level === 'info') {
+			this.lastAutoNotice = null;
+			return;
+		}
+		const key = notice.lines.join('\n');
+		if (key === this.lastAutoNotice) return;
+		this.lastAutoNotice = key;
+		showSyncNotice(notice);
+	}
+
+	/**
+	 * An automatic run failed. No connection is normal on a phone and stays quiet; a missing configuration too.
+	 * Rejected credentials or an unknown API stop the automatic runs until the user acts.
+	 */
+	private handleAutoError(err: unknown): void {
+		if (err instanceof NetworkError || err instanceof ConfigError) return;
+		if (err instanceof AuthError || err instanceof ApiChangedError) this.paused = true;
+		this.showAutoNotice(describeSyncError(err, this.host.t));
 	}
 
 	/** Last run after a run. A cancelled run changes nothing (PLAN §2.1). The conflict count comes from the state. */
@@ -223,7 +346,7 @@ export class SyncController {
 	/** Under the lock: loads the state, applies the choice, saves the state and updates the conflict count. */
 	private async applyChoice(entry: ConflictEntry, choice: ConflictChoice): Promise<boolean> {
 		// Hashes of notes with links need the page index of a sync pass: without one (just started), a sync comes first.
-		if (this.lastLinks === null) await this.runOnce();
+		if (this.lastLinks === null) await this.runOnce('manual');
 		if (this.lastLinks === null) throw new Error('page index unavailable');
 		const store = this.host.stateStore();
 		const state = await store.load();

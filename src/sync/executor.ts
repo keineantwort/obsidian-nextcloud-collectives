@@ -33,7 +33,8 @@ export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<S
 			});
 			continue;
 		}
-		if (changedState) await deps.persist(deps.state);
+		// Only a new page can be derived again after a crash (its file carries the ID); everything else is saved at once.
+		if (changedState) await deps.persist(deps.state, op.kind === 'create' ? 'lazy' : 'now');
 	}
 	return result;
 }

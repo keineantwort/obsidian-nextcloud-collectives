@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, isAttachmentFolderPattern, isMaxAttachmentSizeMb } from '../../src/settings/types';
+import { DEFAULT_SETTINGS, isAttachmentFolderPattern, isMaxAttachmentSizeMb, isSyncDebounceSec, isSyncIntervalMinutes } from '../../src/settings/types';
 
 describe('attachment settings', () => {
 	it('has the defaults of PLAN §10.2', () => {
@@ -22,5 +22,30 @@ describe('attachment settings', () => {
 
 	it.each([0, -1, 1001, 2.5, NaN, '20', null])('rejects the size %j', (size) => {
 		expect(isMaxAttachmentSizeMb(size)).toBe(false);
+	});
+});
+
+describe('automatic sync settings', () => {
+	it('has the defaults of PLAN §10.2', () => {
+		expect(DEFAULT_SETTINGS.syncIntervalMinutes).toBe(5);
+		expect(DEFAULT_SETTINGS.syncOnStartup).toBe(true);
+		expect(DEFAULT_SETTINGS.syncOnSave).toBe(true);
+		expect(DEFAULT_SETTINGS.syncOnSaveDebounceSec).toBe(10);
+	});
+
+	it.each([0, 1, 5, 1440])('accepts the interval %j (0 = off)', (v) => {
+		expect(isSyncIntervalMinutes(v)).toBe(true);
+	});
+
+	it.each([-1, 1441, 1.5, NaN, '5', null, undefined])('rejects the interval %j', (v) => {
+		expect(isSyncIntervalMinutes(v)).toBe(false);
+	});
+
+	it.each([2, 10, 600])('accepts the debounce %j', (v) => {
+		expect(isSyncDebounceSec(v)).toBe(true);
+	});
+
+	it.each([0, 1, 601, 2.5, NaN, '10', null])('rejects the debounce %j', (v) => {
+		expect(isSyncDebounceSec(v)).toBe(false);
 	});
 });

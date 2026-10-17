@@ -1,10 +1,11 @@
 import { MarkdownView, Notice, Platform, Plugin, TFile, TFolder, getLanguage, normalizePath } from 'obsidian';
 import type { Menu, TAbstractFile } from 'obsidian';
-import { testConnection, type ConnectionResult } from './api/connection';
+import { normalizeServerUrl, testConnection, type ConnectionResult } from './api/connection';
+import { awaitLoginFlow, startLoginFlow, type LoginFlowStart } from './api/loginFlow';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
 import {
-	DEFAULT_SETTINGS, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour, NcSettings,
+	DEFAULT_SETTINGS, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour, isSyncDebounceSec, isSyncIntervalMinutes, NcSettings,
 } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
@@ -98,7 +99,13 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			this.registerEmojiPicker();
 			this.registerDirtyTracking(sync);
 			void sync.loadInitialState();
+			sync.startAutomation();
 		});
+		// Mobile apps are suspended in the background: the first moment back in the foreground is the sync time (PLAN §7.1).
+		this.registerDomEvent(activeDocument, 'visibilitychange', () => {
+			if (activeDocument.visibilityState === 'visible') sync.noteForeground();
+		});
+		this.register(() => { sync.stopAutomation(); });
 	}
 
 	/**
@@ -123,6 +130,10 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isAttachmentFolderPattern(data['attachmentFolderPattern'])) loaded.attachmentFolderPattern = data['attachmentFolderPattern'].trim();
 			if (isMaxAttachmentSizeMb(data['maxAttachmentSizeMb'])) loaded.maxAttachmentSizeMb = data['maxAttachmentSizeMb'];
 			if (typeof data['deleteRemoteAttachments'] === 'boolean') loaded.deleteRemoteAttachments = data['deleteRemoteAttachments'];
+			if (isSyncIntervalMinutes(data['syncIntervalMinutes'])) loaded.syncIntervalMinutes = data['syncIntervalMinutes'];
+			if (isSyncDebounceSec(data['syncOnSaveDebounceSec'])) loaded.syncOnSaveDebounceSec = data['syncOnSaveDebounceSec'];
+			if (typeof data['syncOnStartup'] === 'boolean') loaded.syncOnStartup = data['syncOnStartup'];
+			if (typeof data['syncOnSave'] === 'boolean') loaded.syncOnSave = data['syncOnSave'];
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
 			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];
@@ -130,7 +141,10 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		this.settings = { ...DEFAULT_SETTINGS, ...loaded };
 	}
 
-	async saveSettings(): Promise<void> { await this.saveData(this.settings); }
+	async saveSettings(): Promise<void> {
+		await this.saveData(this.settings);
+		this.sync?.settingsChanged();
+	}
 
 	/**
 	 * Stores the app password in secret storage. Empty input is ignored.
@@ -157,6 +171,46 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		// `?? ''` is intentional: a missing secret becomes ConfigError('appPassword', 'missing') in testConnection,
 		// which is shown to the user. It is not a silent fallback.
 		return testConnection({ serverUrl, username, appPassword: appPassword ?? '' }, obsidianRequest);
+	}
+
+	/**
+	 * Login Flow v2 (PLAN §10.1): asks the server for a login page, hands it to `onStart` (the caller opens it), polls until
+	 * the user has confirmed, then stores the user name and the app password. The password never leaves this method
+	 * except into secret storage.
+	 */
+	async loginWithBrowser(onStart: (start: LoginFlowStart) => void, isCancelled: () => boolean): Promise<{ kind: 'done'; user: string } | { kind: 'cancelled' } | { kind: 'timeout' }> {
+		const start = await startLoginFlow(normalizeServerUrl(this.settings.serverUrl), obsidianRequest);
+		onStart(start);
+		const outcome = await awaitLoginFlow(start, {
+			request: obsidianRequest,
+			sleep: (ms) => this.sleepUntilTimerOrResume(ms),
+			now: () => Date.now(),
+			isCancelled,
+		});
+		if (outcome.kind !== 'done') return { kind: outcome.kind };
+		await this.storeAppPassword(outcome.credentials.appPassword);
+		this.settings.username = outcome.credentials.loginName;
+		await this.saveSettings();
+		return { kind: 'done', user: outcome.credentials.loginName };
+	}
+
+	/**
+	 * Waits for the timer or for the app coming back to the foreground, whichever is first: Android freezes timers while
+	 * the browser is in front, so the poll right after the user returns must not wait for the timer.
+	 */
+	private sleepUntilTimerOrResume(ms: number): Promise<void> {
+		return new Promise<void>((resolve) => {
+			const finish = (): void => {
+				window.clearTimeout(timer);
+				activeDocument.removeEventListener('visibilitychange', onVisible);
+				resolve();
+			};
+			const onVisible = (): void => {
+				if (activeDocument.visibilityState === 'visible') finish();
+			};
+			const timer = window.setTimeout(finish, ms);
+			activeDocument.addEventListener('visibilitychange', onVisible);
+		});
 	}
 
 	/** Vault events that mark synced files as changed by the user. The plugin's own writes are filtered by suppressingWriter. */
@@ -295,9 +349,21 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	private registerDirtyTracking(sync: SyncController): void {
 		const { vault } = this.app;
 		const queue = sync.dirtyQueue;
-		this.registerEvent(vault.on('modify', (file) => queue.noteModified(file.path)));
-		this.registerEvent(vault.on('rename', (file, oldPath) => queue.noteRenamed(oldPath, file.path)));
-		this.registerEvent(vault.on('delete', (file) => queue.noteDeleted(file.path)));
+		const synced = (path: string): boolean => isSyncedPath(path, vault.configDir);
+		this.registerEvent(vault.on('modify', (file) => {
+			if (queue.noteModified(file.path) && synced(file.path)) sync.noteUserChange();
+		}));
+		this.registerEvent(vault.on('create', (file) => {
+			if (file instanceof TFile && queue.isUserWrite(file.path) && synced(file.path)) sync.noteUserChange();
+		}));
+		this.registerEvent(vault.on('rename', (file, oldPath) => {
+			queue.noteRenamed(oldPath, file.path);
+			if (file instanceof TFile && (synced(file.path) || synced(oldPath))) sync.noteUserChange();
+		}));
+		this.registerEvent(vault.on('delete', (file) => {
+			queue.noteDeleted(file.path);
+			if (file instanceof TFile && synced(file.path)) sync.noteUserChange();
+		}));
 	}
 
 	private refreshStatusBar(): void {

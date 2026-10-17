@@ -265,13 +265,13 @@ Wichtig: `baseHash` wird auf dem konvertierten Remote-Format berechnet. Sonst er
 
 | Auslöser | Verhalten |
 |---|---|
-| Plugin-Start | nach `workspace.onLayoutReady`, Default an |
+| Plugin-Start | 2 s nach `workspace.onLayoutReady`, Default an |
 | Intervall | Default 5 min, 0 = aus |
-| Nach Speichern | Debounce 10 s nach letztem `modify` einer betroffenen Datei, nur diese Seite |
-| Mobile Foreground | Sync, wenn App wieder aktiv wird (`visibilitychange`) |
+| Nach Speichern | Debounce 10 s nach letztem `modify`/`create`/`rename`/`delete` einer synchronisierten Notiz (Obsidian hat kein Speichern-Ereignis, ADR 0022). Es läuft ein voller Lauf, nicht nur diese Seite |
+| Mobile Foreground | Sync, wenn App wieder aktiv wird (`visibilitychange`), höchstens alle 30 s |
 | Manuell | Command „Jetzt synchronisieren“, „Aktuelle Seite synchronisieren“ |
 
-Ein Mutex verhindert parallele Läufe; Auslöser während eines Laufs setzen ein „erneut laufen“-Flag.
+Ein Mutex verhindert parallele Läufe; Auslöser während eines Laufs setzen ein „erneut laufen“-Flag. Automatische Läufe sind still (kein Dialog, Notice nur bei Warnung/Fehler, Rückfragen werden zurückgestellt); `AuthError`/`ApiChanged` pausieren sie (ADR 0022).
 
 ### 7.2 Phasen eines Laufs
 
@@ -397,9 +397,9 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 |---|---|---|
 | `serverUrl`, `username`, `appPassword` | – | Verbindung |
 | `newFolderBehaviour` | `createCollective` | `createCollective`/`ask`/`ignore` |
-| `syncIntervalMinutes` | 5 | 0 = aus |
+| `syncIntervalMinutes` | 5 | 0 = aus, höchstens 1440 |
 | `syncOnStartup` | true | |
-| `syncOnSave`, `syncOnSaveDebounceSec` | true, 10 | |
+| `syncOnSave`, `syncOnSaveDebounceSec` | true, 10 | Debounce 2–600 s |
 | `conflictStrategy` | `conflictFile` | `conflictFile`/`preferLocal`/`preferRemote` |
 | `localDeleteBehaviour` | `ask` | `ask` (Bestätigung, dann Remote-Papierkorb) / `trashRemote` (ohne Rückfrage). Für Collectives immer `ask` |
 | `remoteDeleteBehaviour` | `obsidianTrash` | `obsidianTrash`/`keepUnlinked` |
@@ -523,7 +523,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 - Hinweis aus dem M3-Review: Der Executor speichert nach jeder Operation den gesamten State (Erstsync mit N Seiten: O(N²) Serialisierung/Schreiben). Vor M9 mit ~1000 Seiten messen und `persist` drosseln (alle k Ops/t ms, am Laufende und vor jedem Abbruch; Konfliktkopien sofort).
 - Hinweise aus dem M4-Review: Dirty-Keys eines abgebrochenen oder fehlgeschlagenen Laufs wieder einreihen (heute leert der Lauf die Queue vor dem Planen). Ändert sich remote erneut, solange eine Seite `conflict` ist, die bestehende Konfliktkopie aktualisieren statt eine weitere anzulegen. Notices pro Auslöser parametrisieren (`runSyncOnce` zeigt heute immer eine).
 - Hinweis aus M4: Die Dirty-Queue (`src/sync/dirtyQueue.ts`) sammelt bereits `modify`/`rename`/`delete` ab `onLayoutReady` und unterdrückt eigene Schreibzugriffe; der Debounce nach Speichern kann sie als Auslöser nutzen. `main.ts` serialisiert Läufe und Konfliktauflösungen schon über eine Queue; M9 ergänzt das Re-Run-Flag.
-- Akzeptanz: Manuelle Testcheckliste auf iOS und Android bestanden.
+- Umsetzung (ONC-10, ADR 0022): `scheduler.ts`, Mutex mit Re-Run-Flag und stille Auto-Läufe im `SyncController`, `loginFlow.ts` mit Button in den Einstellungen, gedrosseltes Speichern (`throttledPersist.ts`), Dirty-Schlüssel kehren nach unfertigem Lauf zurück, Notices pro Auslöser. Performance: `tests/integration/performance.test.ts` (500 Seiten). **Nach M10 verschoben:** Konfliktkopie bei erneuter Server-Änderung aktualisieren (Hinweis aus M4); Befehl „Aktuelle Seite synchronisieren“ und Lauf „nur diese Seite“ nach Speichern; Redirect-Verhalten von `requestUrl` auf den Geräten (in `docs/manual-test.md` nicht gesondert prüfbar, 3xx werden vom Plugin nicht als Fehler behandelt).
+- Akzeptanz: Manuelle Testcheckliste (`docs/manual-test.md`) auf iOS und Android bestanden.
 - Hinweise aus dem M2-Review: Login Flow v2 nutzt `RequestFn` + `errorForStatus` direkt (der Poll-Endpunkt ist eine absolute URL, `HttpClient` setzt immer Basic-Auth); Origin des Poll-Endpunkts gegen `baseUrl` prüfen. API-Clients pro Sync-Lauf neu erzeugen, da `HttpClient` das Passwort beim Erzeugen übernimmt. Redirect-Verhalten von `requestUrl` (Authorization an fremde Hosts) auf Desktop, Android und iOS prüfen; falls unsicher, 3xx als Fehler behandeln.
 
 ### M10 – Härtung und Release
@@ -568,8 +569,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M5 | umgesetzt (ONC-6), gemergt |
 | M6 | umgesetzt (ONC-7), gemergt |
 | M7 | umgesetzt (ONC-8), gemergt |
-| M8 | umgesetzt (ONC-9), PR offen |
-| M9 | offen |
+| M8 | umgesetzt (ONC-9), gemergt (PR #20) |
+| M9 | umgesetzt (ONC-10), PR offen; manuelle Checkliste `docs/manual-test.md` auf iOS/Android steht aus |
 | M10 | offen |
 
 ## 18. Referenzen und Marktlage
