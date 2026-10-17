@@ -6,7 +6,7 @@ import type { NcMeta } from '../mapping/frontmatter';
 import { ncTitleFor, pathKey, sanitizeName } from '../mapping/paths';
 import { NotFoundError, isRunFatal } from '../util/errors';
 import { metaHash, sha256Hex } from '../util/hash';
-import { applyContentOp, fetchPage, readLocal, requireMtime, requireState, uploadLocal, writeIfUnchanged } from './executorContent';
+import { applyContentOp, fetchPage, linkContext, readLocal, requireMtime, requireState, uploadLocal, writeIfUnchanged } from './executorContent';
 import type { ContentOp } from './executorContent';
 import type { ExecutorDeps, StructureApi } from './executorDeps';
 import { localMetaFromFields, pushLocalMeta, reassignTags } from './executorMeta';
@@ -131,7 +131,7 @@ async function linkNewPage(deps: ExecutorDeps, page: PageInfo, collectiveId: Col
 		lastSyncedAt: now,
 	});
 	await deps.persist(deps.state);
-	const local = await readLocal(deps.vault, path);
+	const local = await readLocal(deps.vault, path, linkContext(deps, page.id));
 	if (local.hash === remote.hash) {
 		deps.state.pages[String(page.id)] = { ...requireState(deps, page.id), localMtime: local.mtimeBefore };
 		return;
@@ -230,7 +230,7 @@ async function createRemote(op: Op<'createRemote'>, deps: ExecutorDeps, result: 
 async function createNote(deps: ExecutorDeps, page: PageInfo, collectiveId: CollectiveId, path: string): Promise<void> {
 	const { meta, hash } = await metaForPage(deps, page, collectiveId);
 	const remote = await fetchPage(deps, page);
-	const mtime = await deps.vault.create(path, toLocal(remote.content, metaFor(page, meta, path)));
+	const mtime = await deps.vault.create(path, toLocal(remote.content, metaFor(page, meta, path), linkContext(deps, page.id)));
 	deps.occupied.add(pathKey(path));
 	deps.state.pages[String(page.id)] = newPageState(page, collectiveId, remote, {
 		localPath: path,
@@ -371,7 +371,7 @@ async function removeLocal(op: Op<'removeLocal'>, deps: ExecutorDeps, result: Sy
 		forgetPages(deps, [op.pageId]);
 		return true;
 	}
-	const hash = await sha256Hex(toRemote(await deps.vault.read(op.path)));
+	const hash = await sha256Hex(toRemote(await deps.vault.read(op.path), linkContext(deps, op.pageId)));
 	if (s.status === 'synced' && hash === s.baseHash) {
 		if (op.mode === 'obsidianTrash') await deps.vault.trash(op.path);
 		else await deps.vault.process(op.path, stripNcMeta);

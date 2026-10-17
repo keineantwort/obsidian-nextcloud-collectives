@@ -1,6 +1,8 @@
 import { asCollectiveId, asPageId } from '../api/types';
 import type { CollectiveId, PageId } from '../api/types';
 import { parseEmoji } from './emoji';
+import { linksToLocal, linksToRemote } from './links';
+import type { LinkContext } from './links';
 import { inlineTags, toObsidianTag } from './tags';
 
 /** Plugin fields stored as flat top-level keys in the frontmatter of a local file (PLAN §6.2). */
@@ -110,16 +112,20 @@ function stripTrailingNewlines(text: string): string {
 	return text.replace(/(?:\r?\n)+$/, '');
 }
 
-/** Remote text → local file content. */
-export function toLocal(remote: string, meta: NcMeta): string {
-	return withNcFields(remote, meta);
+/** Remote text → local file content. With `links`, page links become wikilinks (PLAN §9.2). */
+export function toLocal(remote: string, meta: NcMeta, links?: LinkContext): string {
+	return withNcFields(linksToLocal(remote, links), meta);
 }
 
 /**
  * Local file content → canonical remote format (the format baseHash is computed on). The byte order mark is kept. The
  * `tags` property is dropped too: the page's tags are real Collectives tags, not text.
  */
-export function toRemote(local: string): string {
+export function toRemote(local: string, links?: LinkContext): string {
+	return linksToRemote(frontmatterToRemote(local), links);
+}
+
+function frontmatterToRemote(local: string): string {
 	const block = splitBlock(local);
 	if (!block) {
 		const { bom, body } = textParts(local);
@@ -305,6 +311,6 @@ export function stripNcMeta(local: string): string {
 }
 
 /** Canonical remote format of a remote text: toRemote(toLocal(remote, anyMeta)). */
-export function canonicalRemote(remote: string): string {
-	return toRemote(toLocal(remote, PLACEHOLDER_META));
+export function canonicalRemote(remote: string, links?: LinkContext): string {
+	return toRemote(toLocal(remote, PLACEHOLDER_META, links), links);
 }

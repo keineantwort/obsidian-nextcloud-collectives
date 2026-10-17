@@ -5,6 +5,8 @@ import type { App } from 'obsidian';
 import { obsidianRequest } from './api/obsidianRequest';
 import type { Translator } from './i18n';
 import { toRemote } from './mapping/frontmatter';
+import type { PageId } from './api/types';
+import type { LinkContext, LinkIndex } from './mapping/links';
 import type { NcSettings } from './settings/types';
 import { applyResolution, countConflicts, listConflicts, withCurrentPaths } from './sync/conflicts';
 import type { ConflictChoice, ConflictEntry, ResolutionVault } from './sync/conflicts';
@@ -67,6 +69,8 @@ export class SyncController {
 	private openConflicts = 0;
 	/** State as last loaded or written; the conflict list is built from it. */
 	private lastState: SyncState | null = null;
+	/** Page index of the last sync pass: conflict texts and hashes convert links like the sync (PLAN §9). */
+	private lastLinks: LinkIndex | null = null;
 
 	constructor(private readonly host: ControllerHost) {}
 
@@ -120,6 +124,9 @@ export class SyncController {
 				stateStore: this.host.stateStore(),
 				t,
 				log,
+				onLinks: (links) => {
+					this.lastLinks = links;
+				},
 				confirmInitialSync: () => ask(() => confirmInitialSync(app, t)),
 				confirm: (proposals) => ask(() => confirmProposals(app, t, proposals)),
 			});
@@ -196,10 +203,11 @@ export class SyncController {
 	 */
 	private async loadConflictTexts(entry: ConflictEntry): Promise<{ local: string | null; remote: string | null }> {
 		const vault = createObsidianVault(this.host.app);
-		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath)) : null;
+		const links = this.linkContext(entry.pageId);
+		const local = vault.exists(entry.localPath) ? toRemote(await vault.read(entry.localPath), links) : null;
 		const copy = entry.conflictPath;
 		if (copy === null || !vault.exists(copy)) return { local, remote: null };
-		return { local, remote: toRemote(await vault.read(copy)) };
+		return { local, remote: toRemote(await vault.read(copy), links) };
 	}
 
 	/**
@@ -217,7 +225,7 @@ export class SyncController {
 		const store = this.host.stateStore();
 		const state = await store.load();
 		if (state === null) return false;
-		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.host.log }, entry.pageId, choice, {
+		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.host.log, links: this.lastLinks ?? undefined }, entry.pageId, choice, {
 			localPath: entry.localPath,
 			expectedConflictPath: entry.conflictPath,
 		});
@@ -226,6 +234,10 @@ export class SyncController {
 		this.setLastState(state);
 		this.host.onStatusChange();
 		return true;
+	}
+
+	private linkContext(pageId: PageId): LinkContext | undefined {
+		return this.lastLinks === null ? undefined : { index: this.lastLinks, sourceId: pageId };
 	}
 
 	/** Vault access for a conflict choice: notes through the vault API, the trash through the file manager. */

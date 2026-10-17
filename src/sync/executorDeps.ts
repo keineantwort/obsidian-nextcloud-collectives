@@ -1,6 +1,7 @@
 // Dependencies of the sync executor (PLAN §7.2). Types only.
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { WebdavClient } from '../api/webdavClient';
+import type { LinkIndex } from '../mapping/links';
 import type { Logger } from '../util/logger';
 import type { ConflictStrategy } from './decide';
 import type { SyncState } from './state';
@@ -35,6 +36,8 @@ export interface ExecutorDeps {
 	/** Needed by the structure operations only. */
 	api?: StructureApi;
 	state: SyncState;
+	/** Pages that links can point to (PLAN §9). Without it, links are neither converted nor hashed in local form. */
+	links?: LinkIndex;
 	/** Persist state after each op (StateStore.save). */
 	persist: (state: SyncState) => Promise<void>;
 	now: () => Date;

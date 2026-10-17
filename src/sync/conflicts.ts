@@ -1,6 +1,7 @@
 // Conflict list and resolution (PLAN §7.6, spec §7). No 'obsidian' import: trash and file access come through ResolutionVault.
 import type { CollectiveId, PageId } from '../api/types';
 import { replaceNcMeta, toRemote } from '../mapping/frontmatter';
+import type { LinkIndex } from '../mapping/links';
 import { sha256Hex } from '../util/hash';
 import type { Logger } from '../util/logger';
 import { indexFiles, locatePage } from './locate';
@@ -111,9 +112,9 @@ export interface ResolutionOptions {
  * Legacy fallback for states written before M4, where a conflict had baseHash ''. keepLocal takes the base from the
  * conflict copy, which must be read before it is trashed: the copy holds the remote text the conflict was recorded against.
  */
-async function withLegacyBase(vault: ResolutionVault, page: PageState): Promise<PageState> {
+async function withLegacyBase(vault: ResolutionVault, page: PageState, links: LinkIndex | undefined): Promise<PageState> {
 	if (page.baseHash !== '' || page.conflictPath === null || !vault.exists(page.conflictPath)) return page;
-	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath))) };
+	return { ...page, baseHash: await sha256Hex(toRemote(await vault.read(page.conflictPath), links && { index: links, sourceId: page.pageId })) };
 }
 
 /**
@@ -123,7 +124,7 @@ async function withLegacyBase(vault: ResolutionVault, page: PageState): Promise<
  * The state itself keeps its localPath (see `options.localPath`).
  */
 export async function applyResolution(
-	deps: { vault: ResolutionVault; state: SyncState; log: Logger },
+	deps: { vault: ResolutionVault; state: SyncState; log: Logger; links?: LinkIndex },
 	pageId: PageId,
 	choice: ConflictChoice,
 	options: ResolutionOptions = {},
@@ -147,9 +148,9 @@ export async function applyResolution(
 		page = { ...prev, metaHash: '', localMtime };
 	}
 
-	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath)));
+	const localHash = await sha256Hex(toRemote(await deps.vault.read(currentPath), deps.links && { index: deps.links, sourceId: pageId }));
 	const trashPath = page.conflictPath;
-	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page) : page;
+	const withBase = choice === 'keepLocal' ? await withLegacyBase(deps.vault, page, deps.links) : page;
 	deps.state.pages[key] = resolveConflict(withBase, choice, localHash);
 
 	if (trashPath !== null && deps.vault.exists(trashPath)) {
