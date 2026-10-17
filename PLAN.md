@@ -120,6 +120,7 @@ Kein `touch` nach `PUT`: Collectives setzt bei jedem WebDAV-Schreibzugriff selbs
 ```
 src/
   main.ts                 Plugin-Lebenszyklus, Commands, Event-Registrierung
+  syncController.ts       Lauf-Sperre, Dirty-Queue, Laufstatus, Konflikt-Dialog-Anbindung (M5, aus main.ts gelöst)
   settings/
     types.ts              Settings-Interface, Defaults
     settingsTab.ts        UI
@@ -151,7 +152,14 @@ src/
     remoteScanner.ts      erfasst Remote-Seiten + Metadaten
     planner.ts            REINE Funktion: (state, local, remote) → Operationen (`planSync`)
     decide.ts             REINE Entscheidungstabelle 7.3 inkl. Konfliktstrategie (M4, ADR 0017)
-    executor.ts           führt Operationen aus, aktualisiert State
+    plannerTypes.ts, plannerContext.ts   Typen (SyncOp, SyncPlan, PlannerInput) und gemeinsamer Planungszustand (M5)
+    planFolders.ts        REIN: Collective-Fälle aus 7.4 (neu, umbenannt, gelöscht, entzogen) (M5, ADR 0018)
+    planLocal.ts          REIN: lokale Löschungen, Remote-Löschungen, lokale Umbenennungen, neue Dateien (M5)
+    placement.ts          REIN: welche Seite gehört zu welchem Ordner (Ordnerseite, Blatt, virtuelle Ordnerseite) (M5)
+    locate.ts, treeIndex.ts   REIN: Datei einer Seite finden (`locatePage`), Seitenbaum-Abfragen (M5)
+    executor.ts           führt Operationen aus, aktualisiert State (Schleife und Verteilung); executorContent.ts
+                          (Inhalt, M3/M4), executorStructure.ts (Struktur, M5), executorDeps.ts, executorScratch.ts,
+                          pageState.ts (State-Konstruktoren, `unconfirmedRemote`)
     conflicts.ts          Konfliktliste, Auflösung als State-Übergang (M4)
     scheduler.ts          Intervall, Debounce nach Speichern, Mutex
     dirtyQueue.ts         lokale Vault-Events sammeln, eigene Schreibzugriffe unterdrücken (M4)
@@ -162,12 +170,12 @@ src/
     attachments.ts        Anhang-Pfade und Einbettungen
   ui/
     initialSyncModal.ts   Erstsync-Dialog (M3)
+    confirmView.ts        reine Texte und Antworten des Rückfrage-Dialogs (M5); confirmModal.ts zeigt ihn
     syncNotices.ts        Notice-Texte aus Laufergebnis/Fehler, rein (M3); showSyncNotice.ts zeigt sie an
     statusBar.ts          Statusleiste (Desktop), reine Text-Funktion (M4)
     conflictView.ts       reine Texte/Diff-Zeilen für den Konflikt-Dialog (M4)
     conflictModal.ts      Diff-Ansicht lokal vs. remote, Auswahl
     collectivePicker.ts
-    confirmModal.ts
   util/
     hash.ts, logger.ts, errors.ts, timeout.ts, isRecord.ts, diff.ts (Zeilen-Diff, M4)
 tests/
@@ -230,7 +238,7 @@ Gespeichert in der Datei `sync-state.json` im Plugin-Ordner via `app.vault.adapt
 | Feld | Bedeutung |
 |---|---|
 | `pageId`, `collectiveId` | Identität |
-| `localPath` | Vault-Pfad, an dem das Plugin die Datei zuletzt angelegt bzw. verknüpft hat. Nach einer lokalen Umbenennung bleibt er stehen (Basis der Umbenennungs-Erkennung, M5); die aktuelle Datei wird über `nc_page_id` gefunden (M4, ADR 0017) |
+| `localPath` | Vault-Pfad der Datei beim letzten Sync. Seit M5 ziehen alle Strukturoperationen (lokale und entfernte Umbenennung, Verschieben, Collective-Ordner) ihn nach; die aktuelle Datei wird weiterhin über `nc_page_id` gefunden (`locatePage`). Weicht der Pfad der Datei von `localPath` ab, hat der Nutzer sie umbenannt oder verschoben (7.4) |
 | `remoteFilePath`, `remoteFileName`, `parentId` | Remote-Ort beim letzten Sync |
 | `remoteEtag`, `remoteMtime`, `remoteSize` | Remote-Stand. `remoteMtime = -1`: Stand unbestätigt (ETag aus derselben Sekunde oder eigener `PUT`), der nächste Lauf liest per `GET` und vergleicht Hashes (M4, ADR 0017) |
 | `baseHash` | SHA-256 des **Remote-Formats** des Inhalts beim letzten Sync (nach Link-Konvertierung, ohne `nc_*`-Frontmatter). Bei `conflict`/`collision`: Hash der Remote-Fassung der letzten Konfliktkopie (M4, ADR 0017) |
@@ -307,6 +315,8 @@ Umgesetzt als reine Funktion `decideContent` (`src/sync/decide.ts`). Seiten mit 
 | Collective-Ordner umbenannt | gleiche Collective-ID | Collective über die Circles-API umbenennen (`PUT …/apps/circles/circles/{circleId}/name`, M0 ✔); fehlen die Rechte → lokal zurückbenennen und Hinweis |
 
 Neue lokale Unterseite unter einer Blattseite: Remote-Elternseite wird dadurch zum Ordner. Lokal muss danach die Folder-Note-Struktur hergestellt werden (Datei in den neuen Ordner verschieben).
+
+Umsetzung (M5, ADR 0018): Ein Lauf besteht aus bis zu 3 Durchläufen (scannen, planen, ausführen); Folgeschritte wie „Blattseite in den neuen Ordner verschieben“ oder „Seiten eines neuen Collectives“ erledigt der nächste Durchlauf. Der Planner stellt Rückfragen als `proposals` und plant mit den Antworten erneut. Lokale Umbenennung eines Ordners einer Seite mit Unterseiten: Die Seite heißt danach wie der Ordner. Ordner ohne Notiz bekommen beim Hochladen eine leere Ordnerseite. Massenlöschschutz ab 3 Seiten und mehr als 20 %.
 
 ### 7.5 Metadaten
 
@@ -409,7 +419,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 ### Erstsynchronisation
 
 - Leerer Vault (abgesehen von `.obsidian/`): alles herunterladen.
-- Ab M3: Kollidiert eine Remote-Seite mit einer vorhandenen Datei, bleibt die Datei unverändert und die Remote-Fassung wird als Konfliktdatei daneben abgelegt (ADR 0016). In M3 werden lokale Dateien ohne ID noch nicht hochgeladen; der Dialogtext sagt das und wird in M5 angepasst.
+- Ab M3: Kollidiert eine Remote-Seite mit einer vorhandenen Datei, bleibt die Datei unverändert und die Remote-Fassung wird als Konfliktdatei daneben abgelegt (ADR 0016). Ab M5 werden lokale Dateien ohne ID als neue Seiten hochgeladen und neue Ordner auf oberster Ebene zu Collectives; der Dialogtext sagt das.
 - Nicht leerer Vault: Dialog mit Wahl „Remote → lokal; vorhandene Ordner gleichen Namens werden zusammengeführt, lokale Dateien ohne ID werden hochgeladen“ oder „Abbrechen“. Empfehlung im Dialog: neuen, leeren Vault verwenden. Niemals stillschweigend überschreiben.
 
 ## 12. Fehlerbehandlung und Logging
@@ -484,6 +494,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
   - Möglichst zu Beginn von M5 einen `SyncController` aus `main.ts` lösen (Lock, Dirty-Queue, Laufstatus, `lastState`, Auflösung, `ConflictModalSource`).
 - Hinweis aus dem M3-Review: `Skip` in eine diskriminierte Union umbauen (je Grund garantierte Felder), bevor M5 die Gründe in Operationen und Dialoge umsetzt.
 - Akzeptanz: Jeder Fall aus 7.4 hat einen Planner-Unit-Test und einen Integrationstest.
+- **Umgesetzt (ONC-6):** siehe ADR 0018. Planner-Tests: `tests/unit/plannerStructure.test.ts` (eine Gruppe je Zeile der Tabelle 7.4), Integrationstests: `tests/integration/structure.test.ts`. Die Rechte-Fälle (Mitglied statt Admin darf ein Collective weder umbenennen noch löschen) sind nur als Unit-Test abgedeckt, der Testserver hat einen Nutzer. Erledigt: `locatePage`, Executor aufgeteilt, `Skip` als Union, `unconfirmedRemote`, Konfliktlabel per Test eingefroren, `SyncController` aus `main.ts`.
 - Hinweise aus M4: Der Push lädt nur Inhalte bereits verknüpfter Seiten hoch; neue lokale Dateien ohne `nc_page_id` bleiben M5. „Lokal behalten“ bei einer Kollision verknüpft die Nutzerdatei bereits mit der Seite (minimale `nc_*`-Felder, ADR 0017). Nach einer lokalen Umbenennung bleibt `localPath` im State bewusst auf dem alten Pfad (Basis der Umbenennungs-Erkennung); Pull, Push und Konflikt-Dialog finden die Datei über `nc_page_id` (`withCurrentPaths` in `src/sync/conflicts.ts`). M5 muss `localPath` nach dem Umbenennen nachziehen.
 - Hinweis aus dem M2-Review: Schreibende OCS-Aufrufe werden nicht wiederholt (ADR 0015). Ist ein `POST …/pages` angekommen, aber die Antwort verloren, legt der nächste Lauf die Seite sonst doppelt an („Titel (2)“). Fall „lokale Datei ohne `nc_page_id` + unzugeordnete Remote-Seite mit gleichem Titel und Elternseite“ erkennen.
 
@@ -536,7 +547,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | Collectives-API ändert sich | Sync bricht | Versions-Check, `ApiChanged`-Fehler, Fixtures je Version |
 | Gleichzeitige Bearbeitung im Browser (Text-Session) | Plugin-PUT beendet die Browser-Sitzung („Bearbeitungssitzung abgelaufen“); danach Getipptes geht verloren (M0, ADR 0012) | `If-Match` schützt Browser-Speicherungen (412 → Konfliktdatei), Debounce vor Push, Hinweis in README |
 | Link-Konvertierung nicht verlustfrei | Inhaltsänderungen, Ping-Pong | Rundlauf-Tests, Hash auf Remote-Format, unbekannte Links unverändert lassen |
-| Falsch erkannte Löschungen | Datenverlust | Löschen nur nach Bestätigung, immer in den Collectives-Papierkorb (wiederherstellbar); lokale Wiederherstellung stellt auch remote wieder her. Sicherung: Löscht ein Lauf > 20 % der Seiten eines Collectives, wird der Lauf angehalten und gesondert nachgefragt |
+| Falsch erkannte Löschungen | Datenverlust | Löschen nur nach Bestätigung, immer in den Collectives-Papierkorb (wiederherstellbar); lokale Wiederherstellung stellt auch remote wieder her. Sicherung: Löscht ein Lauf ≥ 3 Seiten und > 20 % der Seiten eines Collectives, wird gesondert nachgefragt (auch mit `localDeleteBehaviour = trashRemote`; M5, ADR 0018) |
 | ETag-Sekundenauflösung | Schreibzugriff eines anderen Clients in derselben Sekunde wird trotz `If-Match` überschrieben (M2 nachgewiesen) | Gegenmaßnahme in M4 (unveränderter ETag nach `PUT` = unsicher, neu lesen); Debounce senkt die Wahrscheinlichkeit |
 | Credential-Leak | Zugriff auf Nextcloud | App-Passwort nur im Secret Storage |
 | Mobile ohne Hintergrundausführung | verspäteter Sync | Sync beim Öffnen/Foreground, Statusanzeige |
@@ -549,8 +560,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M1 | umgesetzt (ONC-2), gemergt (PR #13) |
 | M2 | umgesetzt (ONC-3), gemergt (PR #14) |
 | M3 | umgesetzt (ONC-4), gemergt (PR #15) |
-| M4 | umgesetzt (ONC-5), PR offen |
-| M5 | offen |
+| M4 | umgesetzt (ONC-5), gemergt (PR #16) |
+| M5 | umgesetzt (ONC-6), PR offen |
 | M6 | offen |
 | M7 | offen |
 | M8 | offen |

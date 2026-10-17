@@ -133,6 +133,54 @@ export function pageIdFromFrontmatterValue(value: unknown): PageId | undefined {
 	return undefined;
 }
 
+/** Matches `nc_<name>: <value>` lines. */
+const NC_VALUE_LINE = /^["']?(nc_[A-Za-z_]+)["']?[ \t]*:[ \t]*(.*?)[ \t]*$/;
+
+/** Parses a JSON value, or undefined if it is not valid JSON. */
+function parseJson(text: string): unknown {
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Reads the nc_* fields written by the plugin (PLAN §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
+ * Unknown or malformed optional fields count as absent.
+ */
+export function readNcMeta(local: string): NcMeta | null {
+	const block = splitBlock(local);
+	if (!block) return null;
+	const values = new Map<string, string>();
+	for (const line of block.yamlLines) {
+		const match = NC_VALUE_LINE.exec(line);
+		if (match?.[1] !== undefined && match[2] !== undefined && !values.has(match[1])) values.set(match[1], match[2]);
+	}
+	const pageId = pageIdFromFrontmatterValue(parseJson(values.get('nc_page_id') ?? ''));
+	const collectiveId = pageIdFromFrontmatterValue(parseJson(values.get('nc_collective_id') ?? ''));
+	if (pageId === undefined || collectiveId === undefined) return null;
+	const title = parseJson(values.get('nc_title') ?? '');
+	const emoji = parseJson(values.get('nc_emoji') ?? '');
+	const tags = parseJson(values.get('nc_tags') ?? '');
+	return {
+		pageId,
+		collectiveId: asCollectiveId(collectiveId),
+		title: typeof title === 'string' ? title : null,
+		emoji: typeof emoji === 'string' ? emoji : null,
+		tags: Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === 'string') : [],
+	};
+}
+
+/** Removes the nc_* fields; the user's YAML and the body stay byte-identical. An empty block is dropped. */
+export function stripNcMeta(local: string): string {
+	const block = splitBlock(local);
+	if (!block) return local;
+	const userLines = withoutNcLines(block.yamlLines);
+	if (userLines.length === 0) return block.bom + block.rest;
+	return `${block.bom}---${block.eol}${userLines.join(block.eol)}${block.eol}---${block.eol}${block.rest}`;
+}
+
 /** Canonical remote format of a remote text: toRemote(toLocal(remote, anyMeta)). */
 export function canonicalRemote(remote: string): string {
 	return toRemote(toLocal(remote, PLACEHOLDER_META));

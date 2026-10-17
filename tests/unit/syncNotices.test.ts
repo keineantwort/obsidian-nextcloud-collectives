@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '../../src/i18n';
+import { emptyResult } from '../../src/sync/types';
 import type { SyncResult } from '../../src/sync/types';
 import { alreadyRunningNotice, describeSyncOutcome, describeSyncError, formatSyncResult } from '../../src/ui/syncNotices';
 import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } from '../../src/util/errors';
@@ -7,7 +8,7 @@ import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } fr
 const en = createTranslator('en');
 const de = createTranslator('de');
 
-const EMPTY: SyncResult = { created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 };
+const EMPTY: SyncResult = emptyResult();
 
 function result(partial: Partial<SyncResult>): SyncResult {
 	return { ...EMPTY, ...partial };
@@ -255,5 +256,42 @@ describe('formatSyncResult: uploads', () => {
 		const spec = describeSyncOutcome({ kind: 'done', result: result({ pushed: 1 }), skips: [], openConflicts: 0, pages: 1 }, en);
 
 		expect(spec).toEqual({ lines: ['Sync complete. Uploaded: 1'], level: 'info' });
+	});
+});
+
+describe('formatSyncResult: structure', () => {
+	const t = createTranslator('en');
+
+	it('lists moves, trash and restores in the details', () => {
+		const spec = formatSyncResult(result({ moved: 2, trashed: 1, removed: 3, restored: 1 }), 10, t);
+
+		expect(spec.lines).toEqual(['Sync complete. Moved or renamed: 2 · Moved to the Collectives trash: 1 · Removed here: 3 · Restored: 1']);
+		expect(spec.level).toBe('info');
+	});
+
+	it('is no idle run when only structure changed', () => {
+		expect(formatSyncResult(result({ moved: 1 }), 10, t).lines[0]).not.toContain('up to date');
+	});
+
+	it('adds a warning line for files with an unknown page id and for pages moved on both sides', () => {
+		const spec = formatSyncResult(result({}), 3, t, [
+			{ reason: 'unknownId', pageId: 5 as never, path: 'a.md' },
+			{ reason: 'unknownId', pageId: 6 as never, path: 'b.md' },
+			{ reason: 'remoteMoveWins', pageId: 7 as never },
+		]);
+
+		expect(spec.lines).toEqual([
+			'Sync complete. All 3 pages are up to date.',
+			'2 notes carry a page ID that is not on the server. They were left alone.',
+			'1 page was moved on both sides. The server’s location was used.',
+		]);
+		expect(spec.level).toBe('warning');
+	});
+
+	it('says nothing about postponed questions and ignored folders', () => {
+		const spec = formatSyncResult(result({}), 3, t, [{ reason: 'deferred', proposalId: 'deletePage:1' }, { reason: 'folderIgnored', path: 'Neu' }]);
+
+		expect(spec.lines).toEqual(['Sync complete. All 3 pages are up to date.']);
+		expect(spec.level).toBe('info');
 	});
 });

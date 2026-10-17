@@ -145,6 +145,25 @@ describe('HttpClient.send request', () => {
 		expect(fake.calls[0]).toMatchObject({ method: 'GET', url: BASE_URL + PATH });
 	});
 
+	it.each(['GET', 'PROPFIND'] as const)('asks the server, not a cache, for every %s (Electron caches WebDAV responses)', async (method) => {
+		const fake = fakeRequest(reply(200));
+		const client = createClient(fake);
+
+		await client.send({ method, path: PATH });
+
+		expect(getHeader(fake.calls[0]?.headers ?? {}, 'Cache-Control')).toBe('no-cache');
+		expect(getHeader(fake.calls[0]?.headers ?? {}, 'Pragma')).toBe('no-cache');
+	});
+
+	it('sends no cache headers with a write', async () => {
+		const fake = fakeRequest(reply(200));
+		const client = createClient(fake);
+
+		await client.send({ method: 'PUT', path: PATH, body: 'x' });
+
+		expect(getHeader(fake.calls[0]?.headers ?? {}, 'Cache-Control')).toBeUndefined();
+	});
+
 	it('sends the Basic Authorization header of the configured user', async () => {
 		const fake = fakeRequest(reply(200));
 		const client = createClient(fake);

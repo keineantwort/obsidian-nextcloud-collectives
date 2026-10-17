@@ -114,6 +114,12 @@ export class HttpClient {
 		const what = `${method} ${path}`;
 		// Authorization is set last, so no caller header (in any letter case) can replace it.
 		const headers = withoutAuthorization(options.headers ?? {});
+		// Electron (requestUrl) keeps WebDAV responses in its HTTP cache: Nextcloud sends no Cache-Control for them, so a
+		// later GET returns the old text and ETag without asking the server (seen in M5). Every read goes to the server.
+		if (method === 'GET' || method === 'PROPFIND') {
+			headers['Cache-Control'] = 'no-cache';
+			headers['Pragma'] = 'no-cache';
+		}
 		headers['Authorization'] = basicAuthHeader(this.username, this.appPassword);
 
 		let res: HttpResponse;

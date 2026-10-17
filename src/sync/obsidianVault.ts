@@ -47,5 +47,14 @@ export function createObsidianVault(app: App): VaultReader & VaultWriter {
 			await vault.createFolder(path);
 		},
 		mtime: (path) => vault.getFileByPath(path)?.stat.mtime ?? null,
+		rename: async (from, to) => {
+			const entry = vault.getAbstractFileByPath(from);
+			if (entry === null) throw new NotFoundError('Vault entry not found');
+			await app.fileManager.renameFile(entry, to);
+		},
+		trash: async (path) => {
+			const entry = vault.getAbstractFileByPath(path);
+			if (entry !== null) await app.fileManager.trashFile(entry);
+		},
 	};
 }

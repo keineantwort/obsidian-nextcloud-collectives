@@ -141,6 +141,8 @@ describe('testConnection', () => {
 				headers: {
 					'OCS-APIRequest': 'true',
 					'Accept': 'application/json',
+					'Cache-Control': 'no-cache',
+					'Pragma': 'no-cache',
 					'Authorization': basicAuthHeader('alice', 'secret'),
 				},
 			});

@@ -1,173 +1,167 @@
-// Sync planner (PLAN §6, M3/M4). Pure: no Obsidian, no network. Decides which operations the executor runs.
-import type { CollectiveId, PageId, PageInfo } from '../api/types';
+// Sync planner (PLAN §6, §7). Pure: no Obsidian, no network. Decides which operations the executor runs.
+import type { CollectiveId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
 import { canonicalPath, pathKey } from '../mapping/paths';
-import type { PathPlan } from '../mapping/paths';
-import type { LocalFile, LocalSnapshot } from './localScanner';
-import type { RemoteSnapshot } from './remoteScanner';
-import { isCollision } from './state';
-import type { CollectiveState, PageState, SyncState } from './state';
+import { locatePage } from './locate';
+import { Placer } from './placement';
+import { planCollectives } from './planFolders';
+import { movedLocally, planFolderNoteTidy, planLocalDeletions, planLocalFiles, planLocalMove, planRemoteDeletions } from './planLocal';
+import { comparePaths, createContext, depth, inBlockedDir, withoutEntries } from './plannerContext';
+import type { Context } from './plannerContext';
+import type { PageOp, PlannerInput, SyncOp, SyncPlan } from './plannerTypes';
+import type { PageState } from './state';
+import { depthOf } from './treeIndex';
 import type { Skip, SkipReason } from './types';
 
 export type { Skip, SkipReason };
+export type { PlannerBehaviour, PlannerInput, SyncOp, SyncPlan } from './plannerTypes';
+export { DEFAULT_BEHAVIOUR, MASS_DELETE_MIN, MASS_DELETE_SHARE } from './plannerTypes';
 
-export interface PlannerInput {
-	state: SyncState;
-	remote: RemoteSnapshot;
-	local: LocalSnapshot;
-	/** Precomputed by the runner: metaHash for each remote page (remote title, emoji, tag names). */
-	remoteMeta: Map<PageId, { meta: NcMeta; hash: string }>;
-	paths: PathPlan;
-	/** pathKeys of the vault files changed since the last run (DirtyQueue.drain()). */
-	dirty: ReadonlySet<string>;
-}
+type TagEntry = PlannerInput['state']['tags'][string][number];
 
-type TagEntry = SyncState['tags'][string][number];
-
-/** A page operation: the page, its local path and the metadata to write. */
-interface PageOpBase {
-	page: PageInfo;
-	path: string;
-	meta: NcMeta;
-	metaHash: string;
-}
-
-export type SyncOp =
-	| { kind: 'ensureFolder'; path: string }
-	| { kind: 'saveCollective'; collective: CollectiveState }
-	| { kind: 'saveTags'; collectiveId: CollectiveId; tags: SyncState['tags'][string] }
-	/** New page: create file at target.path (path free). */
-	| ({ kind: 'create' } & PageOpBase)
-	/** New page, target path held by a user file without nc_page_id: write remote as conflict copy next to it,
-	 *  record state with status 'collision', localPath = the file's actual path, baseHash ''. */
-	| ({ kind: 'createConflict' } & PageOpBase)
-	/** Page not in state, but a local file carries its nc_page_id (state lost/reset): adopt. */
-	| ({ kind: 'adopt' } & PageOpBase)
-	/** Known page, remote mtime or size changed: fetch and compare. metaChanged = metaHash differs from the state. */
-	| ({ kind: 'update'; metaChanged: boolean } & PageOpBase)
-	/** Known page, remote unchanged since the state, local file changed: upload without fetching. */
-	| ({ kind: 'push'; metaChanged: boolean } & PageOpBase)
-	/** Known page, only metadata changed remotely. */
-	| ({ kind: 'updateMeta' } & PageOpBase);
-
-export interface SyncPlan {
-	ops: SyncOp[];
-	skips: Skip[];
-}
-
-type PageOp = Extract<SyncOp, { page: PageInfo }>;
-
-/** Shared state while planning one run. */
-interface Context {
-	input: PlannerInput;
-	skips: Skip[];
-	/** Local files by nc_page_id; only pages with exactly one file are in here, duplicates are in `duplicates`. */
-	filesById: Map<PageId, LocalFile>;
-	duplicates: Set<PageId>;
-	orphans: Set<PageId>;
-	pageOps: PageOp[];
-	/** pathKeys of the files that create operations of this plan write to. */
-	claimed: Set<string>;
-}
+/** Order of the operation groups (PLAN §7.2): folders, collectives, tags, local renames, structure on the server, content, deletions. */
+const RANK: Record<SyncOp['kind'], number> = {
+	ensureFolder: 0,
+	saveCollective: 1,
+	createCollective: 1,
+	renameCollective: 1,
+	renameCollectiveFolder: 1,
+	renameFolderLocal: 1,
+	saveTags: 2,
+	renameLocal: 3,
+	createRemote: 4,
+	moveRemote: 4,
+	restoreRemote: 4,
+	create: 5,
+	createConflict: 5,
+	adopt: 5,
+	update: 5,
+	push: 5,
+	updateMeta: 5,
+	trashRemote: 6,
+	removeLocal: 6,
+	trashCollective: 6,
+	removeCollectiveLocal: 6,
+	dropState: 6,
+};
 
 /**
- * Plans one sync run (PLAN §6.3). Operations are ordered: folders (parents first), collective saves, tag saves,
- * then page operations by target depth and path. An unchanged remote yields no operations and no skips.
+ * Plans one sync run. Operations are ordered by RANK; within a group page operations go by target depth and path, structure
+ * operations by their depth in the page tree. An unchanged world yields no operations, skips or proposals. A plan with
+ * proposals is incomplete: the runner asks the user and plans again with the decisions.
  */
 export function planSync(input: PlannerInput): SyncPlan {
-	const { state, remote, local, paths } = input;
-	const skips: Skip[] = [];
-	const scanned = new Set<CollectiveId>(remote.collectives.map((rc) => rc.collective.id));
-	const failed = new Set<CollectiveId>(remote.failed.map((f) => f.collective.id));
-	const remotePageIds = new Set<PageId>();
-	for (const rc of remote.collectives) for (const p of rc.pages) remotePageIds.add(p.id);
-
-	const grouped = groupByPageId(local.files);
-	const duplicates = new Set<PageId>();
-	const filesById = new Map<PageId, LocalFile>();
-	for (const [pageId, files] of grouped) {
-		if (files.length > 1) {
-			duplicates.add(pageId);
-			skips.push({ reason: 'duplicateId', pageId });
-			continue;
-		}
-		const [file] = files;
-		if (file !== undefined) filesById.set(pageId, file);
-	}
-
-	const ctx: Context = {
-		input,
-		skips,
-		filesById,
-		duplicates,
-		orphans: new Set(paths.orphans),
-		pageOps: [],
-		claimed: new Set<string>(),
-	};
+	const ctx = createContext(input);
+	planCollectives(ctx);
+	if (ctx.restore.size > 0) ctx.state = withoutEntries(ctx.state, ctx.restore, new Set());
+	planFolderNoteTidy(ctx);
+	planLocalDeletions(ctx);
+	const placer = new Placer(ctx);
 
 	const folderPaths = new Set<string>();
 	const collectiveSaves: SyncOp[] = [];
 	const tagSaves: SyncOp[] = [];
-	for (const rc of remote.collectives) {
-		const planned = paths.collectiveFolders.get(rc.collective.id);
-		if (planned === undefined) throw new Error(`planSync: no local folder planned for collective ${rc.collective.id}`);
-		const folder = canonicalPath(planned, local.paths);
-		const known = state.collectives[String(rc.collective.id)];
-		if (known === undefined) {
-			folderPaths.add(folder);
-			collectiveSaves.push({
-				kind: 'saveCollective',
-				collective: { collectiveId: rc.collective.id, name: rc.collective.name, localFolder: folder },
-			});
-		} else if (known.name !== rc.collective.name) {
-			skips.push({ reason: 'collectiveRenamed', collectiveId: rc.collective.id });
-		}
-		const remoteTags = tagEntries(rc.tags);
-		const cachedTags = tagEntries(state.tags[String(rc.collective.id)] ?? []);
-		if (JSON.stringify(remoteTags) !== JSON.stringify(cachedTags)) {
-			tagSaves.push({ kind: 'saveTags', collectiveId: rc.collective.id, tags: remoteTags });
+	for (const rc of input.remote.collectives) {
+		if (ctx.blocked.has(rc.collective.id)) continue;
+		planRemoteCollective(rc.collective.id, rc.collective.name, rc.tags, ctx, folderPaths, collectiveSaves, tagSaves);
+	}
+	// Known pages first: their renames vacate paths that new pages may take.
+	for (const known of [true, false]) {
+		for (const rc of input.remote.collectives) {
+			if (ctx.blocked.has(rc.collective.id)) continue;
+			for (const page of rc.pages) {
+				if ((ctx.state.pages[String(page.id)] !== undefined) === known) planRemotePage(page, rc.collective.id, ctx, placer);
+			}
 		}
 	}
+	planRemoteDeletions(ctx);
+	planLocalFiles(ctx, placer);
+	for (const pageId of ctx.files.duplicates) ctx.skips.push({ reason: 'duplicateId', pageId });
 
-	for (const rc of remote.collectives) {
-		for (const page of rc.pages) planRemotePage(page, rc.collective.id, ctx);
-	}
-
-	for (const collective of Object.values(state.collectives)) {
-		if (!scanned.has(collective.collectiveId) && !failed.has(collective.collectiveId)) {
-			skips.push({ reason: 'collectiveRemoved', collectiveId: collective.collectiveId });
-		}
-	}
-	for (const known of Object.values(state.pages)) {
-		if (duplicates.has(known.pageId) || remotePageIds.has(known.pageId)) continue;
-		if (scanned.has(known.collectiveId)) {
-			skips.push({ reason: 'remoteDeleted', pageId: known.pageId, collectiveId: known.collectiveId });
-		}
-	}
-
+	assignOrders(ctx);
 	const pageOps = [...ctx.pageOps].sort((a, b) => depth(a.path) - depth(b.path) || comparePaths(a.path, b.path));
 	const ops: SyncOp[] = [
-		...ensureFolderOps(folderPaths, pageOps, local.occupied),
+		...ensureFolderOps(folderPaths, pageOps, input.local.occupied),
 		...collectiveSaves,
+		...ctx.collectiveOps,
 		...tagSaves,
-		...pageOps,
+		...pageOps.filter((op) => RANK[op.kind] === 3),
+		...[...ctx.structureOps].sort(byOrder),
+		...pageOps.filter((op) => RANK[op.kind] === 5),
+		...ctx.finalOps,
 	];
-	return { ops, skips };
+	ops.sort((a, b) => RANK[a.kind] - RANK[b.kind]); // stable: keeps the order inside each group
+	return { ops, skips: ctx.skips, proposals: ctx.proposals, followUp: ctx.followUp };
 }
 
-function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context): void {
-	if (ctx.duplicates.has(page.id)) return;
+function byOrder(a: SyncOp, b: SyncOp): number {
+	const orderA = a.kind === 'createRemote' || a.kind === 'moveRemote' ? a.order : 0;
+	const orderB = b.kind === 'createRemote' || b.kind === 'moveRemote' ? b.order : 0;
+	return orderA - orderB || RANK[a.kind] - RANK[b.kind];
+}
+
+/** Gives each createRemote and moveRemote its depth in the page tree, so that parents are created before their children. */
+function assignOrders(ctx: Context): void {
+	const created = new Map<string, Extract<SyncOp, { kind: 'createRemote' }>>();
+	for (const op of ctx.structureOps) if (op.kind === 'createRemote') created.set(pathKey(op.path), op);
+	const memo = new Map<string, number>();
+	const orderOf = (op: Extract<SyncOp, { kind: 'createRemote' | 'moveRemote' }>, visiting: Set<string>): number => {
+		const parent = op.parent;
+		if (parent === null) return 1;
+		if (parent.kind === 'page') return depthOf(ctx.tree, parent.pageId) + 2;
+		const key = pathKey(parent.path);
+		const known = memo.get(key);
+		if (known !== undefined) return known;
+		const parentOp = created.get(key);
+		if (parentOp === undefined || visiting.has(key)) return 1;
+		visiting.add(key);
+		const value = orderOf(parentOp, visiting) + 1;
+		memo.set(key, value);
+		return value;
+	};
+	for (const op of ctx.structureOps) {
+		if (op.kind === 'createRemote' || op.kind === 'moveRemote') op.order = orderOf(op, new Set<string>());
+	}
+}
+
+/** A collective new to the vault gets its folder and a state entry; changed tags are cached. */
+function planRemoteCollective(
+	collectiveId: CollectiveId,
+	name: string,
+	tags: readonly (TagEntry & { collectiveId?: unknown })[],
+	ctx: Context,
+	folderPaths: Set<string>,
+	collectiveSaves: SyncOp[],
+	tagSaves: SyncOp[],
+): void {
+	const { local, paths } = ctx.input;
+	const planned = paths.collectiveFolders.get(collectiveId);
+	if (planned === undefined) throw new Error(`planSync: no local folder planned for collective ${collectiveId}`);
+	const folder = canonicalPath(planned, local.paths);
+	if (ctx.state.collectives[String(collectiveId)] === undefined) {
+		folderPaths.add(folder);
+		collectiveSaves.push({ kind: 'saveCollective', collective: { collectiveId, name, localFolder: folder } });
+	}
+	const remoteTags = tagEntries(tags);
+	const cachedTags = tagEntries(ctx.state.tags[String(collectiveId)] ?? []);
+	if (JSON.stringify(remoteTags) !== JSON.stringify(cachedTags)) {
+		tagSaves.push({ kind: 'saveTags', collectiveId, tags: remoteTags });
+	}
+}
+
+function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context, placer: Placer): void {
+	if (ctx.files.duplicates.has(page.id)) return;
 	if (ctx.orphans.has(page.id)) {
 		ctx.skips.push({ reason: 'orphan', pageId: page.id, collectiveId });
 		return;
 	}
 	const remoteMeta = ctx.input.remoteMeta.get(page.id);
 	if (remoteMeta === undefined) throw new Error(`planSync: no metadata planned for page ${page.id}`);
-	const known = ctx.input.state.pages[String(page.id)];
+	const known = ctx.state.pages[String(page.id)];
 	if (known === undefined) {
 		planNewPage(page, remoteMeta, ctx);
 	} else {
-		planKnownPage(page, known, remoteMeta, ctx);
+		planKnownPage(page, collectiveId, known, remoteMeta, ctx, placer);
 	}
 }
 
@@ -178,7 +172,7 @@ function planRemotePage(page: PageInfo, collectiveId: CollectiveId, ctx: Context
  */
 function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string }, ctx: Context): void {
 	const base = { page, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
-	const adoptable = ctx.filesById.get(page.id);
+	const adoptable = ctx.files.byId.get(page.id);
 	if (adoptable !== undefined) {
 		ctx.pageOps.push({ kind: 'adopt', ...base, path: adoptable.path });
 		return;
@@ -187,15 +181,22 @@ function planNewPage(page: PageInfo, remoteMeta: { meta: NcMeta; hash: string },
 	if (target === undefined) throw new Error(`planSync: no target path planned for page ${page.id}`);
 	const { local } = ctx.input;
 	const path = canonicalPath(target.path, local.paths);
+	if (inBlockedDir(ctx, path)) return;
 	const key = pathKey(path);
 	const userFile = local.files.find((file) => file.pageId === null && pathKey(file.path) === key);
 	if (userFile !== undefined) {
+		ctx.claimedUserFiles.add(key);
 		ctx.pageOps.push({ kind: 'createConflict', ...base, path: userFile.path });
 		return;
 	}
-	const free = freePath(path, (candidate) => local.occupied.has(candidate) || ctx.claimed.has(candidate));
+	const free = freePath(path, (candidate) => isTaken(candidate, ctx));
 	ctx.claimed.add(pathKey(free));
 	ctx.pageOps.push({ kind: 'create', ...base, path: free });
+}
+
+/** A path another file holds in the vault (and keeps in this plan) or that an operation of this plan writes to. */
+function isTaken(key: string, ctx: Context): boolean {
+	return (ctx.input.local.occupied.has(key) && !ctx.vacated.has(key)) || ctx.claimed.has(key);
 }
 
 /** `path` if `taken` does not hold its key, else the first `dir/Name (n).md` (n >= 2) that is free. */
@@ -211,19 +212,36 @@ function freePath(path: string, taken: (key: string) => boolean): string {
 }
 
 /**
- * Page known to the state: skip if its local file is gone or moved. A changed remote leads to an update (fetch and
- * compare); otherwise a changed local file leads to a push; otherwise changed metadata leads to updateMeta.
+ * Page known to the state. Its file was located by nc_page_id (a missing file was handled as a local deletion). A page moved
+ * on the server moves its file, whatever the user did; a file the user moved alone moves the page. A changed remote leads to
+ * an update (fetch and compare); otherwise a changed local file leads to a push; otherwise changed metadata to updateMeta.
  */
-function planKnownPage(page: PageInfo, known: PageState, remoteMeta: { meta: NcMeta; hash: string }, ctx: Context): void {
-	const file = findKnownFile(known, ctx);
-	if (file === undefined) {
-		ctx.skips.push({ reason: 'localDeleted', pageId: page.id, collectiveId: known.collectiveId, path: known.localPath });
-		return;
+function planKnownPage(
+	page: PageInfo,
+	collectiveId: CollectiveId,
+	known: PageState,
+	remoteMeta: { meta: NcMeta; hash: string },
+	ctx: Context,
+	placer: Placer,
+): void {
+	const file = locatePage(known, ctx.files);
+	if (file === undefined || inBlockedDir(ctx, file.path)) return;
+	const meta = { page, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
+	let path = file.path;
+	const remoteMoved =
+		page.filePath !== known.remoteFilePath ||
+		page.fileName !== known.remoteFileName ||
+		page.parentId !== known.parentId ||
+		collectiveId !== known.collectiveId;
+	if (remoteMoved) {
+		path = renameTarget(page, file.path, ctx);
+		if (movedLocally(file, known) && pathKey(path) !== pathKey(file.path)) ctx.skips.push({ reason: 'remoteMoveWins', pageId: page.id });
+		ctx.pageOps.push({ kind: 'renameLocal', from: file.path, path, ...meta });
+	} else if (movedLocally(file, known)) {
+		path = planLocalMove(page, known, file, ctx, placer);
 	}
-	if (page.filePath !== known.remoteFilePath || page.fileName !== known.remoteFileName || page.parentId !== known.parentId) {
-		ctx.skips.push({ reason: 'remoteMoved', pageId: page.id, collectiveId: known.collectiveId, path: file.path });
-	}
-	const base = { page, path: file.path, meta: remoteMeta.meta, metaHash: remoteMeta.hash };
+
+	const base = { ...meta, path };
 	const metaChanged = remoteMeta.hash !== known.metaHash;
 	const remoteCandidate = page.timestamp !== known.remoteMtime || page.size !== known.remoteSize;
 	// A collision page is never pushed: its file is the user's own until the conflict is resolved.
@@ -238,23 +256,24 @@ function planKnownPage(page: PageInfo, known: PageState, remoteMeta: { meta: NcM
 	}
 }
 
-/**
- * The local file of a known page. A collision page has no nc_page_id in its file, so it is found by its path (any case)
- * among the files without nc_page_id. Every other page is found by its nc_page_id only.
- */
-function findKnownFile(known: PageState, ctx: Context): LocalFile | undefined {
-	if (isCollision(known)) {
-		const key = pathKey(known.localPath);
-		return ctx.input.local.files.find((file) => file.pageId === null && pathKey(file.path) === key);
-	}
-	return ctx.filesById.get(known.pageId);
+/** Where the file of a page moved on the server goes: the planned target, or the next free suffixed name; the file itself if it is there already. */
+function renameTarget(page: PageInfo, current: string, ctx: Context): string {
+	const target = ctx.input.paths.targets.get(page.id);
+	if (target === undefined) throw new Error(`planSync: no target path planned for page ${page.id}`);
+	const { local } = ctx.input;
+	const ideal = canonicalPath(target.path, local.paths);
+	if (pathKey(ideal) === pathKey(current)) return current;
+	const free = freePath(ideal, (candidate) => isTaken(candidate, ctx));
+	ctx.claimed.add(pathKey(free));
+	ctx.vacated.add(pathKey(current));
+	return free;
 }
 
-/** Folder operations: new collective folders and the parent folders of created files, minus those already in the vault. */
+/** Folder operations: new collective folders and the parent folders of created and renamed files, minus those already in the vault. */
 function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: Set<string>): SyncOp[] {
 	const folders = new Set(folderPaths);
 	for (const op of pageOps) {
-		if (op.kind !== 'create') continue;
+		if (op.kind !== 'create' && op.kind !== 'renameLocal') continue;
 		const segments = op.path.split('/');
 		for (let i = 1; i < segments.length; i++) {
 			folders.add(segments.slice(0, i).join('/'));
@@ -266,26 +285,9 @@ function ensureFolderOps(folderPaths: Set<string>, pageOps: PageOp[], occupied: 
 		.map((path): SyncOp => ({ kind: 'ensureFolder', path }));
 }
 
-function groupByPageId(files: LocalFile[]): Map<PageId, LocalFile[]> {
-	const groups = new Map<PageId, LocalFile[]>();
-	for (const file of files) {
-		if (file.pageId === null) continue;
-		groups.set(file.pageId, [...(groups.get(file.pageId) ?? []), file]);
-	}
-	return groups;
-}
-
 /** Tag list in the canonical form compared against the state cache: sorted by id, only id, name and color. */
 function tagEntries(tags: readonly TagEntry[]): TagEntry[] {
 	return [...tags]
 		.sort((a, b) => Number(a.id) - Number(b.id))
 		.map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }));
-}
-
-function depth(path: string): number {
-	return path.split('/').length;
-}
-
-function comparePaths(a: string, b: string): number {
-	return a < b ? -1 : a > b ? 1 : 0;
 }

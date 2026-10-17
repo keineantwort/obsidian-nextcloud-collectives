@@ -86,3 +86,21 @@
 .is-mobile .nc-conflict-actions button,
 .is-mobile .nc-conflicts-done .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }
 .nc-conflicts-done { margin: 0 0 var(--size-4-3); }
+
+.nc-confirm .modal-button-container { flex-wrap: wrap; gap: var(--size-4-2); }
+.is-mobile .nc-confirm .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }
+.nc-confirm-heading { font-size: var(--font-ui-small); font-weight: var(--font-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--size-4-3) 0 var(--size-4-2); }
+.nc-confirm-group:first-of-type .nc-confirm-heading { margin-top: 0; }
+.nc-confirm-list { margin: 0 0 var(--size-4-3); padding: 0; list-style: none; }
+.nc-confirm-item {
+	margin-bottom: var(--size-4-3);
+	padding-inline-start: var(--size-4-3);
+	border-inline-start: 3px solid var(--background-modifier-border);
+}
+.nc-confirm-item.is-warning { border-inline-start-color: var(--color-red); }
+.nc-confirm-row { display: flex; align-items: center; gap: var(--size-4-3); cursor: pointer; }
+.nc-confirm-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.nc-confirm-row input[type='checkbox'] { flex: 0 0 auto; margin: 0; }
+.nc-confirm-label { font-weight: var(--font-semibold); }
+.nc-confirm-warning { color: var(--text-error); margin-top: var(--size-4-1); }
+.nc-confirm-detail { color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: var(--size-4-1); }

@@ -61,7 +61,7 @@ describe('scanLocal', () => {
 		vault.seed('Handbuch/Notiz.txt', 'kein Markdown');
 		vault.seed('Bild.png', 'bytes');
 		vault.seed('.obsidian/app.json', '{}');
-		vault.seedFolder('.obsidian/plugins');
+		vault.seedFolder(`${vault.configDir}/plugins`);
 		vault.seedFolder('Leer');
 
 		const snapshot = await scanLocal(vault);
@@ -121,5 +121,30 @@ describe('scanLocal', () => {
 		const snapshot = await scanLocal(vault);
 
 		expect(snapshot.nonEmpty).toBe(true);
+	});
+});
+
+describe('scanLocal: folders and root files', () => {
+	it('lists every folder outside the config folder, with its spelling on disk', async () => {
+		const vault = new MemoryVault();
+		vault.seed('Handbuch/Prozesse/Urlaub.md', 'x');
+		vault.seedFolder('Leer');
+		vault.seedFolder(`${vault.configDir}/plugins`);
+
+		const snapshot = await scanLocal(vault);
+
+		expect([...snapshot.folders].sort()).toEqual(['Handbuch', 'Handbuch/Prozesse', 'Leer']);
+	});
+
+	it('reports Markdown files directly in the vault root, which are not synced', async () => {
+		const vault = new MemoryVault();
+		vault.seed('Lose Notiz.md', 'x');
+		vault.seed('Bild.png', 'bytes');
+		vault.seed('Handbuch/Seite.md', 'x');
+
+		const snapshot = await scanLocal(vault);
+
+		expect(snapshot.rootFiles).toEqual(['Lose Notiz.md']);
+		expect(snapshot.files.map((file) => file.path)).toEqual(['Handbuch/Seite.md']);
 	});
 });

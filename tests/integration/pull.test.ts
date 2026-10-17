@@ -7,6 +7,7 @@ import { createTranslator } from '../../src/i18n';
 import { readPageId, toRemote } from '../../src/mapping/frontmatter';
 import { remotePagePath, sanitizeName } from '../../src/mapping/paths';
 import { runSync, type SyncRunDeps, type SyncRunOutcome } from '../../src/sync/syncRun';
+import { emptyResult } from '../../src/sync/types';
 import type { SyncResult } from '../../src/sync/types';
 import { StateStore, type StateFile } from '../../src/sync/stateStore';
 import { Logger } from '../../src/util/logger';
@@ -96,11 +97,19 @@ const recordingRequest: RequestFn = async (req: HttpRequest) => {
 
 function makeDeps(): SyncRunDeps {
 	return {
-		settings: { serverUrl: env.baseUrl, username: env.user, conflictStrategy: 'conflictFile' },
+		settings: {
+			serverUrl: env.baseUrl,
+			username: env.user,
+			conflictStrategy: 'conflictFile',
+			newFolderBehaviour: 'createCollective',
+			localDeleteBehaviour: 'ask',
+			remoteDeleteBehaviour: 'obsidianTrash',
+		},
 		readPassword: async () => env.password,
 		request: recordingRequest,
 		vault,
 		stateStore: new StateStore(stateFile, new Logger()),
+		confirm: async () => new Map(),
 		confirmInitialSync: async () => {
 			throw new Error('confirmInitialSync must not be called: the vault is empty in the first run');
 		},
@@ -220,7 +229,7 @@ describe('Pull against the local Docker Nextcloud with an in-memory vault', () =
 
 		expect(vault.writes).toBe(writesBefore);
 		expect(stateFile.writes).toBe(stateWritesBefore);
-		expect(result).toEqual({ created: 0, updated: 0, pushed: 0, metaUpdated: 0, conflicts: 0, unchanged: 0, failed: 0 });
+		expect(result).toEqual(emptyResult());
 		expect(davGetsSince(requestsBefore)).toEqual([]);
 		expect(readPageId(await readLocal(`${f.name}/Notiz.md`))).toBe(f.note.id);
 	});

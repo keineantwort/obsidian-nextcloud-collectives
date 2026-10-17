@@ -21,3 +21,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0015](0015-http-fehlerabbildung-und-retry.md) | HTTP-Fehlerabbildung zentral, 403 ≠ `AuthError`, Retry nur für lesende Requests | akzeptiert |
 | [0016](0016-pull-frontmatter-textbasiert-und-sync-state.md) | Pull: Frontmatter textbasiert, Sync-State als eigene Datei, Konfliktkopie statt Überschreiben | akzeptiert |
 | [0017](0017-push-etag-bestaetigung-und-konfliktaufloesung.md) | Push: bestätigte ETags, Entscheidung als reine Funktion, Konfliktauflösung über den State | akzeptiert |
+| [0018](0018-struktur-mehrere-durchlaeufe-rueckfragen-und-platzierung.md) | Struktur: mehrere Durchläufe, Rückfragen als Vorschläge, Platzierung neuer Dateien | akzeptiert |

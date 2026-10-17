@@ -83,3 +83,12 @@ describe('message tables', () => {
 		expect(placeholdersOf(de[key])).toEqual(placeholdersOf(en[key]));
 	});
 });
+
+describe('conflict file label', () => {
+	// The label is part of the file name format: conflict copies written under an earlier translation must still be
+	// recognised (isConflictFileName reads the labels of every locale). Changing a label here needs a migration.
+	it('is frozen for every locale', () => {
+		expect(en['sync.conflictFileLabel']).toBe('Conflict');
+		expect(de['sync.conflictFileLabel']).toBe('Konflikt');
+	});
+});

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
-import { canonicalRemote, pageIdFromFrontmatterValue, readPageId, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { canonicalRemote, pageIdFromFrontmatterValue, readNcMeta, readPageId, replaceNcMeta, stripNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 
 function meta(over: Partial<NcMeta> = {}): NcMeta {
@@ -279,5 +279,38 @@ describe('pageIdFromFrontmatterValue', () => {
 		{ name: 'rejects an object', value: {}, expected: undefined },
 	])('$name', ({ value, expected }) => {
 		expect(pageIdFromFrontmatterValue(value)).toBe(expected);
+	});
+});
+
+describe('readNcMeta and stripNcMeta', () => {
+	const meta: NcMeta = { pageId: asPageId(12), collectiveId: asCollectiveId(3), title: 'Alt/Titel', emoji: '📘', tags: ['a', 'b c'] };
+
+	it('reads back what replaceNcMeta wrote', () => {
+		expect(readNcMeta(replaceNcMeta('Text', meta))).toEqual(meta);
+	});
+
+	it('reads the required fields only and treats the optional ones as absent', () => {
+		const text = '---\nnc_page_id: 5\nnc_collective_id: 2\nnc_tags: nope\n---\nText';
+
+		expect(readNcMeta(text)).toEqual({ pageId: 5, collectiveId: 2, title: null, emoji: null, tags: [] });
+	});
+
+	it('returns null without nc_page_id or nc_collective_id', () => {
+		expect(readNcMeta('Text')).toBeNull();
+		expect(readNcMeta('---\nnc_page_id: 5\n---\nText')).toBeNull();
+	});
+
+	it('removes the nc fields and drops an empty block', () => {
+		expect(stripNcMeta(replaceNcMeta('Text', meta))).toBe('Text');
+	});
+
+	it('keeps the user YAML and the body byte-identical', () => {
+		const text = replaceNcMeta('---\nauthor: "Ann"\n---\n\nText\n', meta);
+
+		expect(stripNcMeta(text)).toBe('---\nauthor: "Ann"\n---\n\nText\n');
+	});
+
+	it('leaves a text without frontmatter alone', () => {
+		expect(stripNcMeta('Nur Text\n')).toBe('Nur Text\n');
 	});
 });

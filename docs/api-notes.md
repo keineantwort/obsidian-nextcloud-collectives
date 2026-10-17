@@ -153,6 +153,20 @@ Durchgeführt in der Collectives-Oberfläche des Testservers (Pretty-URLs aktiv)
 - **Fremder Schreibzugriff direkt nach dem Listing**: Der `PUT` mit dem ETag aus dem State scheitert mit `412`. Der Executor liest neu, entscheidet erneut und legt bei verschiedenem Inhalt eine Konfliktkopie an. Die Remote-Fassung bleibt unangetastet.
 - **Offen für die manuelle Prüfung in Obsidian**: Reihenfolge und Anzahl der `modify`-Events nach `vault.process` (die Unterdrückung gilt 5 s), Anzeige der Statusleiste und des Konflikt-Dialogs auf Desktop und Mobile, `fileManager.trashFile` für die Konfliktkopie.
 
+## 10d. Befunde aus M5 (Struktur, ONC-6)
+
+Alle Punkte sind in `tests/integration/structure.test.ts` gegen den Docker-Testserver belegt, soweit nicht anders vermerkt.
+
+- **Seite unter eine Blattseite hängen** (`POST …/pages/{blatt}` oder `PUT … {parentId: blatt}`): Das Listing zeigt die Blattseite sofort als `fileName: Readme.md`, `filePath: <Titel>` (Elternseite). Ihre `id` bleibt. Das Plugin merkt das im nächsten Durchlauf als „remote verschoben“ und legt die lokale Notiz in den Ordner (ADR 0018).
+- **`PUT …/pages/{id}/to/{newCId}`**: ID bleibt, die Unterseiten ziehen mit um und behalten ihre Eltern-ID. Der Executor prüft vor jedem Verschieben, wo die Seite gerade liegt (`GET …/pages/{id}` im alten und neuen Collective), und tut für Unterseiten nichts mehr.
+- **`DELETE …/pages/{id}`** auf eine Elternseite nimmt die Unterseiten mit in den Papierkorb; `PATCH …/pages/trash/{id}` stellt die Seite wieder her und liefert die `PageInfo` (mit `collectivePath`). Ein `404` beim Restore behandelt der Executor als „vielleicht zusammen mit der Elternseite schon wiederhergestellt“ und fragt die Seite per `GET` ab (gegen den Server nicht eigens belegt).
+- **Collective umbenennen** über die Circles-API: `GET /collectives` liefert den neuen Namen sofort; die Seiten-IDs bleiben, `collectivePath` der Seiten ändert sich mit dem Namen.
+- **Neues Collective** (`POST /collectives`): legt die Startseite (`Readme.md`, `parentId = 0`) an. Deren Text wird beim Hochladen eines neuen Ordners durch die lokale Notiz mit dem Ordnernamen ersetzt.
+- **Papierkorb-Listing** (`GET …/pages/trash`) enthält die Seiten, die das Plugin per `DELETE` entfernt hat; so erkennt der Lauf eine wieder aufgetauchte Datei (`nc_page_id`) als „lokal wiederhergestellt“.
+- **HTTP-Cache in Obsidian (Electron):** WebDAV-`GET`-Antworten tragen kein `Cache-Control`. `requestUrl` lieferte deshalb wiederholte `GET`s derselben Datei aus dem Cache, ohne den Server zu fragen (im Access-Log fehlten sie): veralteter Text und ETag, jeder `PUT` scheiterte mit `412`. Seit M5 senden alle `GET`/`PROPFIND` `Cache-Control: no-cache` und `Pragma: no-cache`. Node-`fetch` (Integrationstests) cacht nicht, der Fehler ist nur in Obsidian sichtbar.
+- **Nicht getestet:** Mitglieder ohne Admin-Rechte (Level < 8): Der Testserver hat nur einen Nutzer, die Fälle „darf nicht umbenennen/löschen“ sind nur als Unit-Test abgedeckt (`tests/unit/plannerStructure.test.ts`).
+- **Offen für die manuelle Prüfung in Obsidian:** `fileManager.renameFile` für Ordner (Collective-Ordner, Ordnerseiten) und die Linkaktualisierung in anderen Notizen, `fileManager.trashFile` für Ordner, die `rename`-/`delete`-Events nach den eigenen Operationen des Plugins, der Bestätigungsdialog auf Desktop und Mobile.
+
 ## 11. Referenzprojekte (PLAN §18)
 
 Gesichtet nur lesend, ohne Build oder Ausführung.

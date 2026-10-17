@@ -19,6 +19,10 @@ export interface LocalSnapshot {
 	paths: Map<string, string>;
 	/** True if the vault contains any file or folder outside configDir. */
 	nonEmpty: boolean;
+	/** Every folder path (spelling on disk) outside configDir, root excluded. */
+	folders: string[];
+	/** Markdown files directly in the vault root: not synced (PLAN §6.1), reported in the log. */
+	rootFiles: string[];
 }
 
 /** Port, implemented over app.vault + app.metadataCache in src/sync/obsidianVault.ts. */
@@ -44,11 +48,14 @@ export async function scanLocal(vault: VaultReader): Promise<LocalSnapshot> {
 	const occupied = new Set<string>();
 	const paths = new Map<string, string>();
 	let nonEmpty = false;
+	const folders: string[] = [];
+	const rootFiles: string[] = [];
 
 	for (const file of vault.listFiles()) {
 		occupied.add(pathKey(file.path));
 		paths.set(pathKey(file.path), file.path);
 		if (!isInConfigDir(file.path, vault.configDir)) nonEmpty = true;
+		if (!file.path.includes('/') && file.path.endsWith('.md')) rootFiles.push(file.path);
 		if (!isSyncedPath(file.path, vault.configDir)) continue;
 		const cached = vault.cachedPageId(file.path);
 		const pageId = cached !== undefined ? cached : readPageId(await vault.read(file.path));
@@ -58,8 +65,11 @@ export async function scanLocal(vault: VaultReader): Promise<LocalSnapshot> {
 	for (const folder of vault.listFolders()) {
 		occupied.add(pathKey(folder));
 		paths.set(pathKey(folder), folder);
-		if (!isInConfigDir(folder, vault.configDir)) nonEmpty = true;
+		if (!isInConfigDir(folder, vault.configDir)) {
+			nonEmpty = true;
+			folders.push(folder);
+		}
 	}
 
-	return { files, occupied, paths, nonEmpty };
+	return { files, occupied, paths, nonEmpty, folders, rootFiles };
 }

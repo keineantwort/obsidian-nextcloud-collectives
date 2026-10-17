@@ -257,7 +257,16 @@ describe('loadSettings', () => {
 
 		await plugin.loadSettings();
 
-		expect(plugin.settings).toStrictEqual({ serverUrl: 'https://x', username: '', appPasswordSecretId: 'id-1', conflictStrategy: 'conflictFile' });
+		expect(plugin.settings).toStrictEqual({ ...DEFAULT_SETTINGS, serverUrl: 'https://x', appPasswordSecretId: 'id-1' });
+	});
+
+	it('takes the structure settings and ignores unknown values', async () => {
+		const { plugin } = setup();
+		plugin.loadData = () => Promise.resolve({ newFolderBehaviour: 'ask', localDeleteBehaviour: 'trashRemote', remoteDeleteBehaviour: 'nope' });
+
+		await plugin.loadSettings();
+
+		expect(plugin.settings).toMatchObject({ newFolderBehaviour: 'ask', localDeleteBehaviour: 'trashRemote', remoteDeleteBehaviour: 'obsidianTrash' });
 	});
 
 	it('falls back to defaults when no data was saved', async () => {
