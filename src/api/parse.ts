@@ -53,6 +53,11 @@ function reader(entity: string, raw: unknown): FieldReader {
 	};
 }
 
+/** The server reports a removed emoji as '' (it ignores null when removing, docs/api-notes.md); both mean: no emoji. */
+function emojiOrNull(value: string | null): string | null {
+	return value === '' ? null : value;
+}
+
 export function parseCollective(raw: unknown): Collective {
 	const r = reader('Collective', raw);
 	return {
@@ -60,7 +65,7 @@ export function parseCollective(raw: unknown): Collective {
 		circleId: r.string('circleId'),
 		name: r.string('name'),
 		slug: r.string('slug'),
-		emoji: r.stringOrNull('emoji'),
+		emoji: emojiOrNull(r.stringOrNull('emoji')),
 		level: r.number('level'),
 		canEdit: r.boolean('canEdit'),
 		trashTimestamp: r.numberOrNull('trashTimestamp'),
@@ -83,7 +88,7 @@ function readPageFields(r: FieldReader): Omit<PageInfo, 'collectivePath'> {
 		id: asPageId(r.number('id')),
 		slug: r.string('slug'),
 		title: r.string('title'),
-		emoji: r.stringOrNull('emoji'),
+		emoji: emojiOrNull(r.stringOrNull('emoji')),
 		tags: r.numberArray('tags').map(asTagId),
 		timestamp: r.number('timestamp'),
 		size: r.number('size'),

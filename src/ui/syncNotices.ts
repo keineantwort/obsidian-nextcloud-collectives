@@ -13,7 +13,7 @@ const DETAIL_SEPARATOR = ' · ';
 /** Notice text for a finished sync. Conflicts and failures get their own sentence on a separate line. */
 export function formatSyncResult(result: SyncResult, pages: number, t: Translator, skips: readonly Skip[] = []): SyncNoticeSpec {
 	const changed =
-		result.created + result.updated + result.pushed + result.metaUpdated + result.conflicts + result.failed +
+		result.created + result.updated + result.pushed + result.metaUpdated + result.metaPushed + result.conflicts + result.failed +
 		result.uploaded + result.moved + result.trashed + result.removed + result.restored;
 	const lines: string[] = [];
 	if (changed === 0) {
@@ -24,6 +24,7 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 		if (result.updated > 0) details.push(t('sync.result.updated', { count: result.updated }));
 		if (result.pushed > 0) details.push(t('sync.result.pushed', { count: result.pushed }));
 		if (result.metaUpdated > 0) details.push(t('sync.result.metaUpdated', { count: result.metaUpdated }));
+		if (result.metaPushed > 0) details.push(t('sync.result.metaPushed', { count: result.metaPushed }));
 		if (result.uploaded > 0) details.push(t('sync.result.uploaded', { count: result.uploaded }));
 		if (result.moved > 0) details.push(t('sync.result.moved', { count: result.moved }));
 		if (result.trashed > 0) details.push(t('sync.result.trashed', { count: result.trashed }));

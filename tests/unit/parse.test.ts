@@ -377,3 +377,13 @@ describe('parseItem', () => {
 		expectApiChanged(() => parseItem(data, 'tag', parseTag), 'tag');
 	});
 });
+
+describe('emoji reported as an empty string (M6)', () => {
+	it('maps the server\'s "no emoji" of pages and collectives to null', () => {
+		const page = { id: 1, slug: 's', title: 't', emoji: '', tags: [], timestamp: 1, size: 1, fileName: 't.md', filePath: '', collectivePath: '.Collectives/C', parentId: 0, subpageOrder: [], lastUserId: null, linkedPageIds: [], trashTimestamp: null };
+		const collective = { id: 1, circleId: 'c', name: 'C', slug: 'c', emoji: '', level: 9, canEdit: true, trashTimestamp: null };
+
+		expect(parsePageInfo(page).emoji).toBeNull();
+		expect(parseCollective(collective).emoji).toBeNull();
+	});
+});

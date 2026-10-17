@@ -228,7 +228,7 @@ nc_title: "Original/Titel mit Sonderzeichen"   # nur wenn vom Dateinamen abweich
 ```
 
 - Beim Hochladen werden nur die `nc_*`-Felder entfernt. Übriges Frontmatter des Nutzers wird mit hochgeladen (entschieden; Collectives zeigt es als Text an). Beim Herunterladen wird ein YAML-Block am Seitenanfang wieder als Frontmatter erkannt und mit den `nc_*`-Feldern zusammengeführt. Ist nach dem Entfernen der `nc_*`-Felder kein Feld übrig, wird der Block komplett weggelassen. Remote-Format = Normalform des Text-Editors: Leerzeile nach dem schließenden `---`, kein abschließender Zeilenumbruch (M0, ADR 0005).
-- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives).
+- Option `tagsProperty`: `nc_tags` (Default) oder `tags` (Obsidian-Tags; Leerzeichen werden dann zu `-`, Rückabbildung über Tag-Liste des Collectives). Im Modus `tags` schreibt das Plugin die Eigenschaft `tags` zusätzlich zu `nc_tags`; sie bleibt Seiteninhalt und wird mit hochgeladen (M6, ADR 0019).
 - `nc_page_id` ist die Identität einer Datei. Fehlt sie, gilt die Datei als neu.
 
 ### 6.3 Sync-State
@@ -324,6 +324,7 @@ Umsetzung (M5, ADR 0018): Ein Lauf besteht aus bis zu 3 Durchläufen (scannen, p
 - Tags: Abgleich der Namen; fehlende Tags im Collective per `POST /tags` anlegen (Default-Farbe), dann `PUT`/`DELETE …/tags/{tagId}`.
   Vor dem Anlegen case-insensitiv gegen den Tag-Cache prüfen (Server-Duplikatprüfung hängt von der DB-Collation ab, M0). Default-Farbe als 6 Hex-Zeichen ohne `#`. Nach einem Collective-übergreifenden Verschieben die Tags im Ziel-Collective neu zuweisen.
 - Konfliktregel Metadaten: getrennt vom Inhalt über `metaHash`; bei beidseitiger Änderung gewinnt Remote, Hinweis im Log.
+- Umsetzung (M6, ADR 0019): Der Executor vergleicht Emoji/Tags der Notiz beim `push`/`update` mit dem `metaHash` des States (`src/sync/executorMeta.ts`); Emoji wird mit `""` entfernt (api-notes §4); neue Notizen und Collective-Wechsel übertragen die Tags der Notiz.
 
 ### 7.6 Eigene Schreibzugriffe ignorieren
 
@@ -561,8 +562,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M2 | umgesetzt (ONC-3), gemergt (PR #14) |
 | M3 | umgesetzt (ONC-4), gemergt (PR #15) |
 | M4 | umgesetzt (ONC-5), gemergt (PR #16) |
-| M5 | umgesetzt (ONC-6), PR offen |
-| M6 | offen |
+| M5 | umgesetzt (ONC-6), gemergt |
+| M6 | umgesetzt (ONC-7), PR offen |
 | M7 | offen |
 | M8 | offen |
 | M9 | offen |

@@ -1,8 +1,9 @@
 // Fake Collectives API with a small server model, for the executor tests of the structure operations.
 import type { StructureApi } from '../../src/sync/executorDeps';
 import { asCollectiveId, asPageId } from '../../src/api/types';
-import type { Collective, CollectiveId, PageId, PageInfo } from '../../src/api/types';
-import { NotFoundError } from '../../src/util/errors';
+import { asTagId } from '../../src/api/types';
+import type { Collective, CollectiveId, PageId, PageInfo, Tag, TagId } from '../../src/api/types';
+import { NotFoundError, ServerError } from '../../src/util/errors';
 import type { FakeDav } from './fakeDav';
 
 interface Entry {
@@ -19,7 +20,10 @@ export class FakeApi implements StructureApi {
 	readonly calls: string[] = [];
 	/** Errors by method name; thrown once by the next call of that method. */
 	readonly failures = new Map<string, Error>();
+	/** Tags per collective. Names are compared case-sensitively like the server on SQLite; a duplicate is a 400. */
+	readonly tags = new Map<CollectiveId, Tag[]>();
 	private nextId = 1000;
+	private nextTagId = 500;
 
 	constructor(private readonly dav: FakeDav) {}
 
@@ -132,5 +136,48 @@ export class FakeApi implements StructureApi {
 		const collective = this.collectives.get(collectiveId);
 		if (collective === undefined) throw new NotFoundError(String(collectiveId));
 		collective.trashed = true;
+	}
+
+	async setPageEmoji(collectiveId: CollectiveId, pageId: PageId, emoji: string | null): Promise<PageInfo> {
+		this.calls.push(`setPageEmoji ${collectiveId} ${pageId} ${emoji ?? 'null'}`);
+		this.fail('setPageEmoji');
+		const entry = this.require(collectiveId, pageId);
+		entry.page = { ...entry.page, emoji };
+		return entry.page;
+	}
+
+	async addPageTag(collectiveId: CollectiveId, pageId: PageId, tagId: TagId): Promise<PageInfo> {
+		this.calls.push(`addPageTag ${collectiveId} ${pageId} ${tagId}`);
+		this.fail('addPageTag');
+		const entry = this.require(collectiveId, pageId);
+		if (!entry.page.tags.includes(tagId)) entry.page = { ...entry.page, tags: [...entry.page.tags, tagId] };
+		return entry.page;
+	}
+
+	async removePageTag(collectiveId: CollectiveId, pageId: PageId, tagId: TagId): Promise<void> {
+		this.calls.push(`removePageTag ${collectiveId} ${pageId} ${tagId}`);
+		this.fail('removePageTag');
+		const entry = this.require(collectiveId, pageId);
+		entry.page = { ...entry.page, tags: entry.page.tags.filter((id) => id !== tagId) };
+	}
+
+	async listTags(collectiveId: CollectiveId): Promise<Tag[]> {
+		this.calls.push(`listTags ${collectiveId}`);
+		return [...(this.tags.get(collectiveId) ?? [])];
+	}
+
+	/** Adds a tag the server has (no call recorded). */
+	addTag(collectiveId: number, name: string): Tag {
+		const tag: Tag = { id: asTagId(this.nextTagId++), collectiveId: asCollectiveId(collectiveId), name, color: '' };
+		this.tags.set(tag.collectiveId, [...(this.tags.get(tag.collectiveId) ?? []), tag]);
+		return tag;
+	}
+
+	async createTag(collectiveId: CollectiveId, name: string, color: string): Promise<Tag> {
+		this.calls.push(`createTag ${collectiveId} ${name} ${color}`);
+		this.fail('createTag');
+		if ((this.tags.get(collectiveId) ?? []).some((tag) => tag.name === name)) throw new ServerError(400);
+		const tag = this.addTag(collectiveId, name);
+		return { ...tag, color };
 	}
 }

@@ -1,3 +1,5 @@
+import type { TagsProperty } from '../mapping/tags';
+import { TAGS_PROPERTIES } from '../mapping/tags';
 import type { ConflictStrategy } from '../sync/decide';
 import type { PlannerBehaviour } from '../sync/plannerTypes';
 
@@ -15,6 +17,8 @@ export interface NcSettings {
 	localDeleteBehaviour: PlannerBehaviour['localDelete'];
 	/** What happens to the local file of a page deleted on the server (PLAN §7.4). */
 	remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
+	/** Frontmatter key that carries the tags besides nc_tags (PLAN §6.2, §7.5). */
+	tagsProperty: TagsProperty;
 }
 
 export const DEFAULT_SETTINGS: NcSettings = {
@@ -25,6 +29,7 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	newFolderBehaviour: 'createCollective',
 	localDeleteBehaviour: 'ask',
 	remoteDeleteBehaviour: 'obsidianTrash',
+	tagsProperty: 'nc_tags',
 };
 
 export const CONFLICT_STRATEGIES = ['conflictFile', 'preferLocal', 'preferRemote'] as const;
@@ -51,4 +56,8 @@ export function isLocalDeleteBehaviour(v: unknown): v is NcSettings['localDelete
 
 export function isRemoteDeleteBehaviour(v: unknown): v is NcSettings['remoteDeleteBehaviour'] {
 	return isOneOf(REMOTE_DELETE_BEHAVIOURS, v);
+}
+
+export function isTagsProperty(v: unknown): v is TagsProperty {
+	return isOneOf(TAGS_PROPERTIES, v);
 }

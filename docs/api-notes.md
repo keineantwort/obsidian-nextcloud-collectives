@@ -43,7 +43,7 @@ Collectives taucht **nicht** in `/ocs/v2.php/cloud/capabilities` auf. Die App-Ve
 | `GET …/pages/{id}/touch` | funktioniert, wird aber **nicht benötigt** (siehe §5) |
 | `PUT …/pages/{id}` | `title` und/oder `parentId` ✔. Die File-ID bleibt |
 | `PUT …/pages/{id}/to/{newCId}` | ✔, Antwort `data: []`. ID und Emoji bleiben, **Tags gehen verloren** (Tags gehören zum Collective) |
-| `PUT …/pages/{id}/emoji` | `emoji` als String bzw. `null` zum Entfernen ✔ |
+| `PUT …/pages/{id}/emoji` | `emoji` als String ✔. **Entfernen: `""` senden.** `null` antwortet mit `emoji: null`, speichert aber nichts (der nächste `GET` liefert das alte Emoji; geprüft in M6, korrigiert M0). Nach dem Entfernen meldet die Seitenliste `""`. Dasselbe gilt für `PUT /collectives/{id}` |
 | `PUT`/`DELETE …/pages/{id}/tags/{tagId}` | ✔, idempotent (doppelt hinzufügen/entfernen → 200) |
 | `DELETE …/pages/{id}` | in den Papierkorb ✔. Eine Elternseite nimmt Unterseiten und Anhänge mit |
 | `GET …/pages/trash` | ✔. Bei Blattseiten trägt `fileName` im Papierkorb das Suffix `.d<timestamp>` |

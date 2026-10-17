@@ -1,5 +1,7 @@
 import { asCollectiveId, asPageId } from '../api/types';
 import type { CollectiveId, PageId } from '../api/types';
+import { toObsidianTag } from './tags';
+import type { TagsProperty } from './tags';
 
 /** Plugin fields stored as flat top-level keys in the frontmatter of a local file (PLAN §6.2). */
 export interface NcMeta {
@@ -9,6 +11,14 @@ export interface NcMeta {
 	title: string | null;
 	emoji: string | null;
 	/** Tag names; [] = no tags. */
+	tags: string[];
+	/** Which key carries the tags besides `nc_tags` (PLAN §10.2). Default: `nc_tags` only. */
+	tagsProperty?: TagsProperty;
+}
+
+/** What a note says about its emoji and tags. `tags` are the names as written, not yet matched to the server's tags. */
+export interface LocalFields {
+	emoji: string | null;
 	tags: string[];
 }
 
@@ -25,6 +35,10 @@ interface Block {
 /** An nc_* key, optionally quoted, e.g. `nc_page_id:`, `"nc_page_id":`, `'nc_page_id' :`. */
 const NC_KEY = /^["']?nc_[A-Za-z_]+["']?[ \t]*:/;
 const CONTINUATION = /^[ \t-]/;
+/** Obsidian's own `tags` property, optionally quoted. */
+const TAGS_KEY = /^["']?tags["']?[ \t]*:/;
+const TAGS_VALUE_LINE = /^["']?tags["']?[ \t]*:[ \t]*(.*?)[ \t]*$/;
+const LIST_ITEM_LINE = /^[ \t]*-[ \t]+(.*?)[ \t]*$/;
 const PAGE_ID_LINE = /^["']?nc_page_id["']?[ \t]*:[ \t]*["']?(\d+)["']?[ \t]*$/;
 const PLACEHOLDER_META: NcMeta = { pageId: asPageId(0), collectiveId: asCollectiveId(0), title: null, emoji: null, tags: [] };
 
@@ -45,12 +59,15 @@ function splitBlock(text: string): Block | null {
 	return { bom, eol, yamlLines: lines.slice(1, close), rest: lines.slice(close + 1).join(eol) };
 }
 
-/** Removes each nc_* line together with its continuation lines (indented or starting with '-'). */
-function withoutNcLines(lines: string[]): string[] {
+/**
+ * Removes each nc_* line together with its continuation lines (indented or starting with '-'). With `withTags` the
+ * `tags` property goes too: the plugin writes it itself (tagsProperty = tags).
+ */
+function withoutNcLines(lines: string[], withTags = false): string[] {
 	const kept: string[] = [];
 	let inNcField = false;
 	for (const line of lines) {
-		if (NC_KEY.test(line)) {
+		if (NC_KEY.test(line) || (withTags && TAGS_KEY.test(line))) {
 			inNcField = true;
 			continue;
 		}
@@ -66,6 +83,7 @@ function ncLines(meta: NcMeta, eol: string): string {
 	if (meta.title !== null) out += `nc_title: ${JSON.stringify(meta.title)}${eol}`;
 	if (meta.emoji !== null) out += `nc_emoji: ${JSON.stringify(meta.emoji)}${eol}`;
 	if (meta.tags.length > 0) out += `nc_tags: ${JSON.stringify(meta.tags)}${eol}`;
+	if (meta.tagsProperty === 'tags' && meta.tags.length > 0) out += `tags: ${JSON.stringify(meta.tags.map(toObsidianTag))}${eol}`;
 	return out;
 }
 
@@ -77,7 +95,7 @@ function withNcFields(text: string, meta: NcMeta): string {
 		return `${bom}---${eol}${ncLines(meta, eol)}---${eol}${body}`;
 	}
 	const { bom, eol } = block;
-	const userLines = withoutNcLines(block.yamlLines);
+	const userLines = withoutNcLines(block.yamlLines, meta.tagsProperty === 'tags');
 	const userYaml = userLines.length > 0 ? `${userLines.join(eol)}${eol}` : '';
 	return `${bom}---${eol}${ncLines(meta, eol)}${userYaml}---${eol}${block.rest}`;
 }
@@ -145,30 +163,87 @@ function parseJson(text: string): unknown {
 	}
 }
 
-/**
- * Reads the nc_* fields written by the plugin (PLAN §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
- * Unknown or malformed optional fields count as absent.
- */
-export function readNcMeta(local: string): NcMeta | null {
-	const block = splitBlock(local);
-	if (!block) return null;
+/** The nc_<name> values of a block by key (first line wins), unparsed. */
+function ncValues(block: Block): Map<string, string> {
 	const values = new Map<string, string>();
 	for (const line of block.yamlLines) {
 		const match = NC_VALUE_LINE.exec(line);
 		if (match?.[1] !== undefined && match[2] !== undefined && !values.has(match[1])) values.set(match[1], match[2]);
 	}
+	return values;
+}
+
+function stringList(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/** A YAML scalar as text: surrounding quotes and a leading '#' (Obsidian tag syntax) removed. */
+function unquote(item: string): string {
+	const trimmed = item.trim();
+	const quoted = /^(["'])(.*)\1$/.exec(trimmed);
+	return (quoted?.[2] ?? trimmed).trim().replace(/^#+/, '');
+}
+
+/**
+ * The tag names of Obsidian's `tags` property: a flow list `[a, b]`, a block list, or one scalar (comma or space
+ * separated). undefined if the property is missing or written in a form this does not read (a flow list over several lines).
+ */
+function readTagsProperty(lines: readonly string[]): string[] | undefined {
+	const index = lines.findIndex((line) => TAGS_KEY.test(line));
+	if (index < 0) return undefined;
+	const value = TAGS_VALUE_LINE.exec(lines[index] ?? '')?.[1] ?? '';
+	let items: string[];
+	if (value === '') {
+		items = [];
+		for (const line of lines.slice(index + 1)) {
+			const item = LIST_ITEM_LINE.exec(line)?.[1];
+			if (item === undefined) break;
+			items.push(item);
+		}
+	} else if (value.startsWith('[')) {
+		if (!value.endsWith(']')) return undefined;
+		items = value.slice(1, -1).split(',');
+	} else {
+		items = value.split(/[,\s]+/);
+	}
+	return items.map(unquote).filter((item) => item !== '');
+}
+
+/**
+ * Emoji and tags a note carries: `nc_emoji` and `nc_tags`, and with tagsProperty = tags the `tags` property in
+ * place of `nc_tags` (`nc_tags` is the fallback while the note has no `tags` yet, e.g. after the setting changed).
+ * null if the text has no frontmatter block.
+ */
+export function readLocalFields(local: string, tagsProperty: TagsProperty = 'nc_tags'): LocalFields | null {
+	const block = splitBlock(local);
+	if (!block) return null;
+	const values = ncValues(block);
+	const emoji = parseJson(values.get('nc_emoji') ?? '');
+	let tags = stringList(parseJson(values.get('nc_tags') ?? ''));
+	if (tagsProperty === 'tags') tags = readTagsProperty(block.yamlLines) ?? tags;
+	return { emoji: typeof emoji === 'string' && emoji !== '' ? emoji : null, tags };
+}
+
+/**
+ * Reads the nc_* fields written by the plugin (PLAN §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
+ * Unknown or malformed optional fields count as absent.
+ */
+export function readNcMeta(local: string, tagsProperty: TagsProperty = 'nc_tags'): NcMeta | null {
+	const block = splitBlock(local);
+	if (!block) return null;
+	const values = ncValues(block);
 	const pageId = pageIdFromFrontmatterValue(parseJson(values.get('nc_page_id') ?? ''));
 	const collectiveId = pageIdFromFrontmatterValue(parseJson(values.get('nc_collective_id') ?? ''));
 	if (pageId === undefined || collectiveId === undefined) return null;
 	const title = parseJson(values.get('nc_title') ?? '');
 	const emoji = parseJson(values.get('nc_emoji') ?? '');
-	const tags = parseJson(values.get('nc_tags') ?? '');
 	return {
 		pageId,
 		collectiveId: asCollectiveId(collectiveId),
 		title: typeof title === 'string' ? title : null,
 		emoji: typeof emoji === 'string' ? emoji : null,
-		tags: Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === 'string') : [],
+		tags: readLocalFields(local, tagsProperty)?.tags ?? [],
+		...(tagsProperty === 'tags' ? { tagsProperty } : {}),
 	};
 }
 

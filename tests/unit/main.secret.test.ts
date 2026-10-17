@@ -269,6 +269,17 @@ describe('loadSettings', () => {
 		expect(plugin.settings).toMatchObject({ newFolderBehaviour: 'ask', localDeleteBehaviour: 'trashRemote', remoteDeleteBehaviour: 'obsidianTrash' });
 	});
 
+	it('takes tagsProperty and ignores an unknown value', async () => {
+		const { plugin } = setup();
+		plugin.loadData = () => Promise.resolve({ tagsProperty: 'tags' });
+		await plugin.loadSettings();
+		expect(plugin.settings.tagsProperty).toBe('tags');
+
+		plugin.loadData = () => Promise.resolve({ tagsProperty: 'labels' });
+		await plugin.loadSettings();
+		expect(plugin.settings.tagsProperty).toBe('nc_tags');
+	});
+
 	it('falls back to defaults when no data was saved', async () => {
 		const { plugin } = setup();
 		plugin.loadData = () => Promise.resolve(null);

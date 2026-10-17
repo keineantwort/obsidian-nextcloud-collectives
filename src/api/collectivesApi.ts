@@ -32,8 +32,9 @@ export class CollectivesApi {
 		return parseItem(data, 'collective', parseCollective);
 	}
 
+	/** `null` removes the emoji. The server ignores a JSON null (M6, docs/api-notes.md); it removes the emoji for ''. */
 	async setCollectiveEmoji(collectiveId: CollectiveId, emoji: string | null): Promise<void> {
-		await this.ocs.request('PUT', `${OCS_COLLECTIVES_BASE}/collectives/${collectiveId}`, { emoji });
+		await this.ocs.request('PUT', `${OCS_COLLECTIVES_BASE}/collectives/${collectiveId}`, { emoji: emoji ?? '' });
 	}
 
 	/** Renames a collective through the Circles API, which owns the circle name. */
@@ -89,8 +90,9 @@ export class CollectivesApi {
 		await this.ocs.request('PUT', `${OCS_COLLECTIVES_BASE}/collectives/${collectiveId}/pages/${pageId}/to/${newCollectiveId}`, body);
 	}
 
+	/** `null` removes the emoji. The server ignores a JSON null (M6, docs/api-notes.md); it removes the emoji for ''. */
 	async setPageEmoji(collectiveId: CollectiveId, pageId: PageId, emoji: string | null): Promise<PageInfo> {
-		const data = await this.ocs.request('PUT', `${OCS_COLLECTIVES_BASE}/collectives/${collectiveId}/pages/${pageId}/emoji`, { emoji });
+		const data = await this.ocs.request('PUT', `${OCS_COLLECTIVES_BASE}/collectives/${collectiveId}/pages/${pageId}/emoji`, { emoji: emoji ?? '' });
 		return parseItem(data, 'page', parsePageInfo);
 	}
 

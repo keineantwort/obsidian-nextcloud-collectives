@@ -8,6 +8,7 @@ import { canonicalRemote } from '../mapping/frontmatter';
 import type { NcMeta } from '../mapping/frontmatter';
 import { planLocalPaths, remotePagePath } from '../mapping/paths';
 import type { CollectiveTree, PathPlan } from '../mapping/paths';
+import type { TagsProperty } from '../mapping/tags';
 import type { Translator } from '../i18n';
 import type { WebdavClient } from '../api/webdavClient';
 import { ConfigError, isRunFatal } from '../util/errors';
@@ -40,6 +41,8 @@ export interface SyncRunDeps {
 		newFolderBehaviour: PlannerBehaviour['newFolder'];
 		localDeleteBehaviour: PlannerBehaviour['localDelete'];
 		remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
+		/** Default nc_tags. */
+		tagsProperty?: TagsProperty;
 	};
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
@@ -102,7 +105,8 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
+		const tagsProperty = deps.settings.tagsProperty ?? 'nc_tags';
+		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log, tagsProperty);
 		const input: PlannerInput = {
 			state,
 			remote,
@@ -139,6 +143,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			sleep: deps.sleep ?? defaultSleep,
 			log: deps.log,
 			occupied: local.occupied,
+			tagsProperty,
 		});
 		addResult(total, result);
 		// Another pass finds what depended on this one (a new collective's pages, a folder page's moved note). A failure ends the loop.
@@ -233,6 +238,7 @@ async function buildRemoteMeta(
 	collectives: RemoteCollective[],
 	paths: PathPlan,
 	log: Logger,
+	tagsProperty: TagsProperty,
 ): Promise<Map<PageId, { meta: NcMeta; hash: string }>> {
 	const out = new Map<PageId, { meta: NcMeta; hash: string }>();
 	for (const rc of collectives) {
@@ -246,6 +252,7 @@ async function buildRemoteMeta(
 				title: page.title,
 				emoji: page.emoji,
 				tags: tagNamesOf(page, tagNames, log),
+				...(tagsProperty === 'tags' ? { tagsProperty } : {}),
 			};
 			out.set(page.id, { meta, hash: await metaHash(meta.title, meta.emoji, meta.tags) });
 		}

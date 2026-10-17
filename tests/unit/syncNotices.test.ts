@@ -59,6 +59,11 @@ describe('formatSyncResult', () => {
 		expect(spec.lines[0]).toBe('Synchronisierung abgeschlossen. Aktualisiert: 2 · Nur Metadaten: 1');
 	});
 
+	it('reports emoji and tags sent to the server, and does not call a run with only those idle', () => {
+		expect(formatSyncResult(result({ metaPushed: 2 }), 5, en).lines).toEqual(['Sync complete. Emoji/tags sent: 2']);
+		expect(formatSyncResult(result({ metaPushed: 1 }), 0, de).lines[0]).toBe('Synchronisierung abgeschlossen. Emoji/Tags gesendet: 1');
+	});
+
 	it('puts a single conflict on its own line, with the conflict label, as a warning', () => {
 		const spec = formatSyncResult(result({ conflicts: 1 }), 0, en);
 

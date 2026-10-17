@@ -6,6 +6,10 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 
 ## Hilfe
 
+### Emoji und Tags
+
+Emoji (`nc_emoji`) und Tags (`nc_tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, gewinnt der Server. Die Einstellung „Eigenschaft für Tags“ schaltet auf Obsidians `tags` um (Leerzeichen werden zu `-`); diese Eigenschaft bleibt Teil des Seitentexts und erscheint daher auch in Collectives.
+
 ### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
 
 Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective ist ein Ordner auf oberster Ebene des Vaults. Eine Seite mit Unterseiten ist ein Ordner mit einer gleichnamigen Notiz darin (`Handbuch/Prozesse/Prozesse.md`).
@@ -13,7 +17,7 @@ Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective is
 | Du machst im Vault … | … das passiert auf dem Server |
 |---|---|
 | eine neue Notiz anlegen | Sie wird als neue Seite hochgeladen, ihre `nc_page_id` steht danach im Frontmatter. Die Seite hängt unter der Seite, der ihr Ordner gehört; liegt sie in einem Ordner ohne Notiz, legt das Plugin dafür eine Ordnerseite an. |
-| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben, Tags gehen dabei verloren). |
+| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben; die Tags der Notiz werden im neuen Collective neu zugewiesen). |
 | den Ordner einer Seite mit Unterseiten umbenennen, oder nur die Notiz darin | Die Seite heißt danach wie der Ordner bzw. die Notiz; Ordner und Notiz bekommen denselben Namen. |
 | einen neuen Ordner auf oberster Ebene mit Notizen anlegen | Ein neues Collective entsteht (einstellbar: „Neue Ordner auf oberster Ebene“). Die Notiz, die wie der Ordner heißt, wird die Startseite. |
 | den Ordner eines Collectives umbenennen | Das Collective wird umbenannt. Das dürfen nur Admins und Eigentümer; sonst wird der Ordner zurückbenannt. |

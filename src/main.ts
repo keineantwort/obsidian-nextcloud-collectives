@@ -3,7 +3,7 @@ import { testConnection, type ConnectionResult } from './api/connection';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
 import {
-	DEFAULT_SETTINGS, isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, NcSettings,
+	DEFAULT_SETTINGS, isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, isTagsProperty, NcSettings,
 } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
@@ -88,6 +88,8 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isLocalDeleteBehaviour(localDelete)) loaded.localDeleteBehaviour = localDelete;
 			const remoteDelete = data['remoteDeleteBehaviour'];
 			if (isRemoteDeleteBehaviour(remoteDelete)) loaded.remoteDeleteBehaviour = remoteDelete;
+			const tagsProperty = data['tagsProperty'];
+			if (isTagsProperty(tagsProperty)) loaded.tagsProperty = tagsProperty;
 		}
 		this.settings = { ...DEFAULT_SETTINGS, ...loaded };
 	}

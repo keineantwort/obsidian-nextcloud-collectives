@@ -9,6 +9,8 @@ import { ConflictError } from '../util/errors';
 import { decideContent } from './decide';
 import type { ConflictStrategy, ContentAction } from './decide';
 import type { ExecutorDeps, VaultWriter } from './executorDeps';
+import { noteRemoteWins, pushLocalMeta, readLocalMeta } from './executorMeta';
+import type { PushedMeta } from './executorMeta';
 import { livePage } from './executorScratch';
 import { markConflict, markSynced, metaFor, newPageState, remoteFields, unconfirmedRemote } from './pageState';
 import type { RemoteVersion } from './pageState';
@@ -245,7 +247,7 @@ function decideFor(s: PageState, local: LocalText, remote: Fetched, strategy: Co
  */
 async function refreshUnchanged(op: ContentOp, s: PageState, remote: Fetched, local: LocalText, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
 	const refreshed = { ...s, ...remoteFields(op.page, remote), localMtime: local.mtimeBefore, lastSyncedAt: now };
-	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, refreshed, local.text, deps);
+	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, refreshed, local.text, deps, result);
 	result.unchanged++;
 	return true;
 }
@@ -253,7 +255,7 @@ async function refreshUnchanged(op: ContentOp, s: PageState, remote: Fetched, lo
 /** Action 'adoptBase': both sides hold the same text already, so only the base moves on to the remote text. */
 async function adoptRemoteAsBase(op: ContentOp, s: PageState, remote: Fetched, local: LocalText, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
 	const adopted = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: s.metaHash, localMtime: local.mtimeBefore, now });
-	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, adopted, local.text, deps);
+	deps.state.pages[String(op.page.id)] = await applyMetaChange(op, adopted, local.text, deps, result);
 	result.unchanged++;
 	return true;
 }
@@ -271,14 +273,22 @@ async function pullRemote(
 	result: SyncResult,
 	now: number,
 ): Promise<boolean> {
-	const meta = metaFor(op.page, op.meta, op.path);
+	// The file takes the remote text, so the note's own emoji/tags changes have to reach the server first.
+	let pulledMeta: PushedMeta = { meta: op.meta, hash: op.metaHash };
+	if (op.metaChanged) {
+		await noteRemoteWins(op, local.text, deps);
+	} else {
+		const changed = await readLocalMeta(op, local.text, deps);
+		if (changed !== null) pulledMeta = await pushLocalMeta(op, changed, deps, result);
+	}
+	const meta = metaFor(op.page, pulledMeta.meta, op.path);
 	const mtime = await writeIfUnchanged(deps.vault, op.path, local.text, toLocal(remote.content, meta));
 	if (mtime === null) return recordUpdateConflict(op, s, remote, deps, result, now);
 	if (local.hash !== s.baseHash) {
 		// Both sides changed and the strategy is preferRemote (the only one that pulls then): the local changes are replaced.
 		deps.log.info('Local changes replaced by remote text', { pageId: op.page.id });
 	}
-	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: op.metaHash, localMtime: mtime, now });
+	deps.state.pages[String(op.page.id)] = markSynced(s, { page: op.page, remote, baseHash: remote.hash, metaHash: pulledMeta.hash, localMtime: mtime, now });
 	result.updated++;
 	return true;
 }
@@ -299,7 +309,7 @@ async function pushFetched(
 ): Promise<boolean> {
 	let next: PageState;
 	try {
-		next = await uploadLocal(op, s, local, remote.etag, deps, now);
+		next = await uploadLocal(op, s, local, remote.etag, deps, now, result);
 	} catch (err) {
 		if (!(err instanceof ConflictError) || attempt >= MAX_ATTEMPTS) throw err;
 		deps.log.info('Upload rejected, remote changed: fetching again', { pageId: op.page.id });
@@ -363,7 +373,7 @@ async function pushPage(op: Extract<SyncOp, { kind: 'push' }>, deps: ExecutorDep
 	const action = decideContent({ baseHash: s.baseHash, localHash: local.hash, remoteHash: s.baseHash, status: s.status, strategy: deps.strategy });
 	if (action === 'none') {
 		// Content equal to the base (or a conflict page, which is not pushed): only the mtime moved, nothing is uploaded.
-		const next = await applyMetaChange(op, { ...s, localMtime: local.mtimeBefore }, local.text, deps);
+		const next = await applyMetaChange(op, { ...s, localMtime: local.mtimeBefore }, local.text, deps, result);
 		deps.state.pages[String(op.page.id)] = next;
 		result.unchanged++;
 		return true;
@@ -371,7 +381,7 @@ async function pushPage(op: Extract<SyncOp, { kind: 'push' }>, deps: ExecutorDep
 	// The only other action for this input is 'push'.
 	let next: PageState;
 	try {
-		next = await uploadLocal(op, s, local, s.remoteEtag, deps, now);
+		next = await uploadLocal(op, s, local, s.remoteEtag, deps, now, result);
 	} catch (err) {
 		if (!(err instanceof ConflictError)) throw err;
 		// The first attempt was this upload; the update path gets the second one.
@@ -384,7 +394,15 @@ async function pushPage(op: Extract<SyncOp, { kind: 'push' }>, deps: ExecutorDep
 }
 
 /** Uploads the local text under If-Match and records the push (base = text hash, remote mtime unconfirmed). */
-export async function uploadLocal(op: ContentOp, s: PageState, local: LocalText, ifMatch: string, deps: ExecutorDeps, now: number): Promise<PageState> {
+export async function uploadLocal(
+	op: ContentOp,
+	s: PageState,
+	local: LocalText,
+	ifMatch: string,
+	deps: ExecutorDeps,
+	now: number,
+	result?: SyncResult,
+): Promise<PageState> {
 	const put = await deps.webdav.put(remotePagePath(livePage(deps, op.page)), toRemote(local.text), { ifMatch });
 	const pushed = markSynced(s, {
 		page: op.page,
@@ -394,21 +412,32 @@ export async function uploadLocal(op: ContentOp, s: PageState, local: LocalText,
 		localMtime: local.mtimeBefore,
 		now,
 	});
-	return applyMetaChange(op, pushed, local.text, deps);
+	return applyMetaChange(op, pushed, local.text, deps, result);
 }
 
 /**
- * Writes the nc fields after a content step if the metadata changed. Only if the file still holds `expectedText`
- * (the text the step read); otherwise the metaHash stays and the next run retries.
+ * Brings the metadata in line after a content step. Changed on the server: the nc fields take the server's values (the
+ * server wins, PLAN §7.5). Otherwise emoji and tags the user changed in the note go to the server, and the nc fields are
+ * written again in the server's spelling. Written only if the file still holds `expectedText` (the text the step read);
+ * otherwise the metaHash stays and the next run retries (after a push it moves on: the server has the values already).
  */
-async function applyMetaChange(op: ContentOp, state: PageState, expectedText: string, deps: ExecutorDeps): Promise<PageState> {
-	if (!op.metaChanged) return state;
-	const mtime = await writeIfUnchanged(deps.vault, op.path, expectedText, replaceNcMeta(expectedText, metaFor(op.page, op.meta, op.path)));
+async function applyMetaChange(op: ContentOp, state: PageState, expectedText: string, deps: ExecutorDeps, result?: SyncResult): Promise<PageState> {
+	if (op.metaChanged) {
+		await noteRemoteWins(op, expectedText, deps);
+		return writeMeta(op, { meta: op.meta, hash: op.metaHash }, state, expectedText, deps, false);
+	}
+	const local = await readLocalMeta(op, expectedText, deps);
+	if (local === null) return state;
+	return writeMeta(op, await pushLocalMeta(op, local, deps, result), state, expectedText, deps, true);
+}
+
+async function writeMeta(op: ContentOp, meta: PushedMeta, state: PageState, expectedText: string, deps: ExecutorDeps, pushed: boolean): Promise<PageState> {
+	const mtime = await writeIfUnchanged(deps.vault, op.path, expectedText, replaceNcMeta(expectedText, metaFor(op.page, meta.meta, op.path)));
 	if (mtime === null) {
 		deps.log.info('Metadata write skipped: file changed during sync', { pageId: op.page.id });
-		return state;
+		return pushed ? { ...state, metaHash: meta.hash } : state;
 	}
-	return { ...state, metaHash: op.metaHash, localMtime: mtime };
+	return { ...state, metaHash: meta.hash, localMtime: mtime };
 }
 
 async function updateMeta(op: Extract<SyncOp, { kind: 'updateMeta' }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
