@@ -10,6 +10,11 @@ export interface DavFile {
 	date: string | null;
 }
 export interface DavWriteResult { etag: string; }
+/** Bytes of a file (attachments). */
+export interface DavBinary { data: ArrayBuffer; etag: string; }
+
+/** Timeout for attachment transfers: far above the default, since a file can be 20 MB on a slow mobile connection. */
+export const ATTACHMENT_TIMEOUT_MS = 180_000;
 /** Exactly one precondition is mandatory: never overwrite blindly (AGENTS rule 4). */
 export type PutPrecondition = { ifMatch: string } | { ifNoneMatch: '*' };
 
@@ -195,6 +200,27 @@ export class WebdavClient {
 		if ('ifMatch' in precondition) headers['If-Match'] = quoteEtag(precondition.ifMatch);
 		else headers['If-None-Match'] = precondition.ifNoneMatch;
 		const res = await this.http.send({ method: 'PUT', path: this.filePath(path), headers, body: content });
+		const etag = etagHeader(res);
+		if (etag !== undefined) return { etag };
+		return { etag: await this.etagAfterWrite(path) };
+	}
+
+	/** GET of a binary file. Missing ETag → ApiChangedError. */
+	async getBinary(path: string): Promise<DavBinary> {
+		const res = await this.http.send({ method: 'GET', path: this.filePath(path), binaryResponse: true, timeoutMs: ATTACHMENT_TIMEOUT_MS });
+		if (res.data === undefined) throw new ApiChangedError('GET response has no body bytes');
+		return { data: res.data, etag: requireEtag(res, 'GET') };
+	}
+
+	/**
+	 * PUT of a binary file with the given content type and exactly one precondition (see `put`). Never retried.
+	 * Without an ETag header in the response the ETag is read with propfind(path, 0).
+	 */
+	async putBinary(path: string, data: ArrayBuffer, contentType: string, precondition: PutPrecondition): Promise<DavWriteResult> {
+		const headers: Record<string, string> = { 'Content-Type': contentType };
+		if ('ifMatch' in precondition) headers['If-Match'] = quoteEtag(precondition.ifMatch);
+		else headers['If-None-Match'] = precondition.ifNoneMatch;
+		const res = await this.http.send({ method: 'PUT', path: this.filePath(path), headers, body: data, timeoutMs: ATTACHMENT_TIMEOUT_MS });
 		const etag = etagHeader(res);
 		if (etag !== undefined) return { etag };
 		return { etag: await this.etagAfterWrite(path) };

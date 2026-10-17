@@ -14,7 +14,7 @@ const DETAIL_SEPARATOR = ' · ';
 export function formatSyncResult(result: SyncResult, pages: number, t: Translator, skips: readonly Skip[] = []): SyncNoticeSpec {
 	const changed =
 		result.created + result.updated + result.pushed + result.metaUpdated + result.metaPushed + result.metaInvalid + result.conflicts + result.failed +
-		result.uploaded + result.moved + result.trashed + result.removed + result.restored;
+		result.uploaded + result.moved + result.trashed + result.removed + result.restored + result.attachments;
 	const lines: string[] = [];
 	if (changed === 0) {
 		lines.push(upToDate(pages, t));
@@ -30,6 +30,7 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 		if (result.trashed > 0) details.push(t('sync.result.trashed', { count: result.trashed }));
 		if (result.removed > 0) details.push(t('sync.result.removed', { count: result.removed }));
 		if (result.restored > 0) details.push(t('sync.result.restored', { count: result.restored }));
+		if (result.attachments > 0) details.push(t('sync.result.attachments', { count: result.attachments }));
 		if (result.unchanged > 0) details.push(t('sync.result.unchanged', { count: result.unchanged }));
 		// Only conflicts/failures changed: the first line still confirms completion, without a trailing empty detail list.
 		lines.push(t('sync.result.done', { details: details.join(DETAIL_SEPARATOR) }).trim());

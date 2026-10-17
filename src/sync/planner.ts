@@ -38,6 +38,7 @@ const RANK: Record<SyncOp['kind'], number> = {
 	update: 5,
 	push: 5,
 	updateMeta: 5,
+	attachments: 5,
 	trashRemote: 6,
 	removeLocal: 6,
 	trashCollective: 6,
@@ -251,8 +252,10 @@ function planKnownPage(
 		ctx.pageOps.push({ kind: 'update', ...base, metaChanged });
 	} else if (localCandidate) {
 		ctx.pageOps.push({ kind: 'push', ...base, metaChanged });
-	} else if (metaChanged) {
-		ctx.pageOps.push({ kind: 'updateMeta', ...base });
+	} else {
+		if (metaChanged) ctx.pageOps.push({ kind: 'updateMeta', ...base });
+		// Files of the page can change on the server without the page changing: compared every run (ETags, no transfer if equal).
+		if (known.attachments.length > 0 && known.status !== 'collision') ctx.pageOps.push({ kind: 'attachments', ...base });
 	}
 }
 

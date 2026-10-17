@@ -68,6 +68,7 @@ Besonderheiten:
 ## 5. Dateistruktur und WebDAV (PLAN §4.4, §4.5)
 
 - **Blatt → Elternseite** (`Titel.md` → `Titel/Readme.md`): Die **File-ID bleibt erhalten** ✔. Der Anhang-Ordner wandert mit (`.attachments.97/` → `Onboarding/.attachments.97/`) ✔.
+- **Anhang-ID (M8, Integrationstest)**: Die `oc:fileid` eines Anhangs im PROPFIND ist die `id` der OCS-Anhangliste. Anhänge per WebDAV (`MKCOL` + `PUT` mit `If-None-Match: *`) erscheinen in der OCS-Liste; ein gelöschter Anhang verschwindet aus dem PROPFIND.
 - **Anhang-Ordner**: `.attachments.{pageId}/` im Elternordner der Seitendatei ✔, bei Elternseiten also im eigenen Ordner neben `Readme.md`. Zusätzlich listet Collectives als Anhänge vom Typ `folder` alle Nicht-Markdown-Dateien im Ordner einer Elternseite.
 - Elternseiten bleiben Ordner, auch wenn ihre letzte Unterseite verschwindet (`Titel/Readme.md` ohne Geschwister ist zulässig).
 - Ein Ordner ohne `Readme.md` bekommt beim nächsten Auflisten automatisch eine (leere) `Readme.md`.

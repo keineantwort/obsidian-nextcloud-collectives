@@ -42,5 +42,6 @@ export const fetchRequest: RequestFn = async (req: HttpRequest): Promise<HttpRes
 	res.headers.forEach((value, key) => {
 		headers[key] = value;
 	});
+	if (req.binaryResponse) return { status: res.status, headers, text: '', data: await res.arrayBuffer() };
 	return { status: res.status, headers, text: await res.text() };
 };

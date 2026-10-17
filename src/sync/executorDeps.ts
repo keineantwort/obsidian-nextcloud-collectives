@@ -1,6 +1,7 @@
 // Dependencies of the sync executor (PLAN §7.2). Types only.
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { WebdavClient } from '../api/webdavClient';
+import type { AttachmentOptions } from '../mapping/attachments';
 import type { LinkIndex } from '../mapping/links';
 import type { Logger } from '../util/logger';
 import type { ConflictStrategy } from './decide';
@@ -10,6 +11,12 @@ import type { SyncState } from './state';
 export interface VaultWriter {
 	exists(path: string): boolean;
 	read(path: string): Promise<string>;
+	/** Bytes of a file (attachments). */
+	readBinary(path: string): Promise<ArrayBuffer>;
+	/** Creates a new binary file (fails if it exists; the parent folder must exist). Returns mtime after write. */
+	createBinary(path: string, data: ArrayBuffer): Promise<number>;
+	/** Replaces the bytes of an existing file. Returns mtime after write. */
+	modifyBinary(path: string, data: ArrayBuffer): Promise<number>;
 	/** Creates a new file (fails if it exists). Returns mtime after write. */
 	create(path: string, content: string): Promise<number>;
 	/** Atomic read-modify-write (app.vault.process). Returns mtime after write. */
@@ -30,6 +37,17 @@ export type StructureApi = Pick<
 	| 'setPageEmoji' | 'addPageTag' | 'removePageTag' | 'listTags' | 'createTag'
 >;
 
+/** What the attachment step needs (PLAN §9.4). Without it attachments are not synced. */
+export interface AttachmentDeps {
+	options: AttachmentOptions;
+	/** Delete the server file of an attachment deleted in the vault and no longer embedded. */
+	deleteRemote: boolean;
+	/** What happens to the vault file of an attachment the server deleted. */
+	remoteDelete: 'obsidianTrash' | 'keepUnlinked';
+	webdav: Pick<WebdavClient, 'propfind' | 'mkcol' | 'getBinary' | 'putBinary'>;
+	api: Pick<CollectivesApi, 'listAttachments' | 'deleteAttachment'>;
+}
+
 export interface ExecutorDeps {
 	vault: VaultWriter;
 	webdav: Pick<WebdavClient, 'get' | 'put'>;
@@ -38,6 +56,8 @@ export interface ExecutorDeps {
 	state: SyncState;
 	/** Pages that links can point to (PLAN §9). Without it, links are neither converted nor hashed in local form. */
 	links?: LinkIndex;
+	/** Attachments of pages (PLAN §9.4); absent = not synced. */
+	attachments?: AttachmentDeps;
 	/** Persist state after each op (StateStore.save). */
 	persist: (state: SyncState) => Promise<void>;
 	now: () => Date;

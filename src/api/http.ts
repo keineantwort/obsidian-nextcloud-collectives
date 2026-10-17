@@ -1,8 +1,23 @@
 import { AuthError, ConflictError, ForbiddenError, NcError, NetworkError, NotFoundError, ServerError } from '../util/errors';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'PROPFIND' | 'MKCOL' | 'MOVE';
-export interface HttpRequest { url: string; method: HttpMethod; headers: Record<string, string>; body?: string; }
-export interface HttpResponse { status: number; headers: Record<string, string>; text: string; }
+export interface HttpRequest {
+	url: string;
+	method: HttpMethod;
+	headers: Record<string, string>;
+	body?: string | ArrayBuffer;
+	/** Timeout for this request; the transport's default if absent (large attachments need more). */
+	timeoutMs?: number;
+	/** Deliver the body as `data` (bytes) instead of `text`. */
+	binaryResponse?: boolean;
+}
+export interface HttpResponse {
+	status: number;
+	headers: Record<string, string>;
+	text: string;
+	/** Response bytes, set when the request asked for `binaryResponse` (then `text` is empty). */
+	data?: ArrayBuffer;
+}
 /** Performs one HTTP request. Must resolve for every HTTP status (incl. 4xx/5xx); rejects only if no response was received. */
 export type RequestFn = (req: HttpRequest) => Promise<HttpResponse>;
 
@@ -61,7 +76,9 @@ export interface SendOptions {
 	/** Absolute path below the server base URL, must start with '/'. Already URL-encoded by the caller. */
 	path: string;
 	headers?: Record<string, string>;
-	body?: string;
+	body?: string | ArrayBuffer;
+	timeoutMs?: number;
+	binaryResponse?: boolean;
 }
 
 const defaultSleep = (ms: number): Promise<void> => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -124,7 +141,14 @@ export class HttpClient {
 
 		let res: HttpResponse;
 		try {
-			res = await this.request({ url: this.baseUrl + path, method, headers, body: options.body });
+			res = await this.request({
+				url: this.baseUrl + path,
+				method,
+				headers,
+				body: options.body,
+				timeoutMs: options.timeoutMs,
+				binaryResponse: options.binaryResponse,
+			});
 		} catch (err) {
 			if (err instanceof NcError) throw err;
 			throw new NetworkError(`Request failed: ${what}`, { cause: err });

@@ -308,3 +308,14 @@ describe('formatSyncResult: structure', () => {
 		expect(spec.level).toBe('info');
 	});
 });
+
+describe('formatSyncResult: attachments', () => {
+	it('reports transferred attachments as their own detail in English and German', () => {
+		expect(formatSyncResult(result({ attachments: 3 }), 0, en)).toEqual({ lines: ['Sync complete. Attachments: 3'], level: 'info' });
+		expect(formatSyncResult(result({ attachments: 3 }), 0, de).lines[0]).toBe('Synchronisierung abgeschlossen. Anhänge: 3');
+	});
+
+	it('counts transferred attachments as a change, so the run is not reported as up to date', () => {
+		expect(formatSyncResult(result({ attachments: 1 }), 5, en).lines[0]).not.toContain('up to date');
+	});
+});

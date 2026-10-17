@@ -1,6 +1,8 @@
 // Page links between the Collectives format and Obsidian wikilinks (PLAN §9.1–9.3, ADR 0008, ADR 0020). Pure: no Obsidian,
 // no network imports. The index of pages comes from the caller.
 import type { CollectiveId, PageId } from '../api/types';
+import { attachmentUrl, parseAttachmentUrl } from './attachments';
+import type { AttachmentIndex } from './attachments';
 import { pathKey } from './paths';
 
 /** A page a link can point to. */
@@ -30,9 +32,12 @@ export class LinkIndex {
 	private readonly origin: string | null;
 	/** Path the server lives under ('' at the web root, '/nextcloud' for a sub-path install). */
 	readonly basePath: string;
+	/** Attachments (embeds of files); without it, embeds are left alone. */
+	readonly attachments: AttachmentIndex | undefined;
 
 	/** `serverUrl`: absolute links count as internal only for this server (scheme and host, no path). */
-	constructor(targets: readonly LinkTarget[], serverUrl?: string) {
+	constructor(targets: readonly LinkTarget[], serverUrl?: string, attachments?: AttachmentIndex) {
+		this.attachments = attachments;
 		this.origin = serverUrl === undefined ? null : originOf(serverUrl);
 		this.basePath = serverUrl === undefined ? '' : basePathOf(serverUrl);
 		for (const target of targets) {
@@ -174,7 +179,7 @@ export function linksToLocal(remote: string, links: LinkContext | undefined): st
 	const source = links.index.get(links.sourceId);
 	return mapProse(remote, (prose) =>
 		prose.replace(MD_LINK, (whole: string, bang: string, text: string, url: string) => {
-			if (bang !== '') return whole;
+			if (bang !== '') return embedToLocal(text, url, links) ?? whole;
 			const target = resolveRemoteUrl(url, links.index, source);
 			if (target?.localPath == null || /[[\]|]/.test(text)) return whole;
 			const name = stripMd(target.localPath);
@@ -238,13 +243,13 @@ export function linksToRemote(local: string, links: LinkContext | undefined): st
 	if (source === undefined) return local;
 	return mapProse(local, (prose) => {
 		const wiki = prose.replace(WIKILINK, (whole: string, bang: string, name: string, heading: string | undefined, alias: string | undefined) => {
-			if (bang !== '') return whole;
+			if (bang !== '') return (heading === undefined ? embedToRemote(name, alias, source.localPath ?? '', links) : null) ?? whole;
 			const target = links.index.byLocalName(name, source.localPath ?? '');
 			if (target === undefined) return whole;
 			return remoteLink(source, target, alias?.trim() || target.title, heading, links.index.basePath) ?? whole;
 		});
 		return wiki.replace(MD_LINK, (whole: string, bang: string, text: string, url: string) => {
-			if (bang !== '') return whole;
+			if (bang !== '') return markdownEmbedToRemote(text, url, source.localPath ?? '', links) ?? whole;
 			const parsed = parseLocalMarkdownUrl(url);
 			if (parsed === null) return whole;
 			const target = links.index.byLocalName(parsed.path, source.localPath ?? '');
@@ -272,6 +277,74 @@ function remoteLink(source: LinkTarget, target: LinkTarget, text: string, headin
 	}
 	const base = `${basePath}/apps/collectives/${encodeURIComponent(target.collectiveSlug)}-${target.collectiveId}`;
 	return `[${text}](${target.landing ? base : `${base}/${encodeURIComponent(target.slug)}-${target.pageId}`}${anchor})`;
+}
+
+// ---------------------------------------------------------------------------
+// Attachments (embeds of files, ADR 0021)
+// ---------------------------------------------------------------------------
+
+/** `![alt](.attachments.{id}/name)` of the page → `![[path]]` (`![[path|alt]]` if the alt text is not the file name). */
+function embedToLocal(alt: string, url: string, links: LinkContext): string | null {
+	const attachment = parseAttachmentUrl(url);
+	if (links.index.attachments === undefined || attachment === null || attachment.pageId !== links.sourceId) return null;
+	const path = links.index.attachments.localPath(links.sourceId, attachment.name);
+	if (path === undefined || /[[\]|#^\n]/.test(path) || /[[\]|\n]/.test(alt)) return null;
+	return alt === '' || alt === attachment.name ? `![[${path}]]` : `![[${path}|${alt}]]`;
+}
+
+/** `![[file]]` / `![[file|alt]]` of an attachment file → `![alt](.attachments.{id}/name)`. */
+function embedToRemote(target: string, alias: string | undefined, fromPath: string, links: LinkContext): string | null {
+	const found = links.index.attachments?.resolve(target, fromPath, links.sourceId);
+	if (found === undefined) return null;
+	const alt = alias?.trim() || found.name;
+	return /[[\]\n]/.test(alt) ? null : `![${alt}](${attachmentUrl(links.sourceId, found.name)})`;
+}
+
+/** `![alt](path/to/file.png)` of an attachment file → `![alt](.attachments.{id}/name)`. */
+function markdownEmbedToRemote(alt: string, url: string, fromPath: string, links: LinkContext): string | null {
+	if (/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url)) return null;
+	const found = links.index.attachments?.resolve(safeDecode(url), fromPath, links.sourceId);
+	if (found === undefined) return null;
+	return `![${alt === '' ? found.name : alt}](${attachmentUrl(links.sourceId, found.name)})`;
+}
+
+/** Names of the files the remote text of a page embeds with `![…](.attachments.{pageId}/name)`. */
+export function attachmentRefs(remote: string, pageId: PageId): string[] {
+	const names = new Set<string>();
+	mapProse(remote, (prose) => {
+		for (const match of prose.matchAll(MD_LINK)) {
+			const attachment = match[1] === '!' && match[3] !== undefined ? parseAttachmentUrl(match[3]) : null;
+			if (attachment?.pageId === pageId) names.add(attachment.name);
+		}
+		return prose;
+	});
+	return [...names];
+}
+
+/**
+ * The embeds of a note that stand for attachments of its page: name → the vault file it points to, or null where the file is
+ * not in the vault. Looked at with the same rules as linksToRemote.
+ */
+export function embeddedFiles(local: string, links: LinkContext): Map<string, string | null> {
+	const found = new Map<string, string | null>();
+	const source = links.index.get(links.sourceId);
+	const attachments = links.index.attachments;
+	if (source === undefined || attachments === undefined) return found;
+	const fromPath = source.localPath ?? '';
+	mapProse(local, (prose) => {
+		for (const match of prose.matchAll(WIKILINK)) {
+			if (match[1] !== '!' || match[2] === undefined || match[3] !== undefined) continue;
+			const embed = attachments.resolve(match[2], fromPath, links.sourceId);
+			if (embed !== undefined) found.set(embed.name, embed.path);
+		}
+		for (const match of prose.matchAll(MD_LINK)) {
+			if (match[1] !== '!' || match[3] === undefined || /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(match[3])) continue;
+			const embed = attachments.resolve(safeDecode(match[3]), fromPath, links.sourceId);
+			if (embed !== undefined) found.set(embed.name, embed.path);
+		}
+		return prose;
+	});
+	return found;
 }
 
 // ---------------------------------------------------------------------------

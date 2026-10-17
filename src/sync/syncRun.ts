@@ -5,6 +5,8 @@ import type { CollectivesApi } from '../api/collectivesApi';
 import type { RequestFn } from '../api/http';
 import type { CollectiveId, PageId, PageInfo, Tag, TagId } from '../api/types';
 import { canonicalRemote } from '../mapping/frontmatter';
+import { DEFAULT_ATTACHMENT_PATTERN, DEFAULT_MAX_ATTACHMENT_MB } from '../mapping/attachments';
+import type { AttachmentOptions } from '../mapping/attachments';
 import type { LinkIndex } from '../mapping/links';
 import type { NcMeta } from '../mapping/frontmatter';
 import { planLocalPaths, remotePagePath } from '../mapping/paths';
@@ -42,6 +44,10 @@ export interface SyncRunDeps {
 		newFolderBehaviour: PlannerBehaviour['newFolder'];
 		localDeleteBehaviour: PlannerBehaviour['localDelete'];
 		remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
+		/** Attachment settings (PLAN §9.4); the defaults apply where absent. */
+		attachmentFolderPattern?: string;
+		maxAttachmentSizeMb?: number;
+		deleteRemoteAttachments?: boolean;
 	};
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
@@ -91,6 +97,10 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 		state.user = userId;
 	}
 
+	const attachmentOptions: AttachmentOptions = {
+		pattern: deps.settings.attachmentFolderPattern ?? DEFAULT_ATTACHMENT_PATTERN,
+		maxBytes: (deps.settings.maxAttachmentSizeMb ?? DEFAULT_MAX_ATTACHMENT_MB) * 1024 * 1024,
+	};
 	const total = emptyResult();
 	const skips: Skip[] = [];
 	const decisions = new Map<string, Decision>();
@@ -106,7 +116,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 
 		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
 		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const links = buildLinkIndex(remote, local, paths, serverUrl);
+		const links = buildLinkIndex(remote, local, paths, serverUrl, { options: attachmentOptions, state });
 		deps.onLinks?.(links);
 		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
 		const input: PlannerInput = {
@@ -137,6 +147,13 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 			api: clients.collectives,
 			state,
 			links,
+			attachments: {
+				options: attachmentOptions,
+				deleteRemote: deps.settings.deleteRemoteAttachments ?? true,
+				remoteDelete: deps.settings.remoteDeleteBehaviour,
+				webdav: clients.webdav,
+				api: clients.collectives,
+			},
 			persist: async (current) => {
 				await deps.stateStore.save(current);
 			},

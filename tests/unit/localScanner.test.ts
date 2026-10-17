@@ -148,3 +148,22 @@ describe('scanLocal: folders and root files', () => {
 		expect(snapshot.files.map((file) => file.path)).toEqual(['Handbuch/Seite.md']);
 	});
 });
+
+describe('scanLocal: attachment files', () => {
+	it('lists the files notes can embed, with their size, but not notes, hidden or config files', async () => {
+		const vault = new MemoryVault();
+		vault.seed('Handbuch/Seite.md', 'x');
+		vault.seedBinary('Handbuch/_attachments/Seite/bild.png', new Uint8Array([1, 2, 3]).buffer);
+		vault.seedBinary('Pasted image.png', new Uint8Array(5).buffer);
+		vault.seedBinary('Handbuch/.versteckt/geheim.png', new Uint8Array(1).buffer);
+		vault.seedBinary(`${vault.configDir}/plugins/x/icon.png`, new Uint8Array(1).buffer);
+		vault.seed('Handbuch/Skizze.canvas', '{}');
+
+		const snapshot = await scanLocal(vault);
+
+		expect([...snapshot.attachmentFiles].sort((a, b) => a.path.localeCompare(b.path))).toEqual([
+			{ path: 'Handbuch/_attachments/Seite/bild.png', size: 3 },
+			{ path: 'Pasted image.png', size: 5 },
+		]);
+	});
+});

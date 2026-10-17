@@ -2,6 +2,7 @@
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import { pathKey } from '../mapping/paths';
 import { isRunFatal } from '../util/errors';
+import { syncAttachments } from './executorAttachments';
 import { applyContentOp } from './executorContent';
 import type { ExecutorDeps } from './executorDeps';
 import { applyStructureOp } from './executorStructure';
@@ -55,10 +56,28 @@ async function applyOp(op: SyncOp, deps: ExecutorDeps, result: SyncResult): Prom
 		case 'adopt':
 		case 'update':
 		case 'push':
-		case 'updateMeta':
-			return applyContentOp(op, deps, result);
+		case 'updateMeta': {
+			const changed = await applyContentOp(op, deps, result);
+			// The text is in line now; the files it embeds follow (a conflict copy has no text to embed from).
+			if (op.kind === 'createConflict' || op.kind === 'updateMeta') return changed;
+			return (await attachmentsOf(op, deps, result)) || changed;
+		}
+		case 'attachments':
+			return attachmentsOf(op, deps, result);
 		default:
 			return applyStructureOp(op, deps, result);
+	}
+}
+
+/** Runs the attachment step of a page. A failure is logged and counted; the content step's result stays. */
+async function attachmentsOf(op: Extract<SyncOp, { page: unknown; path: string }>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
+	try {
+		return await syncAttachments(op, deps, result);
+	} catch (err) {
+		if (isRunFatal(err)) throw err;
+		result.failed++;
+		deps.log.warn('Attachment step failed', { pageId: op.page.id, error: err instanceof Error ? err.name : 'unknown' });
+		return false;
 	}
 }
 

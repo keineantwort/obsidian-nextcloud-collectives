@@ -24,3 +24,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0018](0018-struktur-mehrere-durchlaeufe-rueckfragen-und-platzierung.md) | Struktur: mehrere Durchläufe, Rückfragen als Vorschläge, Platzierung neuer Dateien | akzeptiert |
 | [0019](0019-tags-emoji-push-und-tags-eigenschaft.md) | Tags und Emoji: Push über den metaHash, Eigenschaft `tags` bleibt Seiteninhalt | akzeptiert |
 | [0020](0020-links-index-anker-und-hash.md) | Links: Seitenindex, Anker unverändert, Hash im Remote-Format | akzeptiert |
+| [0021](0021-anhaenge-einbettungen-index-und-abgleich.md) | Anhänge: Einbettungen über den Index, Abgleich über ETags, Schritt nach dem Inhalt | akzeptiert |

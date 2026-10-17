@@ -4,7 +4,7 @@ import { testConnection, type ConnectionResult } from './api/connection';
 import { obsidianRequest } from './api/obsidianRequest';
 import { createTranslator, resolveLocale, type Translator } from './i18n';
 import {
-	DEFAULT_SETTINGS, isConflictStrategy, isLocalDeleteBehaviour, isNewFolderBehaviour, isRemoteDeleteBehaviour, NcSettings,
+	DEFAULT_SETTINGS, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour, NcSettings,
 } from './settings/types';
 import { NcSettingTab } from './settings/settingsTab';
 import { CredentialsStore } from './settings/credentialsStore';
@@ -120,6 +120,9 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isLocalDeleteBehaviour(localDelete)) loaded.localDeleteBehaviour = localDelete;
 			const remoteDelete = data['remoteDeleteBehaviour'];
 			if (isRemoteDeleteBehaviour(remoteDelete)) loaded.remoteDeleteBehaviour = remoteDelete;
+			if (isAttachmentFolderPattern(data['attachmentFolderPattern'])) loaded.attachmentFolderPattern = data['attachmentFolderPattern'].trim();
+			if (isMaxAttachmentSizeMb(data['maxAttachmentSizeMb'])) loaded.maxAttachmentSizeMb = data['maxAttachmentSizeMb'];
+			if (typeof data['deleteRemoteAttachments'] === 'boolean') loaded.deleteRemoteAttachments = data['deleteRemoteAttachments'];
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
 			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];

@@ -24,6 +24,8 @@ interface FileEntry {
 	/** Path as spelled when the file was created. */
 	path: string;
 	content: string;
+	/** Set for binary files (attachments); `content` is '' then. */
+	bytes: ArrayBuffer | null;
 	mtime: number;
 }
 
@@ -70,9 +72,32 @@ export class MemoryVault implements VaultReader, VaultWriter {
 		if (this.exists(path)) throw new Error(`File already exists: ${path}`);
 		this.requireParent(path);
 		const mtime = this.tick();
-		this.files.set(this.keyOf(path), { path, content, mtime });
+		this.files.set(this.keyOf(path), { path, content, bytes: null, mtime });
 		this.writes++;
 		return mtime;
+	}
+
+	async readBinary(path: string): Promise<ArrayBuffer> {
+		const entry = this.require(path);
+		return entry.bytes ?? new TextEncoder().encode(entry.content).buffer;
+	}
+
+	async createBinary(path: string, data: ArrayBuffer): Promise<number> {
+		if (this.exists(path)) throw new Error(`File already exists: ${path}`);
+		this.requireParent(path);
+		const mtime = this.tick();
+		this.files.set(this.keyOf(path), { path, content: '', bytes: data, mtime });
+		this.writes++;
+		return mtime;
+	}
+
+	async modifyBinary(path: string, data: ArrayBuffer): Promise<number> {
+		const entry = this.require(path);
+		entry.bytes = data;
+		entry.content = '';
+		entry.mtime = this.tick();
+		this.writes++;
+		return entry.mtime;
 	}
 
 	async process(path: string, fn: (current: string) => string): Promise<number> {
@@ -100,8 +125,12 @@ export class MemoryVault implements VaultReader, VaultWriter {
 		return entry === undefined ? undefined : readPageId(entry.content);
 	}
 
-	listFiles(): { path: string; mtime: number }[] {
-		return [...this.files.values()].map((entry) => ({ path: entry.path, mtime: entry.mtime }));
+	listFiles(): { path: string; mtime: number; size: number }[] {
+		return [...this.files.values()].map((entry) => ({
+			path: entry.path,
+			mtime: entry.mtime,
+			size: entry.bytes?.byteLength ?? new TextEncoder().encode(entry.content).byteLength,
+		}));
 	}
 
 	listFolders(): string[] {
@@ -111,7 +140,20 @@ export class MemoryVault implements VaultReader, VaultWriter {
 	/** Setup helper: writes a file and its missing ancestor folders without counting a write. */
 	seed(path: string, content: string): void {
 		this.seedFolder(parentOf(path));
-		this.files.set(this.keyOf(path), { path, content, mtime: this.tick() });
+		this.files.set(this.keyOf(path), { path, content, bytes: null, mtime: this.tick() });
+	}
+
+	/** Setup helper: writes a binary file (and its missing ancestor folders) without counting a write. */
+	seedBinary(path: string, data: ArrayBuffer): void {
+		this.seedFolder(parentOf(path));
+		this.files.set(this.keyOf(path), { path, content: '', bytes: data, mtime: this.tick() });
+	}
+
+	/** Simulates the user replacing the bytes of a file: new mtime, not counted as a sync write. */
+	userEditBinary(path: string, data: ArrayBuffer): void {
+		const entry = this.require(path);
+		entry.bytes = data;
+		entry.mtime = this.tick();
 	}
 
 	/** Setup helper: adds a folder and its missing ancestors without counting a write. */

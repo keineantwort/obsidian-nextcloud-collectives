@@ -16,6 +16,14 @@ export const UNCHECKED_LOCAL_MTIME = -1;
  */
 export type PageStatus = 'synced' | 'conflict' | 'collision';
 
+export interface AttachmentState {
+	id: AttachmentId;
+	name: string;
+	etag: string;
+	localPath: string;
+	hash: string;
+}
+
 export interface PageState {
 	pageId: PageId;
 	collectiveId: CollectiveId;
@@ -44,8 +52,12 @@ export interface PageState {
 	status: PageStatus;
 	/** Path of the last conflict copy, or null. */
 	conflictPath: string | null;
-	/** M8; always [] in M3. */
-	attachments: { id: AttachmentId; name: string; etag: string; localPath: string }[];
+	/**
+	 * Attachments of the page that both sides held at the last sync (M8, ADR 0021). `etag`: ETag of the server file ('' = not
+	 * transferred yet, retried next run). `hash`: sha256 of the bytes both sides held ('' = unknown). `localPath`: where the
+	 * file lies in the vault. `id`: attachment id, 0 = unknown (resolved by name when needed).
+	 */
+	attachments: AttachmentState[];
 	lastSyncedAt: number;
 }
 
@@ -74,7 +86,7 @@ const PAGE_KEYS = [
 	'pageId', 'collectiveId', 'localPath', 'localMtime', 'remoteFilePath', 'remoteFileName', 'parentId', 'remoteEtag',
 	'remoteMtime', 'remoteSize', 'baseHash', 'metaHash', 'status', 'conflictPath', 'attachments', 'lastSyncedAt',
 ];
-const ATTACHMENT_KEYS = ['id', 'name', 'etag', 'localPath'];
+const ATTACHMENT_KEYS = ['id', 'name', 'etag', 'localPath', 'hash'];
 const TAG_KEYS = ['id', 'name', 'color'];
 
 export function emptyState(serverUrl: string, user: string): SyncState {
@@ -175,11 +187,11 @@ function parseCollectiveState(raw: unknown): CollectiveState | null {
 	return { collectiveId: asCollectiveId(collectiveId), name, localFolder };
 }
 
-function parseAttachment(raw: unknown): PageState['attachments'][number] | null {
+function parseAttachment(raw: unknown): AttachmentState | null {
 	if (!isRecord(raw) || !hasExactKeys(raw, ATTACHMENT_KEYS)) return null;
-	const { id, name, etag, localPath } = raw;
-	if (!isInt(id) || !isText(name) || !isText(etag) || !isText(localPath)) return null;
-	return { id: asAttachmentId(id), name, etag, localPath };
+	const { id, name, etag, localPath, hash } = raw;
+	if (!isInt(id) || !isText(name) || !isText(etag) || !isText(localPath) || !isText(hash)) return null;
+	return { id: asAttachmentId(id), name, etag, localPath, hash };
 }
 
 function parsePageState(raw: unknown): PageState | null {

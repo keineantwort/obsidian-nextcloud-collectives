@@ -37,7 +37,7 @@ function pageState(id: number, over: Partial<PageState> = {}): PageState {
 		metaHash: `meta-${id}`,
 		status: 'synced',
 		conflictPath: null,
-		attachments: [{ id: asAttachmentId(7), name: 'bild.png', etag: 'a-etag', localPath: 'Coll/.attachments.10/bild.png' }],
+		attachments: [{ id: asAttachmentId(7), name: 'bild.png', etag: 'a-etag', localPath: 'Coll/.attachments.10/bild.png', hash: 'h' }],
 		lastSyncedAt: 1792138999000,
 		...over,
 	};

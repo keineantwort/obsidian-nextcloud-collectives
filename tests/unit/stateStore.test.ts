@@ -38,7 +38,7 @@ function pageState(id: number): PageState {
 		metaHash: `meta-${id}`,
 		status: 'synced',
 		conflictPath: null,
-		attachments: [{ id: asAttachmentId(7), name: 'bild.png', etag: 'a', localPath: 'Handbuch/.attachments.10/bild.png' }],
+		attachments: [{ id: asAttachmentId(7), name: 'bild.png', etag: 'a', localPath: 'Handbuch/.attachments.10/bild.png', hash: 'h' }],
 		lastSyncedAt: 1792138999000,
 	};
 }
