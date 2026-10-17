@@ -43,8 +43,8 @@ export type Proposal =
 	| { id: string; kind: 'deletePage'; pageId: PageId; collectiveId: CollectiveId; title: string; path: string; descendants: number; mass: MassDelete | null }
 	/** Local collective folder deleted: move the collective to the Collectives trash? */
 	| { id: string; kind: 'deleteCollective'; collectiveId: CollectiveId; name: string; pages: number }
-	/** The collective is gone on the server: move its local folder to the trash? */
-	| { id: string; kind: 'removeCollectiveLocal'; collectiveId: CollectiveId; name: string; pages: number }
+	/** The collective is gone on the server: move its local folder to the trash? `notes`: Markdown files in the folder. */
+	| { id: string; kind: 'removeCollectiveLocal'; collectiveId: CollectiveId; name: string; notes: number }
 	/** New top-level folder: create a collective? Only asked with newFolderBehaviour = ask. */
 	| { id: string; kind: 'newCollective'; folder: string; files: number };
 

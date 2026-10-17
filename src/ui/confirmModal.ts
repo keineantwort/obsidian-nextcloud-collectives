@@ -4,8 +4,8 @@ import { ButtonComponent, Modal } from 'obsidian';
 import type { App } from 'obsidian';
 import type { Translator } from '../i18n';
 import type { Decision, Proposal } from '../sync/types';
-import { buildConfirmRows, decisionsFor, laterDecisions } from './confirmView';
-import type { ConfirmRow } from './confirmView';
+import { buildConfirmGroups, decisionsFor, laterDecisions } from './confirmView';
+import type { ConfirmGroup, ConfirmRow } from './confirmView';
 
 const TITLE_ID = 'nc-confirm-title';
 
@@ -15,21 +15,23 @@ const TITLE_ID = 'nc-confirm-title';
  */
 export function confirmProposals(app: App, t: Translator, proposals: Proposal[]): Promise<ReadonlyMap<string, Decision>> {
 	return new Promise((resolve) => {
-		new ConfirmModal(app, t, buildConfirmRows(proposals, t), resolve).open();
+		new ConfirmModal(app, t, buildConfirmGroups(proposals, t), resolve).open();
 	});
 }
 
 class ConfirmModal extends Modal {
 	private settled = false;
 	private readonly boxes = new Map<string, HTMLInputElement>();
+	private readonly rows: ConfirmRow[];
 
 	constructor(
 		app: App,
 		private readonly t: Translator,
-		private readonly rows: ConfirmRow[],
+		private readonly groups: ConfirmGroup[],
 		private readonly onDecision: (answers: ReadonlyMap<string, Decision>) => void,
 	) {
 		super(app);
+		this.rows = groups.flatMap((group) => group.rows);
 	}
 
 	onOpen(): void {
@@ -43,8 +45,13 @@ class ConfirmModal extends Modal {
 		modalEl.setAttribute('aria-modal', 'true');
 		modalEl.setAttribute('aria-labelledby', TITLE_ID);
 
-		const list = contentEl.createEl('ul', { cls: 'nc-confirm-list' });
-		this.rows.forEach((row, index) => this.renderRow(list, row, index));
+		let index = 0;
+		this.groups.forEach((group, groupIndex) => {
+			const section = contentEl.createDiv({ cls: 'nc-confirm-group', attr: { role: 'group', 'aria-labelledby': `nc-confirm-group-${groupIndex}` } });
+			section.createDiv({ cls: 'nc-confirm-heading', text: group.heading, attr: { id: `nc-confirm-group-${groupIndex}` } });
+			const list = section.createEl('ul', { cls: 'nc-confirm-list' });
+			for (const row of group.rows) this.renderRow(list, row, index++);
+		});
 
 		const buttons = contentEl.createDiv({ cls: 'modal-button-container' });
 		new ButtonComponent(buttons).setButtonText(t('confirm.later')).onClick(() => this.settle(laterDecisions(this.rows)));

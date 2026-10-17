@@ -89,6 +89,8 @@
 
 .nc-confirm .modal-button-container { flex-wrap: wrap; gap: var(--size-4-2); }
 .is-mobile .nc-confirm .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }
+.nc-confirm-heading { font-size: var(--font-ui-small); font-weight: var(--font-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--size-4-3) 0 var(--size-4-2); }
+.nc-confirm-group:first-of-type .nc-confirm-heading { margin-top: 0; }
 .nc-confirm-list { margin: 0 0 var(--size-4-3); padding: 0; list-style: none; }
 .nc-confirm-item {
 	margin-bottom: var(--size-4-3);

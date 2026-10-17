@@ -358,7 +358,7 @@ describe('planSync: collectives', () => {
 		state.collectives['2'] = { collectiveId: asCollectiveId(2), name: 'Alt', localFolder: 'Alt' };
 		state.pages['50'] = pageState(alt, 2, 'Alt/Alt.md');
 		const plan = planFor({ state, files: [...baseFiles(), localFile('Alt/Alt.md', 50)] });
-		expect(plan.proposals).toEqual([{ id: 'removeCollectiveLocal:2', kind: 'removeCollectiveLocal', collectiveId: 2, name: 'Alt', pages: 1 }]);
+		expect(plan.proposals).toEqual([{ id: 'removeCollectiveLocal:2', kind: 'removeCollectiveLocal', collectiveId: 2, name: 'Alt', notes: 1 }]);
 		expect(opsOf(plan, 'removeLocal')).toEqual([]);
 	});
 

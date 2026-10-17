@@ -575,7 +575,7 @@ describe('planSync: Collective remote gelöscht', () => {
 	it('asks before the folder goes to the trash', () => {
 		const plan = vanished();
 
-		expect(plan.proposals).toEqual([{ id: 'removeCollectiveLocal:2', kind: 'removeCollectiveLocal', collectiveId: 2, name: 'Alt', pages: 1 }]);
+		expect(plan.proposals).toEqual([{ id: 'removeCollectiveLocal:2', kind: 'removeCollectiveLocal', collectiveId: 2, name: 'Alt', notes: 1 }]);
 		expect(plan.ops).toEqual([]);
 	});
 

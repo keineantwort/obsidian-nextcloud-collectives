@@ -129,7 +129,9 @@ function planVanishedCollective(ctx: Context, collective: CollectiveState): void
 	} else if (decision === 'defer') {
 		ctx.skips.push({ reason: 'deferred', proposalId });
 	} else {
-		ctx.proposals.push({ id: proposalId, kind: 'removeCollectiveLocal', collectiveId: id, name: collective.name, pages: pageCount(ctx, id) });
+		const prefix = pathKey(collective.localFolder) + '/';
+		const notes = ctx.input.local.files.filter((file) => pathKey(file.path).startsWith(prefix)).length;
+		ctx.proposals.push({ id: proposalId, kind: 'removeCollectiveLocal', collectiveId: id, name: collective.name, notes });
 	}
 }
 

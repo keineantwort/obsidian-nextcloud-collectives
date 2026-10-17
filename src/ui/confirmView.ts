@@ -13,7 +13,32 @@ export interface ConfirmRow {
 	warning: string | null;
 }
 
-const KIND_ORDER: Record<Proposal['kind'], number> = { deleteCollective: 0, removeCollectiveLocal: 1, deletePage: 2, newCollective: 3 };
+const KIND_ORDER: Record<Proposal['kind'], number> = { deleteCollective: 0, deletePage: 1, removeCollectiveLocal: 2, newCollective: 3 };
+
+/** Why the dialog asks: the user deleted something in the vault, the server deleted something, the vault has something new. */
+export type ConfirmGroupKind = 'localDeleted' | 'remoteDeleted' | 'localNew';
+
+const GROUP_OF: Record<Proposal['kind'], ConfirmGroupKind> = {
+	deleteCollective: 'localDeleted',
+	deletePage: 'localDeleted',
+	removeCollectiveLocal: 'remoteDeleted',
+	newCollective: 'localNew',
+};
+
+const GROUP_ORDER: readonly ConfirmGroupKind[] = ['localDeleted', 'remoteDeleted', 'localNew'];
+
+export interface ConfirmGroup {
+	kind: ConfirmGroupKind;
+	heading: string;
+	rows: ConfirmRow[];
+}
+
+/** The rows grouped by cause, in a fixed order; empty groups are left out. */
+export function buildConfirmGroups(proposals: readonly Proposal[], t: Translator): ConfirmGroup[] {
+	const rows = buildConfirmRows(proposals, t);
+	return GROUP_ORDER.map((kind) => ({ kind, heading: t(`confirm.group.${kind}`), rows: rows.filter((row) => GROUP_OF[row.kind] === kind) }))
+		.filter((group) => group.rows.length > 0);
+}
 
 /** One row per question: mass deletions first within the page deletions, collective questions before page questions. */
 export function buildConfirmRows(proposals: readonly Proposal[], t: Translator): ConfirmRow[] {
@@ -45,7 +70,7 @@ function toRow(proposal: Proposal, t: Translator): ConfirmRow {
 				id: proposal.id,
 				kind: proposal.kind,
 				label: t('confirm.removeCollectiveLocal.label', { name: proposal.name }),
-				details: [t('confirm.removeCollectiveLocal.detail', { count: proposal.pages })],
+				details: proposal.notes > 0 ? [t('confirm.removeCollectiveLocal.detail', { count: proposal.notes })] : [],
 				warning: null,
 			};
 		case 'newCollective':
