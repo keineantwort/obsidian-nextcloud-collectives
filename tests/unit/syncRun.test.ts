@@ -16,7 +16,7 @@ import { runSync } from '../../src/sync/syncRun';
 import { describeSyncOutcome } from '../../src/ui/syncNotices';
 import type { SyncRunDeps } from '../../src/sync/syncRun';
 import { createTranslator } from '../../src/i18n';
-import { ConfigError } from '../../src/util/errors';
+import { AuthError, ConfigError } from '../../src/util/errors';
 import { metaHash } from '../../src/util/hash';
 import { emptyResult } from '../../src/sync/types';
 import type { Decision, Proposal } from '../../src/sync/types';
@@ -319,6 +319,34 @@ describe('runSync: first sync into an empty vault', () => {
 		expect(dav).toHaveLength(DAV_FILES.length);
 		expect(dav.every((req) => req.url.startsWith(DAV_ROOT))).toBe(true);
 		expect(dav.some((req) => req.url.includes('/remote.php/dav/files/alice/'))).toBe(false);
+	});
+
+	it('writes the state fewer times than it has operations, and the last write is complete', async () => {
+		const stateFile = new FakeStateFile();
+
+		await runSync(makeDeps(new FakeNextcloud(), new MemoryVault(), stateFile));
+
+		// One write per operation would be 6 pages + collective + tags; lazy saves of pages are bundled.
+		expect(stateFile.writes).toBeLessThan(8);
+		expect(Object.keys(storedState(stateFile).pages)).toHaveLength(6);
+	});
+
+	it('flushes pending lazy saves when the run is aborted', async () => {
+		const stateFile = new FakeStateFile();
+		const server = new FakeNextcloud();
+		const vault = new MemoryVault();
+		let dav = 0;
+		const request: RequestFn = async (req) => {
+			if (req.url.includes('/remote.php/dav/') && ++dav >= 5) return { status: 401, headers: {}, text: '' };
+			return server.request(req);
+		};
+
+		await expect(runSync(makeDeps(server, vault, stateFile, { request }))).rejects.toBeInstanceOf(AuthError);
+
+		const stored = storedState(stateFile);
+		const filesWithId = (await Promise.all(vault.listFiles().map((f) => vault.read(f.path)))).filter((text) => readPageId(text) !== null).length;
+		expect(Object.keys(stored.pages)).toHaveLength(filesWithId);
+		expect(filesWithId).toBeGreaterThan(0);
 	});
 
 	it('does not ask for the initial-sync confirmation when the vault is empty', async () => {

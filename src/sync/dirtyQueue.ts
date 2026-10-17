@@ -26,10 +26,17 @@ export class DirtyQueue {
 		this.suppressed.set(pathKey(path), this.now());
 	}
 
-	/** Vault 'modify' event: adds pathKey(path) unless suppressed. */
-	noteModified(path: string): void {
+	/** Vault 'modify' event: adds pathKey(path) unless suppressed. Returns true if the change is the user's. */
+	noteModified(path: string): boolean {
 		const key = pathKey(path);
-		if (!this.isSuppressed(key)) this.dirty.add(key);
+		if (this.isSuppressed(key)) return false;
+		this.dirty.add(key);
+		return true;
+	}
+
+	/** Vault 'create' event: not dirty (the scan finds new files), but tells whether the user made the file. */
+	isUserWrite(path: string): boolean {
+		return !this.isSuppressed(pathKey(path));
 	}
 
 	/** Vault 'rename' event: a dirty oldPath moves to newPath. */
@@ -43,6 +50,11 @@ export class DirtyQueue {
 	/** Vault 'delete' event: drops path. */
 	noteDeleted(path: string): void {
 		this.dirty.delete(pathKey(path));
+	}
+
+	/** Puts keys back that a run took but did not finish with (failed or aborted run), so the next run sees them again. */
+	requeue(keys: Iterable<string>): void {
+		for (const key of keys) this.dirty.add(key);
 	}
 
 	/** Returns the dirty pathKeys and clears them. Events after drain() are collected for the next run. */
@@ -67,10 +79,13 @@ export function suppressingWriter<T extends VaultWriter>(vault: T, queue: DirtyQ
 		get(target, prop) {
 			const value: unknown = Reflect.get(target, prop, target);
 			if (typeof value !== 'function') return value;
-			const writes = prop === 'create' || prop === 'process';
+			// Writes name one path; a rename names two, and the events of both ends are the plugin's own.
+			const writes = prop === 'create' || prop === 'process' || prop === 'trash';
+			const renames = prop === 'rename';
 			return (...args: unknown[]) => {
 				const path = args[0];
-				if (writes && typeof path === 'string') queue.suppress(path);
+				if ((writes || renames) && typeof path === 'string') queue.suppress(path);
+				if (renames && typeof args[1] === 'string') queue.suppress(args[1]);
 				return Reflect.apply(value, target, args) as unknown;
 			};
 		},

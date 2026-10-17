@@ -26,6 +26,14 @@ export interface NcSettings {
 	maxAttachmentSizeMb: number;
 	/** Delete the server file of an attachment deleted in the vault and no longer used (PLAN §9.4). */
 	deleteRemoteAttachments: boolean;
+	/** Minutes between automatic syncs; 0 = off (PLAN §7.1). */
+	syncIntervalMinutes: number;
+	/** Run a sync when the plugin starts. */
+	syncOnStartup: boolean;
+	/** Run a sync a few seconds after the last change of a synced note. */
+	syncOnSave: boolean;
+	/** Seconds of quiet after the last change before the save sync starts. */
+	syncOnSaveDebounceSec: number;
 	/** Show the note of a folder first in its folder in the file list (display only). */
 	folderNoteFirst: boolean;
 }
@@ -43,8 +51,22 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	attachmentFolderPattern: DEFAULT_ATTACHMENT_PATTERN,
 	maxAttachmentSizeMb: DEFAULT_MAX_ATTACHMENT_MB,
 	deleteRemoteAttachments: true,
+	syncIntervalMinutes: 5,
+	syncOnStartup: true,
+	syncOnSave: true,
+	syncOnSaveDebounceSec: 10,
 	folderNoteFirst: true,
 };
+
+/** Interval in minutes: a whole number from 0 (off) to 1440. */
+export function isSyncIntervalMinutes(v: unknown): v is number {
+	return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 1440;
+}
+
+/** Debounce after saving in seconds: a whole number from 2 to 600. */
+export function isSyncDebounceSec(v: unknown): v is number {
+	return typeof v === 'number' && Number.isInteger(v) && v >= 2 && v <= 600;
+}
 
 /** A pattern is usable if it is a relative path of plain folder names (with `{title}`) that cannot leave the note's folder. */
 export function isAttachmentFolderPattern(v: unknown): v is string {

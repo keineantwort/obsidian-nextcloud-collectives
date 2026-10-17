@@ -179,3 +179,51 @@ describe('suppressingWriter', () => {
 		expect(queue.drain()).toEqual(new Set(['coll/a.md']));
 	});
 });
+
+describe('DirtyQueue: user changes and requeue', () => {
+	it('tells whether a modify is the user\'s', () => {
+		const { queue, setNow } = clockedQueue();
+		queue.suppress('A/B.md');
+		expect(queue.noteModified('A/B.md')).toBe(false);
+		expect(queue.noteModified('A/C.md')).toBe(true);
+		setNow(TTL + 1);
+		expect(queue.noteModified('A/B.md')).toBe(true);
+	});
+
+	it('tells whether a created file is the user\'s without marking it dirty', () => {
+		const { queue } = clockedQueue();
+		queue.suppress('A/B.md');
+		expect(queue.isUserWrite('A/B.md')).toBe(false);
+		expect(queue.isUserWrite('A/N.md')).toBe(true);
+		expect(queue.drain()).toEqual(new Set());
+	});
+
+	it('puts the keys of an unfinished run back, together with newer changes', () => {
+		const { queue } = clockedQueue();
+		queue.noteModified('A/B.md');
+		const taken = queue.drain();
+		queue.noteModified('A/C.md');
+
+		queue.requeue(taken);
+
+		expect(queue.drain()).toEqual(new Set(['a/b.md', 'a/c.md']));
+	});
+});
+
+describe('suppressingWriter: renames and trash of the plugin', () => {
+	it('marks both ends of a rename and a trashed path as the plugin\'s own', async () => {
+		const queue = new DirtyQueue(() => 0, TTL);
+		const vault = new MemoryVault();
+		vault.seed('A/old.md', 'x');
+		vault.seed('A/gone.md', 'y');
+		const writer = suppressingWriter(vault, queue);
+
+		await writer.rename('A/old.md', 'A/new.md');
+		await writer.trash('A/gone.md');
+
+		expect(queue.isUserWrite('A/old.md')).toBe(false);
+		expect(queue.isUserWrite('A/new.md')).toBe(false);
+		expect(queue.isUserWrite('A/gone.md')).toBe(false);
+		expect(queue.isUserWrite('A/other.md')).toBe(true);
+	});
+});

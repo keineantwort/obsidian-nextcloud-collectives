@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTranslator } from '../../src/i18n';
 import { emptyResult } from '../../src/sync/types';
 import type { SyncResult } from '../../src/sync/types';
-import { alreadyRunningNotice, describeSyncOutcome, describeSyncError, formatSyncResult } from '../../src/ui/syncNotices';
+import { describeSyncOutcome, describeSyncError, formatSyncResult } from '../../src/ui/syncNotices';
 import { ApiChangedError, AuthError, ConfigError, NetworkError, ServerError } from '../../src/util/errors';
 
 const en = createTranslator('en');
@@ -236,12 +236,6 @@ describe('describeSyncError', () => {
 		const spec = describeSyncError(new ServerError(503), en);
 
 		expect(spec.lines[0]).toContain('503');
-	});
-});
-
-describe('alreadyRunningNotice', () => {
-	it('is an info notice', () => {
-		expect(alreadyRunningNotice(de)).toEqual({ lines: ['Es läuft bereits eine Synchronisierung.'], level: 'info' });
 	});
 });
 

@@ -92,6 +92,8 @@ interface Harness {
 	state: SyncState;
 	/** Deep copies of the state at each persist call, in order. */
 	persisted: SyncState[];
+	/** The persist mode of each call ('now' when the executor passed none). */
+	modes: string[];
 	/** Milliseconds passed to deps.sleep, in order. */
 	sleeps: number[];
 	deps: ExecutorDeps;
@@ -102,13 +104,15 @@ function harness(): Harness {
 	const dav = new FakeDav();
 	const state = emptyState(SERVER, 'alice-id');
 	const persisted: SyncState[] = [];
+	const modes: string[] = [];
 	const sleeps: number[] = [];
 	const deps: ExecutorDeps = {
 		vault,
 		webdav: dav.webdav,
 		state,
-		persist: async (current) => {
+		persist: async (current, mode) => {
 			persisted.push(structuredClone(current));
+			modes.push(mode ?? 'now');
 		},
 		now: () => NOW,
 		conflictLabel: 'Konflikt',
@@ -119,7 +123,7 @@ function harness(): Harness {
 		log: new Logger(),
 		occupied: new Set<string>(),
 	};
-	return { vault, dav, state, persisted, sleeps, deps };
+	return { vault, dav, state, persisted, modes, sleeps, deps };
 }
 
 function plan(ops: SyncOp[]): SyncPlan {
@@ -209,6 +213,24 @@ describe('executeSync: create', () => {
 		expect(h.persisted[0]?.pages['10']).toEqual(h.state.pages['10']);
 	});
 
+	it('saves a created page lazily: it can be derived again from its file after a crash', async () => {
+		const h = harness();
+		h.vault.seedFolder('Coll');
+		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
+
+		await executeSync(plan([{ kind: 'create', page: NOTE, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH }]), h.deps);
+
+		expect(h.modes).toEqual(['lazy']);
+	});
+
+	it('saves collectives and tags at once', async () => {
+		const h = harness();
+
+		await executeSync(plan([{ kind: 'saveTags', collectiveId: asCollectiveId(1), tags: [] }]), h.deps);
+
+		expect(h.modes).toEqual(['now']);
+	});
+
 	it('creates a page in a subfolder when the ensureFolder ops come first in the plan', async () => {
 		const h = harness();
 		const erster = page(20, { title: 'Erster Tag', fileName: 'Erster Tag.md', filePath: 'Onboarding' });
@@ -278,6 +300,16 @@ describe('executeSync: createConflict and conflict naming', () => {
 			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),
 			conflictPath: NOTE_CONFLICT,
 		});
+	});
+
+	it('saves a conflict copy at once', async () => {
+		const h = harness();
+		h.vault.seed(NOTE_PATH, 'Mein eigener Text\n');
+		h.dav.serve(NOTE, REMOTE_V1, '"e1"');
+
+		await executeSync(plan([{ kind: 'createConflict', page: NOTE, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH }]), h.deps);
+
+		expect(h.modes).toEqual(['now']);
 	});
 
 	it('never overwrites an existing conflict file and picks the next free name', async () => {

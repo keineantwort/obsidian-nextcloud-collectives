@@ -58,8 +58,8 @@ export interface ExecutorDeps {
 	links?: LinkIndex;
 	/** Attachments of pages (PLAN §9.4); absent = not synced. */
 	attachments?: AttachmentDeps;
-	/** Persist state after each op (StateStore.save). */
-	persist: (state: SyncState) => Promise<void>;
+	/** Persist state after each op (StateStore.save). 'lazy' may be written later (throttled, flushed at the end of the run). */
+	persist: (state: SyncState, mode?: 'now' | 'lazy') => Promise<void>;
 	now: () => Date;
 	/** Translated label for conflict file names ('Konflikt' / 'Conflict'). */
 	conflictLabel: string;

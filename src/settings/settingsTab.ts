@@ -1,11 +1,22 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
+import type { TextComponent } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
-import { isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
+import { isSyncDebounceSec, isSyncIntervalMinutes, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
+	/** Fields that the browser login fills in. */
+	private usernameField: TextComponent | null = null;
+	private passwordField: TextComponent | null = null;
+	/** Set while a browser login waits; hide() cancels it so no invisible flow keeps polling. */
+	private cancelLogin: (() => void) | null = null;
+
+	hide(): void {
+		this.cancelLogin?.();
+	}
+
 	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
 
 	display(): void {
@@ -24,11 +35,13 @@ export class NcSettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder('https://cloud.example.com')
 					.setValue(settings.serverUrl)
-					.onChange(async (value) => {
-						settings.serverUrl = value.trim();
-						updateUrlWarning(value);
-						await plugin.saveSettings();
-					});
+					.onChange((value) => { updateUrlWarning(value); });
+				// Saved on commit (blur/Enter), not per keystroke: an automatic sync must never send the app password
+				// to a half-typed server address.
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					settings.serverUrl = text.inputEl.value.trim();
+					await plugin.saveSettings();
+				})(); });
 				applyPlainInputAttributes(text.inputEl);
 				text.inputEl.type = 'url';
 			});
@@ -49,6 +62,7 @@ export class NcSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName(t('settings.username.name'))
 			.addText((text) => {
+				this.usernameField = text;
 				text
 					.setValue(settings.username)
 					.onChange(async (value) => {
@@ -62,6 +76,7 @@ export class NcSettingTab extends PluginSettingTab {
 			.setName(t('settings.appPassword.name'))
 			.setDesc(t('settings.appPassword.desc'))
 			.addText((text) => {
+				this.passwordField = text;
 				text.inputEl.type = 'password';
 				text.inputEl.autocomplete = 'off';
 				applyPlainInputAttributes(text.inputEl);
@@ -105,6 +120,68 @@ export class NcSettingTab extends PluginSettingTab {
 				}
 			});
 		});
+
+		this.displayLogin(containerEl);
+
+		new Setting(containerEl).setName(t('settings.heading.automation')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('settings.syncInterval.name'))
+			.setDesc(t('settings.syncInterval.desc'))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.setValue(String(settings.syncIntervalMinutes));
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					const value = Number(text.inputEl.value);
+					if (text.inputEl.value.trim() === '' || !isSyncIntervalMinutes(value)) {
+						new Notice(t('settings.syncInterval.invalid'));
+						text.setValue(String(settings.syncIntervalMinutes));
+						return;
+					}
+					settings.syncIntervalMinutes = value;
+					await plugin.saveSettings();
+				})(); });
+				text.inputEl.setAttribute('aria-label', t('settings.syncInterval.name'));
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.syncOnStartup.name'))
+			.setDesc(t('settings.syncOnStartup.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.syncOnStartup).onChange(async (value) => {
+					settings.syncOnStartup = value;
+					await plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.syncOnSave.name'))
+			.setDesc(t('settings.syncOnSave.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.syncOnSave).onChange(async (value) => {
+					settings.syncOnSave = value;
+					await plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.syncDebounce.name'))
+			.setDesc(t('settings.syncDebounce.desc'))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.setValue(String(settings.syncOnSaveDebounceSec));
+				text.inputEl.addEventListener('change', () => { void (async () => {
+					const value = Number(text.inputEl.value);
+					if (text.inputEl.value.trim() === '' || !isSyncDebounceSec(value)) {
+						new Notice(t('settings.syncDebounce.invalid'));
+						text.setValue(String(settings.syncOnSaveDebounceSec));
+						return;
+					}
+					settings.syncOnSaveDebounceSec = value;
+					await plugin.saveSettings();
+				})(); });
+				text.inputEl.setAttribute('aria-label', t('settings.syncDebounce.name'));
+			});
 
 		new Setting(containerEl).setName(t('settings.heading.behaviour')).setHeading();
 
@@ -267,6 +344,61 @@ export class NcSettingTab extends PluginSettingTab {
 					plugin.refreshEmojiTitles();
 				});
 			});
+	}
+
+	/** Login Flow v2: a button that opens the Nextcloud login page; username and app password are filled in afterwards. */
+	private displayLogin(containerEl: HTMLElement): void {
+		const { plugin } = this;
+		const t = plugin.t;
+		const setting = new Setting(containerEl).setName(t('settings.login.name')).setDesc(t('settings.login.desc'));
+		const statusEl = containerEl.createDiv({ cls: 'nc-login-status', attr: { role: 'status', 'aria-live': 'polite' } });
+		let cancelled = false;
+		let running = false;
+		setting.addButton((btn) => {
+			btn.setButtonText(t('settings.login.button')).onClick(async () => {
+				if (running) {
+					cancelled = true;
+					return;
+				}
+				// Plain http would send the sign-in and the new app password unencrypted.
+				try {
+					if (isInsecureRemoteUrl(normalizeServerUrl(plugin.settings.serverUrl))) {
+						statusEl.setText(t('settings.login.insecure'));
+						return;
+					}
+				} catch {
+					// An invalid or missing URL is reported by the login itself.
+				}
+				running = true;
+				cancelled = false;
+				this.cancelLogin = () => { cancelled = true; };
+				btn.setButtonText(t('settings.login.cancel'));
+				statusEl.empty();
+				statusEl.setText(t('settings.login.waiting'));
+				try {
+					const outcome = await plugin.loginWithBrowser((start) => {
+						// The login URL is shown as a link too: a pop-up blocker may swallow window.open.
+						window.open(start.loginUrl);
+						statusEl.empty();
+						statusEl.createSpan({ text: t('settings.login.waiting') + ' ' });
+						statusEl.createEl('a', { text: t('settings.login.openAgain'), href: start.loginUrl });
+					}, () => cancelled);
+					if (outcome.kind === 'done') {
+						this.usernameField?.setValue(outcome.user);
+						this.passwordField?.setPlaceholder(t('settings.appPassword.placeholderStored'));
+						statusEl.setText(t('settings.login.success', { user: outcome.user }));
+						return;
+					}
+					statusEl.setText(outcome.kind === 'cancelled' ? t('settings.login.cancelled') : t('settings.login.timeout'));
+				} catch (err) {
+					statusEl.setText(t('settings.login.failed', { reason: describeConnectionError(err, t) }));
+				} finally {
+					running = false;
+					this.cancelLogin = null;
+					btn.setButtonText(t('settings.login.button'));
+				}
+			});
+		});
 	}
 }
 

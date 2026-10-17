@@ -31,6 +31,7 @@ import type { RemoteCollective, RemoteSnapshot } from './remoteScanner';
 import { UNCONFIRMED_REMOTE_MTIME, emptyState, isCollision } from './state';
 import type { SyncState } from './state';
 import type { StateStore } from './stateStore';
+import { createThrottledPersist } from './throttledPersist';
 import { emptyResult } from './types';
 import type { Decision, Proposal, Skip, SyncResult, SyncRunOutcome } from './types';
 
@@ -105,69 +106,75 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	const skips: Skip[] = [];
 	const decisions = new Map<string, Decision>();
 	let first = true;
-	for (let pass = 0; pass < MAX_PASSES; pass++) {
-		const remote = await scanRemote(clients.collectives);
-		const local = await scanLocal(deps.vault);
-		if (first && !hasPages && local.nonEmpty) {
-			if (!(await deps.confirmInitialSync())) return { kind: 'cancelled' };
-		}
-		if (first && local.rootFiles.length > 0) deps.log.info('Notes directly in the vault root are not synced', { count: local.rootFiles.length });
-		first = false;
+	const saver = createThrottledPersist((current) => deps.stateStore.save(current), () => (deps.now?.() ?? new Date()).getTime());
+	try {
+		for (let pass = 0; pass < MAX_PASSES; pass++) {
+			const remote = await scanRemote(clients.collectives);
+			const local = await scanLocal(deps.vault);
+			if (first && !hasPages && local.nonEmpty) {
+				if (!(await deps.confirmInitialSync())) return { kind: 'cancelled' };
+			}
+			if (first && local.rootFiles.length > 0) deps.log.info('Notes directly in the vault root are not synced', { count: local.rootFiles.length });
+			first = false;
 
-		const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
-		const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
-		const links = buildLinkIndex(remote, local, paths, serverUrl, { options: attachmentOptions, state });
-		deps.onLinks?.(links);
-		const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
-		const input: PlannerInput = {
-			state,
-			remote,
-			local,
-			remoteMeta,
-			paths,
-			dirty: deps.dirty(),
-			remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log, links),
-			remoteTrash: await findRemoteTrash(state, remote, local, clients.collectives),
-			decisions,
-			behaviour: {
-				remoteDelete: deps.settings.remoteDeleteBehaviour,
-				localDelete: deps.settings.localDeleteBehaviour,
-				newFolder: deps.settings.newFolderBehaviour,
-			},
-		};
-		const plan = await planWithAnswers(input, decisions, deps);
-		for (const skip of plan.skips) {
-			logSkip(skip, deps.log);
-			if (!skips.some((known) => JSON.stringify(known) === JSON.stringify(skip))) skips.push(skip);
-		}
+			const knownFolders = new Map<CollectiveId, string>(Object.values(state.collectives).map((c) => [c.collectiveId, c.localFolder]));
+			const paths = planLocalPaths(remote.collectives.map(toTree), knownFolders);
+			const links = buildLinkIndex(remote, local, paths, serverUrl, { options: attachmentOptions, state });
+			deps.onLinks?.(links);
+			const remoteMeta = await buildRemoteMeta(remote.collectives, paths, deps.log);
+			const input: PlannerInput = {
+				state,
+				remote,
+				local,
+				remoteMeta,
+				paths,
+				dirty: deps.dirty(),
+				remoteChanged: await findRemoteChanged(state, remote, local, clients.webdav, deps.log, links),
+				remoteTrash: await findRemoteTrash(state, remote, local, clients.collectives),
+				decisions,
+				behaviour: {
+					remoteDelete: deps.settings.remoteDeleteBehaviour,
+					localDelete: deps.settings.localDeleteBehaviour,
+					newFolder: deps.settings.newFolderBehaviour,
+				},
+			};
+			const plan = await planWithAnswers(input, decisions, deps);
+			for (const skip of plan.skips) {
+				logSkip(skip, deps.log);
+				if (!skips.some((known) => JSON.stringify(known) === JSON.stringify(skip))) skips.push(skip);
+			}
 
-		const result = await executeSync(plan, {
-			vault: deps.vault,
-			webdav: clients.webdav,
-			api: clients.collectives,
-			state,
-			links,
-			attachments: {
-				options: attachmentOptions,
-				deleteRemote: deps.settings.deleteRemoteAttachments ?? true,
-				remoteDelete: deps.settings.remoteDeleteBehaviour,
+			const result = await executeSync(plan, {
+				vault: deps.vault,
 				webdav: clients.webdav,
 				api: clients.collectives,
-			},
-			persist: async (current) => {
-				await deps.stateStore.save(current);
-			},
-			now: deps.now ?? (() => new Date()),
-			conflictLabel: deps.t('sync.conflictFileLabel'),
-			strategy: deps.settings.conflictStrategy,
-			sleep: deps.sleep ?? defaultSleep,
-			log: deps.log,
-			occupied: local.occupied,
-		});
-		addResult(total, result);
-		// Another pass finds what depended on this one (a new collective's pages, a folder page's moved note). A failure ends the loop.
-		if (!plan.followUp || result.failed > 0) break;
+				state,
+				links,
+				attachments: {
+					options: attachmentOptions,
+					deleteRemote: deps.settings.deleteRemoteAttachments ?? true,
+					remoteDelete: deps.settings.remoteDeleteBehaviour,
+					webdav: clients.webdav,
+					api: clients.collectives,
+				},
+				persist: (current, mode) => saver.persist(current, mode),
+				now: deps.now ?? (() => new Date()),
+				conflictLabel: deps.t('sync.conflictFileLabel'),
+				strategy: deps.settings.conflictStrategy,
+				sleep: deps.sleep ?? defaultSleep,
+				log: deps.log,
+				occupied: local.occupied,
+			});
+			addResult(total, result);
+			// Another pass finds what depended on this one (a new collective's pages, a folder page's moved note). A failure ends the loop.
+			if (!plan.followUp || result.failed > 0) break;
+		}
+	} catch (err) {
+		// Also on an abort: lazy saves still pending must reach the disk. A failing flush must not hide the abort reason.
+		await saver.flush().catch(() => undefined);
+		throw err;
 	}
+	await saver.flush();
 	return { kind: 'done', result: total, skips, openConflicts: countConflicts(state), pages: Object.keys(state.pages).length };
 }
 
