@@ -222,6 +222,9 @@ export class SyncController {
 
 	/** Under the lock: loads the state, applies the choice, saves the state and updates the conflict count. */
 	private async applyChoice(entry: ConflictEntry, choice: ConflictChoice): Promise<boolean> {
+		// Hashes of notes with links need the page index of a sync pass: without one (just started), a sync comes first.
+		if (this.lastLinks === null) await this.runOnce();
+		if (this.lastLinks === null) throw new Error('page index unavailable');
 		const store = this.host.stateStore();
 		const state = await store.load();
 		if (state === null) return false;

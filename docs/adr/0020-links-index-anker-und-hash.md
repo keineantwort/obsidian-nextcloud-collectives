@@ -27,3 +27,9 @@ M7 wandelt Seitenlinks zwischen Collectives (`[Text](Pfad.md?fileId=…)` u. a.)
 - Anker auf Überschriften mit Umlauten/Leerzeichen springen in Obsidian oder Collectives ggf. nicht exakt; der Link zur Seite funktioniert.
 - Wikilinks auf Seiten, die in diesem Lauf erst entstehen, werden erst im Folgelauf gewandelt (der Hash zieht dann nach, ein Push folgt).
 - Index entsteht zu Laufbeginn; Verschiebungen innerhalb desselben Laufs wirken erst im nächsten.
+
+## Bekannte Einschränkungen (Review ONC-8)
+
+- Ein Link ohne Alias lokal bedeutet „Text = aktueller Titel“. Wird die Zielseite umbenannt, ändert sich der kanonische Linktext der verlinkenden Seiten (einmaliger Push, bei gleichzeitiger Server-Änderung derselben Seite ein Konflikt). Bewusst akzeptiert; ohne Alias-Merker im State nicht vermeidbar.
+- Relative Links und `fileId` lösen nur innerhalb der eigenen Collective auf; Links in andere Collectives nur als URL mit passendem `{slug}-{id}` und Host des Servers (Schutz vor Auslesen fremder Collectives über geratene IDs). Server unter Unterpfad: der Pfad wird in URLs berücksichtigt.
+- Der Konflikt-Dialog braucht den Seitenindex eines Sync-Durchlaufs; nach dem Start läuft vor der Auflösung zuerst ein Sync.

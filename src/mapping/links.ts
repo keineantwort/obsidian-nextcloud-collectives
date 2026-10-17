@@ -28,10 +28,13 @@ export class LinkIndex {
 	private readonly byBase = new Map<string, LinkTarget[]>();
 	private readonly landings = new Map<number, LinkTarget>();
 	private readonly origin: string | null;
+	/** Path the server lives under ('' at the web root, '/nextcloud' for a sub-path install). */
+	readonly basePath: string;
 
 	/** `serverUrl`: absolute links count as internal only for this server (scheme and host, no path). */
 	constructor(targets: readonly LinkTarget[], serverUrl?: string) {
 		this.origin = serverUrl === undefined ? null : originOf(serverUrl);
+		this.basePath = serverUrl === undefined ? '' : basePathOf(serverUrl);
 		for (const target of targets) {
 			this.byPageId.set(target.pageId, target);
 			this.byRemoteKey.set(`${target.collectiveId}/${target.remotePath}`, target);
@@ -177,7 +180,7 @@ export function linksToLocal(remote: string, links: LinkContext | undefined): st
 			const name = stripMd(target.localPath);
 			const anchor = anchorOf(url);
 			const heading = anchor === '' ? '' : `#${decodeAnchor(anchor)}`;
-			if (/[[\]|]/.test(heading)) return whole;
+			if (/[[\]|\n]/.test(heading)) return whole;
 			return text === target.title || text === '' ? `[[${name}${heading}]]` : `[[${name}${heading}|${text}]]`;
 		}),
 	);
@@ -189,8 +192,11 @@ function resolveRemoteUrl(url: string, index: LinkIndex, source: LinkTarget | un
 	const [path = '', query = ''] = beforeAnchor.split('?');
 	const urlPath = /^https?:\/\/[^/]+(\/.*)?$/i.exec(path);
 	if (urlPath !== null && !index.isOwnOrigin(path)) return undefined;
-	const absolute = urlPath !== null ? (urlPath[1] ?? '') : path.startsWith('/') ? path : null;
-	if (absolute !== null) return resolveCollectivesUrl(absolute, index, source);
+	const rooted = urlPath !== null ? (urlPath[1] ?? '') : path.startsWith('/') ? path : null;
+	if (rooted !== null) {
+		if (index.basePath !== '' && !rooted.startsWith(`${index.basePath}/`)) return undefined;
+		return resolveCollectivesUrl(rooted.slice(index.basePath.length), index, source);
+	}
 	if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path === '') return undefined;
 	const fileId = /(?:^|&)fileId=(\d+)(?:&|$)/.exec(query)?.[1];
 	// Relative links stay inside the collective: a crafted fileId must not reach the user's other collectives.
@@ -235,7 +241,7 @@ export function linksToRemote(local: string, links: LinkContext | undefined): st
 			if (bang !== '') return whole;
 			const target = links.index.byLocalName(name, source.localPath ?? '');
 			if (target === undefined) return whole;
-			return remoteLink(source, target, alias?.trim() || target.title, heading) ?? whole;
+			return remoteLink(source, target, alias?.trim() || target.title, heading, links.index.basePath) ?? whole;
 		});
 		return wiki.replace(MD_LINK, (whole: string, bang: string, text: string, url: string) => {
 			if (bang !== '') return whole;
@@ -243,7 +249,7 @@ export function linksToRemote(local: string, links: LinkContext | undefined): st
 			if (parsed === null) return whole;
 			const target = links.index.byLocalName(parsed.path, source.localPath ?? '');
 			if (target === undefined) return whole;
-			return remoteLink(source, target, text === '' ? target.title : text, parsed.heading) ?? whole;
+			return remoteLink(source, target, text === '' ? target.title : text, parsed.heading, links.index.basePath) ?? whole;
 		});
 	});
 }
@@ -257,14 +263,14 @@ function parseLocalMarkdownUrl(url: string): { path: string; heading: string | u
 	return { path: safeDecode(path), heading: hash === -1 ? undefined : decodeAnchor(url.slice(hash + 1)) };
 }
 
-function remoteLink(source: LinkTarget, target: LinkTarget, text: string, heading: string | undefined): string | null {
+function remoteLink(source: LinkTarget, target: LinkTarget, text: string, heading: string | undefined, basePath: string): string | null {
 	if (/[[\]\n]/.test(text)) return null;
 	const anchor = heading === undefined || heading === '' ? '' : `#${encodeAnchor(heading)}`;
 	if (source.collectiveId === target.collectiveId) {
 		const relative = relativePath(folderOf(source.remotePath), target.remotePath);
 		return `[${text}](${encodePath(relative)}?fileId=${target.pageId}${anchor})`;
 	}
-	const base = `/apps/collectives/${encodeURIComponent(target.collectiveSlug)}-${target.collectiveId}`;
+	const base = `${basePath}/apps/collectives/${encodeURIComponent(target.collectiveSlug)}-${target.collectiveId}`;
 	return `[${text}](${target.landing ? base : `${base}/${encodeURIComponent(target.slug)}-${target.pageId}`}${anchor})`;
 }
 
@@ -339,4 +345,10 @@ function sameCollective(target: LinkTarget | undefined, source: LinkTarget | und
 function originOf(url: string): string | null {
 	const match = /^(https?):\/\/([^/?#]+)/i.exec(url);
 	return match?.[1] === undefined || match[2] === undefined ? null : `${match[1]}://${match[2]}`.toLowerCase();
+}
+
+/** Path part of the server URL without a trailing slash ('' if none). */
+function basePathOf(url: string): string {
+	const match = /^https?:\/\/[^/?#]+(\/[^?#]*)?/i.exec(url);
+	return (match?.[1] ?? '').replace(/\/+$/, '');
 }

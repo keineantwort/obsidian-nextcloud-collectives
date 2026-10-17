@@ -86,6 +86,11 @@ describe('linksToLocal', () => {
 		expect(Date.now() - start).toBeLessThan(1000);
 	});
 
+	it('does not put a line break from a decoded anchor into a wikilink', () => {
+		const text = '[t](Prozesse/Urlaub.md?fileId=100#a%0Ab)';
+		expect(linksToLocal(text, from(101))).toBe(text);
+	});
+
 	it('does nothing without a context', () => {
 		expect(linksToLocal('[Urlaub](Prozesse/Urlaub.md?fileId=100)', undefined)).toBe('[Urlaub](Prozesse/Urlaub.md?fileId=100)');
 	});
@@ -201,5 +206,21 @@ describe('with frontmatter and canonical form', () => {
 		const ctx = { index: renamed, sourceId: asPageId(101) };
 		expect(toRemote('[[Handbuch/Prozesse/Ferien]]', ctx)).toBe(canonicalRemote('[Urlaub](Prozesse/Urlaub.md?fileId=100)', ctx));
 		expect(toRemote('[[Handbuch/Prozesse/Ferien]]', ctx)).toBe('[Urlaub](Prozesse/Ferien.md?fileId=100)');
+	});
+});
+
+describe('server under a sub-path', () => {
+	const sub = new LinkIndex(pages, 'https://host.example/nextcloud/');
+	const ctx = { index: sub, sourceId: asPageId(101) };
+
+	it('reads picker links with the sub-path and writes cross-collective links with it', () => {
+		expect(linksToLocal('[Urlaub](https://host.example/nextcloud/index.php/apps/collectives/Handbuch-1/Prozesse-98/Urlaub-100)', ctx)).toBe('[[Handbuch/Prozesse/Urlaub]]');
+		expect(linksToRemote('[[Wiki/Server]]', ctx)).toBe('[Server](/nextcloud/apps/collectives/Team%20Wiki-2/Server-201)');
+		expect(linksToLocal('[Server](/nextcloud/apps/collectives/Team%20Wiki-2/Server-201)', ctx)).toBe('[[Wiki/Server]]');
+	});
+
+	it('ignores root-relative links outside the sub-path', () => {
+		const text = '[Server](/apps/collectives/Team%20Wiki-2/Server-201)';
+		expect(linksToLocal(text, ctx)).toBe(text);
 	});
 });
