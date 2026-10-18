@@ -1,0 +1,70 @@
+name: Integration (Nextcloud versions)
+
+# Runs the integration tests (npm run test:int) against every Nextcloud version listed in TESTED_NEXTCLOUD_MAJORS
+# (src/api/versionCheck.ts; tests/unit/testedVersions.test.ts keeps both lists equal). Each run starts a fresh
+# Nextcloud with the newest Collectives that fits (hooks/10-collectives.sh) and prints both versions into the log.
+# The job "latest" tests the newest image as an early warning for the next major version; it may fail without
+# failing the workflow. Needs a runner with Docker and the Compose plugin (requirements: docs/ci-runner.md).
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  integration:
+    name: Nextcloud ${{ matrix.nc }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental == true }}
+    timeout-minutes: 45
+    env:
+      # Own Compose project and port per version: the matrix jobs may run at the same time on one Docker host.
+      COMPOSE_PROJECT_NAME: nc-test-${{ matrix.nc }}
+    strategy:
+      fail-fast: false
+      matrix:
+        nc: [33, 34, 35]
+        include:
+          - { nc: 33, port: 8133 }
+          - { nc: 34, port: 8134 }
+          - { nc: 35, port: 8135 }
+          - { nc: latest, port: 8199, experimental: true }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure the test server
+        working-directory: scripts/dev-nextcloud
+        run: |
+          cp .env.example .env
+          sed -i -e "s/^NC_VERSION=.*/NC_VERSION=${{ matrix.nc }}/" -e "s/^NC_PORT=.*/NC_PORT=${{ matrix.port }}/" .env
+
+      - name: Start Nextcloud with Collectives
+        working-directory: scripts/dev-nextcloud
+        run: docker compose up -d --wait --wait-timeout 600
+
+      - name: Versions under test
+        run: |
+          sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Integration tests
+        run: npm run test:int
+
+      - name: Server log on failure
+        if: failure()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose logs --tail 200 nextcloud
+
+      - name: Stop and delete the test server
+        if: always()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose down -v

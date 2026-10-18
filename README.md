@@ -7,7 +7,7 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 ## Voraussetzungen
 
 - Obsidian ab 1.11.4 (Desktop, iOS und Android).
-- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33 und Collectives 4.7. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
+- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33, 34 und 35 (jeweils mit der dazu passenden Collectives-Version, zuletzt 4.7.1). Welche Versionen genau gelaufen sind, steht im Protokoll des wöchentlichen Integrationslaufs. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
 - Ein Nextcloud-Konto; das Plugin meldet sich per Login Flow oder mit einem App-Passwort an (kein Hauptpasswort).
 
 ## Installation

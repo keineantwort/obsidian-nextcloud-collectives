@@ -10,6 +10,14 @@ Ein Release ist ein Git-Tag `x.y.z` (ohne `v`), das genau der `version` in `mani
 4. `.forgejo/workflows/release.yml` prüft das Tag, baut und legt ein Forgejo-Release mit `main.js`, `manifest.json` und `styles.css` an. Voraussetzung: Actions-Secret `RELEASE_TOKEN` (Forgejo-Token mit Schreibrecht auf Releases).
 5. Vor einer Veröffentlichung für andere: Checkliste `docs/manual-test.md` auf iOS und Android.
 
+## Integrationstests über mehrere Nextcloud-Versionen
+
+`.forgejo/workflows/integration.yml` startet je Version aus `TESTED_NEXTCLOUD_MAJORS` einen frischen Testserver und führt `npm run test:int` aus. Anforderungen an den Runner: [ci-runner.md](ci-runner.md). Ein Lauf dauert je Version einige Minuten; deshalb nur wöchentlich, per „Run workflow“ und bei Release-Tags.
+
+- Die Nextcloud- und App-Versionen (Collectives, Circles, Text) stehen im Schritt „Versions under test“ und in der Job-Zusammenfassung.
+- Neue Hauptversion: Zeigt der Lauf `latest` eine neue Nextcloud-Version grün, die Nummer in `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **und** in der Matrix von `integration.yml` ergänzen; `tests/unit/testedVersions.test.ts` schlägt sonst fehl.
+- Lokal gegen eine zweite Version: `NC_VERSION=35 NC_PORT=8135 docker compose -p nc-test-35 up -d --wait` im Ordner `scripts/dev-nextcloud`, dann `NC_PORT=8135 NC_VERSION=35 npm run test:int`; Versionen zeigt `sh scripts/dev-nextcloud/versions.sh nc-test-35`.
+
 ## Noch offen (außerhalb des Repos, vom Maintainer zu erledigen)
 
 Diese Punkte aus ONC-11 lassen sich nicht per Code im Repo erledigen:

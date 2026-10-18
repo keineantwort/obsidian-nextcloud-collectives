@@ -542,9 +542,9 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | 3 | Veröffentlichung im Community-Store | erst nach M10 und bestandener Checkliste `docs/manual-test.md` entscheiden; bis dahin BRAT bzw. manuelle Installation (siehe `docs/release.md`) |
 | 4 | Mehrere Nextcloud-Server | **entschieden:** ein Server pro Vault; alle Collectives bilden den Vault |
 | 5 | Nutzer-Frontmatter mit hochladen? | **entschieden:** ja, nur `nc_*` entfernen |
-| 6 | Ziel-Version Nextcloud/Collectives | **erfasst (M0):** Nextcloud 33.0.10, Collectives 4.7.1 |
+| 6 | Ziel-Version Nextcloud/Collectives | **erfasst:** Nextcloud 33, 34, 35 (zuletzt 33.0.10, 34.0.5, 35.0.2), jeweils Collectives 4.7.1; Matrix in `.forgejo/workflows/integration.yml` |
 | 7 | Eigenes Plugin oder bestehendes nutzen/forken? | **entschieden:** eigenes Plugin; bestehende Plugins nur als Referenz (siehe 18) |
-| 8 | Integrationstests in CI | Remote-Testserver (z. B. im HomeLab) aufbauen, damit Forgejo Actions `test:int` ausführen kann. Bis dahin lokal per Docker. Entscheidung spätestens vor M4 |
+| 8 | Integrationstests in CI | **entschieden (M10, ADR 0023):** Docker-Testserver im Runner, Matrix über die getesteten Nextcloud-Hauptversionen (`integration.yml`), wöchentlich/manuell/bei Release-Tags |
 
 ## 16. Risiken
 
