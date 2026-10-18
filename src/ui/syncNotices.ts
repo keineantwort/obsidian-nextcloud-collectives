@@ -14,7 +14,7 @@ const DETAIL_SEPARATOR = ' · ';
 export function formatSyncResult(result: SyncResult, pages: number, t: Translator, skips: readonly Skip[] = []): SyncNoticeSpec {
 	const changed =
 		result.created + result.updated + result.pushed + result.metaUpdated + result.metaPushed + result.metaInvalid + result.conflicts + result.failed +
-		result.uploaded + result.moved + result.trashed + result.removed + result.restored + result.attachments;
+		result.uploaded + result.moved + result.trashed + result.removed + result.restored + result.attachments + result.deferred;
 	const lines: string[] = [];
 	if (changed === 0) {
 		lines.push(upToDate(pages, t));
