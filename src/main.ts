@@ -18,13 +18,14 @@ import { pickEmoji } from './ui/emojiModal';
 import { promptName } from './ui/renameModal';
 import { clearEmoji, decorateExplorer, decorateView, emojiFromFrontmatter } from './ui/emojiTitles';
 import { clearProperties, decorateProperties, propertyLabels } from './ui/propertyLabels';
+import { openLogModal } from './ui/logModal';
 import { Logger } from './util/logger';
 import { isRecord } from './util/isRecord';
 
 export default class NextcloudCollectivesPlugin extends Plugin {
 	settings: NcSettings = { ...DEFAULT_SETTINGS };
 	t: Translator = createTranslator('en');
-	/** In-memory log of this session; shown by the log view in M10. Never logs credentials. */
+	/** In-memory log of this session; shown by the log modal (PLAN §12). Never logs credentials. */
 	readonly log = new Logger();
 	private statusBar: StatusBar | null = null;
 	/** Sync runs, conflicts and the run status (PLAN §7.1); created in onload, after the language is known. */
@@ -60,6 +61,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		this.sync = sync;
 		this.addSettingTab(new NcSettingTab(this.app, this));
 		this.addCommand({ id: 'sync-now', name: this.t('command.syncNow'), callback: () => { void sync.runFromUi(); } });
+		this.addCommand({ id: 'show-log', name: this.t('command.showLog'), callback: () => { this.showLog(); } });
 		this.addCommand({ id: 'show-conflicts', name: this.t('command.showConflicts'), callback: () => { sync.showConflicts(); } });
 		this.addCommand({
 			id: 'set-emoji',
@@ -108,6 +110,10 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		this.register(() => { sync.stopAutomation(); });
 	}
 
+	showLog(): void {
+		openLogModal(this.app, this.t, this.log);
+	}
+
 	/**
 	 * Only known keys with the expected types are taken over from data.json; anything else is ignored.
 	 * The app password itself is never stored there, only the secret ID.
@@ -137,6 +143,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
 			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];
+			if (typeof data['debugLogging'] === 'boolean') loaded.debugLogging = data['debugLogging'];
 		}
 		this.settings = { ...DEFAULT_SETTINGS, ...loaded };
 	}

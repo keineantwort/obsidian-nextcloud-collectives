@@ -26,3 +26,4 @@ Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [tem
 | [0020](0020-links-index-anker-und-hash.md) | Links: Seitenindex, Anker unverändert, Hash im Remote-Format | akzeptiert |
 | [0021](0021-anhaenge-einbettungen-index-und-abgleich.md) | Anhänge: Einbettungen über den Index, Abgleich über ETags, Schritt nach dem Inhalt | akzeptiert |
 | [0022](0022-automatik-mutex-login-flow-und-gedrosseltes-speichern.md) | Automatik: Mutex mit Re-Run-Flag, stille Auto-Läufe, Login Flow v2, gedrosseltes Speichern | akzeptiert |
+| [0023](0023-release-versions-check-protokoll-und-ci.md) | Release: Versions-Check, Protokoll-Ansicht, Release-CI | akzeptiert |

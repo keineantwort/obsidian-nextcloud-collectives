@@ -69,7 +69,11 @@ export interface HttpClientOptions {
 	retry?: boolean;
 	/** Waits `ms` milliseconds. Injectable for tests. Default: promise around window.setTimeout. */
 	sleep?: (ms: number) => Promise<void>;
+	/** Called after every attempt with method, path (no host, no headers, no body) and status (0 = no response). For debug logging. */
+	onAttempt?: (info: AttemptInfo) => void;
 }
+
+export interface AttemptInfo { method: HttpMethod; path: string; status: number; ms: number; }
 
 export interface SendOptions {
 	method: HttpMethod;
@@ -90,6 +94,7 @@ export class HttpClient {
 	private readonly request: RequestFn;
 	private readonly retry: boolean;
 	private readonly sleep: (ms: number) => Promise<void>;
+	private readonly onAttempt: ((info: AttemptInfo) => void) | undefined;
 
 	constructor(options: HttpClientOptions) {
 		this.baseUrl = options.baseUrl;
@@ -98,6 +103,7 @@ export class HttpClient {
 		this.request = options.request;
 		this.retry = options.retry ?? true;
 		this.sleep = options.sleep ?? defaultSleep;
+		this.onAttempt = options.onAttempt;
 	}
 
 	/**
@@ -139,6 +145,7 @@ export class HttpClient {
 		}
 		headers['Authorization'] = basicAuthHeader(this.username, this.appPassword);
 
+		const started = Date.now();
 		let res: HttpResponse;
 		try {
 			res = await this.request({
@@ -150,10 +157,12 @@ export class HttpClient {
 				binaryResponse: options.binaryResponse,
 			});
 		} catch (err) {
+			this.onAttempt?.({ method, path, status: 0, ms: Date.now() - started });
 			if (err instanceof NcError) throw err;
 			throw new NetworkError(`Request failed: ${what}`, { cause: err });
 		}
 
+		this.onAttempt?.({ method, path, status: res.status, ms: Date.now() - started });
 		const error = errorForStatus(res.status, what);
 		if (error) throw error;
 		return res;

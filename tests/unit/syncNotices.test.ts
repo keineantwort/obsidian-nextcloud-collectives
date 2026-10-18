@@ -313,3 +313,13 @@ describe('formatSyncResult: attachments', () => {
 		expect(formatSyncResult(result({ attachments: 1 }), 5, en).lines[0]).not.toContain('up to date');
 	});
 });
+
+describe('formatSyncResult: deferred pushes', () => {
+	it('warns that pages were not sent, in English and German', () => {
+		const one = formatSyncResult(result({ deferred: 1 }), 4, en);
+		expect(one.level).toBe('warning');
+		expect(one.lines.at(-1)).toBe('1 page was not sent: the server did not confirm its current version. It will be retried on the next sync.');
+		expect(formatSyncResult(result({ deferred: 2 }), 4, en).lines.at(-1)).toContain('2 pages were not sent');
+		expect(formatSyncResult(result({ deferred: 2 }), 4, de).lines.at(-1)).toContain('2 Seiten wurden nicht gesendet');
+	});
+});

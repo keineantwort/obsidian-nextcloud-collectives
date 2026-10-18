@@ -1,5 +1,8 @@
 // Sync runner (spec M4 §10): config checks, scans, planning and execution in one run. Obsidian-free; all I/O is injected.
 import { createApiClients } from '../api/clients';
+import type { AttemptInfo } from '../api/http';
+import type { OcsClient } from '../api/ocsClient';
+import { fetchServerVersion, type ServerVersion } from '../api/versionCheck';
 import { normalizeServerUrl } from '../api/connection';
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { RequestFn } from '../api/http';
@@ -49,6 +52,8 @@ export interface SyncRunDeps {
 		attachmentFolderPattern?: string;
 		maxAttachmentSizeMb?: number;
 		deleteRemoteAttachments?: boolean;
+		/** Log the details of every request (PLAN §12). */
+		debugLogging?: boolean;
 	};
 	readPassword: () => Promise<string | null>;
 	request: RequestFn;
@@ -65,6 +70,8 @@ export interface SyncRunDeps {
 	confirm: (proposals: Proposal[]) => Promise<ReadonlyMap<string, Decision>>;
 	/** Called with the page index of each pass, so the conflict dialog can hash and show texts like the sync does. */
 	onLinks?: (links: LinkIndex) => void;
+	/** Called once per run with the Nextcloud version of the server (PLAN §12); not called if it could not be read. */
+	onServerVersion?: (version: ServerVersion) => void;
 	t: Translator;
 	log: Logger;
 	now?: () => Date;
@@ -83,9 +90,16 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	if (appPassword === null || appPassword === '') throw new ConfigError('appPassword', 'missing');
 
 	// The Nextcloud user ID is needed for WebDAV paths; the first client only fetches it.
-	const options = { baseUrl: serverUrl, username, appPassword, request: deps.request, retry: true };
+	const options = {
+		baseUrl: serverUrl, username, appPassword, request: deps.request, retry: true,
+		// Request details only with the debug setting; path, status and duration, never headers or bodies.
+		onAttempt: deps.settings.debugLogging === true
+			? (info: AttemptInfo) => { deps.log.debug(`${info.method} ${info.path}`, { status: info.status, ms: info.ms }); }
+			: undefined,
+	};
 	const userId = await createApiClients(options).collectives.getCurrentUserId();
 	const clients = createApiClients(options, userId);
+	await reportServerVersion(clients.ocs, deps);
 
 	const stored = await deps.stateStore.load();
 	const state: SyncState = stored ?? emptyState(serverUrl, userId);
@@ -301,4 +315,16 @@ function tagNamesOf(page: PageInfo, tagNames: ReadonlyMap<TagId, string>, log: L
 
 function logSkip(skip: Skip, log: Logger): void {
 	log.info('Sync item skipped', { ...skip });
+}
+
+/** Version check (PLAN §12). Only informs; a server that does not answer or answers oddly never stops the sync. */
+async function reportServerVersion(ocs: OcsClient, deps: SyncRunDeps): Promise<void> {
+	try {
+		const version = await fetchServerVersion(ocs);
+		if (version === null) deps.log.warn('Server version not readable');
+		else deps.onServerVersion?.(version);
+	} catch (err) {
+		// An auth failure would already have failed getCurrentUserId; anything here is a capabilities-only problem.
+		deps.log.warn('Server version check failed', { error: err instanceof Error ? err.name : 'unknown' });
+	}
 }

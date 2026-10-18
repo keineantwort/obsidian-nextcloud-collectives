@@ -36,6 +36,8 @@ export interface NcSettings {
 	syncOnSaveDebounceSec: number;
 	/** Show the note of a folder first in its folder in the file list (display only). */
 	folderNoteFirst: boolean;
+	/** Also write the details of every request (method, path, status, duration; no credentials) to the log (PLAN §12). */
+	debugLogging: boolean;
 }
 
 export const DEFAULT_SETTINGS: NcSettings = {
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	syncOnSave: true,
 	syncOnSaveDebounceSec: 10,
 	folderNoteFirst: true,
+	debugLogging: false,
 };
 
 /** Interval in minutes: a whole number from 0 (off) to 1440. */

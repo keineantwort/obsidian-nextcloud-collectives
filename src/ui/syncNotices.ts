@@ -45,12 +45,15 @@ export function formatSyncResult(result: SyncResult, pages: number, t: Translato
 	if (result.metaInvalid > 0) {
 		lines.push(result.metaInvalid === 1 ? t('sync.result.metaInvalid.one') : t('sync.result.metaInvalid.other', { count: result.metaInvalid }));
 	}
+	if (result.deferred > 0) {
+		lines.push(result.deferred === 1 ? t('sync.result.deferred.one') : t('sync.result.deferred.other', { count: result.deferred }));
+	}
 	if (result.failed > 0) {
 		lines.push(result.failed === 1 ? t('sync.result.failed.one') : t('sync.result.failed.other', { count: result.failed }));
 	}
 	const hints = skipHints(skips, t);
 	lines.push(...hints);
-	const level: NoticeLevel = result.conflicts > 0 || result.failed > 0 || result.metaInvalid > 0 || hints.length > 0 ? 'warning' : 'info';
+	const level: NoticeLevel = result.conflicts > 0 || result.failed > 0 || result.metaInvalid > 0 || result.deferred > 0 || hints.length > 0 ? 'warning' : 'info';
 	return { lines, level };
 }
 
