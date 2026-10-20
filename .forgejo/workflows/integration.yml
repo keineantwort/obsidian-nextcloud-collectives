@@ -6,12 +6,27 @@ name: Integration (Nextcloud versions)
 # The job "latest" tests the newest image as an early warning for the next major version; it may fail without
 # failing the workflow. Runs on the runner label docker-host (requirements: docs/ci-runner.md).
 on:
+  pull_request:
+    # Only changes that can affect the tests; a push to main or a tag always runs them (a paths filter would also hold back tags).
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/dev-nextcloud/**"
+      - ".forgejo/workflows/integration.yml"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches: [main]
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
   schedule:
     - cron: "0 3 * * 1"
   workflow_dispatch:
-  push:
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+
+# A new push to the same branch replaces the run that is still going (the cleanup step runs on cancel as well).
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   integration:

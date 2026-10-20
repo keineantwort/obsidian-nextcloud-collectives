@@ -8,7 +8,7 @@ Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung de
 |---|---|---|---|
 | `ci.yml` | jeder PR, Push auf `main` | `ubuntu-latest` | Node.js (über `actions/setup-node`); ca. 1–2 Minuten |
 | `release.yml` | Tag `x.y.z` | `ubuntu-latest` | Node.js, `curl`, `jq`; Secret `RELEASE_TOKEN` |
-| `integration.yml` | wöchentlich (Mo 03:00), manuell, Tag `x.y.z` | **`docker-host`** | Docker mit Compose, siehe unten |
+| `integration.yml` | Pull Request (bei Änderungen an `src/`, `tests/`, `scripts/dev-nextcloud/`, `package*.json`), Push auf `main`, Tag `x.y.z`, wöchentlich (Mo 03:00), manuell | **`docker-host`** | Docker mit Compose, siehe unten |
 
 ## `docker-host` (Host-Runner auf den Docker-LXCs)
 
@@ -20,7 +20,7 @@ Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung de
 ## Bedarf je Nextcloud-Job
 
 - ca. 1–2 CPU-Kerne, 2 GB RAM, Image ca. 1,2 GB je Version plus Datenvolume; mindestens 10 GB frei auf dem Docker-Host.
-- Laufzeit: Start ca. 2–5 Minuten, Tests ca. 5–15 Minuten (Timeout 45 Minuten).
+- Laufzeit: Start ca. 2–5 Minuten, Tests ca. 5–15 Minuten (Timeout 45 Minuten). Ein neuer Push auf denselben PR-Branch bricht den laufenden Lauf ab und startet neu (`concurrency`), damit nicht mehrere Läufe die LXCs belegen.
 - Ausgehend: Docker Hub (`nextcloud`), `apps.nextcloud.com` (Collectives, Circles), npm-Registry.
 
 ## Aufräumen

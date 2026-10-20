@@ -12,7 +12,7 @@ Ein Release ist ein Git-Tag `x.y.z` (ohne `v`), das genau der `version` in `mani
 
 ## Integrationstests über mehrere Nextcloud-Versionen
 
-`.forgejo/workflows/integration.yml` startet je Version aus `TESTED_NEXTCLOUD_MAJORS` einen frischen Testserver und führt `npm run test:int` aus. Anforderungen an den Runner: [ci-runner.md](ci-runner.md). Ein Lauf dauert je Version einige Minuten; deshalb nur wöchentlich, per „Run workflow“ und bei Release-Tags.
+`.forgejo/workflows/integration.yml` startet je Version aus `TESTED_NEXTCLOUD_MAJORS` einen frischen Testserver und führt `npm run test:int` aus. Anforderungen an den Runner: [ci-runner.md](ci-runner.md). Er läuft bei jedem Pull Request (wenn Quellcode, Tests oder Testserver-Skripte betroffen sind), bei jedem Push auf `main`, bei Release-Tags, wöchentlich und per „Run workflow“; ein Lauf dauert je Version einige Minuten. Der Merge ist damit durch die volle Suite abgesichert, wenn du `Integration / Nextcloud 33–35` als grün abwartest (der Job `latest` darf rot sein).
 
 - Die Nextcloud- und App-Versionen (Collectives, Circles, Text) stehen im Schritt „Versions under test“ und in der Job-Zusammenfassung.
 - Neue Hauptversion: Zeigt der Lauf `latest` eine neue Nextcloud-Version grün, die Nummer in `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **und** in der Matrix von `integration.yml` ergänzen; `tests/unit/testedVersions.test.ts` schlägt sonst fehl.
