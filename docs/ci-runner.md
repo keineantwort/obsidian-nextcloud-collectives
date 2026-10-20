@@ -6,9 +6,16 @@ Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung de
 
 | Workflow | Auslöser | `runs-on` | Braucht |
 |---|---|---|---|
-| `ci.yml` | jeder PR, Push auf `main` | `ubuntu-latest` | Node.js (über `actions/setup-node`); ca. 1–2 Minuten |
-| `release.yml` | Tag `x.y.z` | `ubuntu-latest` | Node.js, `curl`, `jq`; Secret `RELEASE_TOKEN` |
+| `ci.yml` | jeder PR, Push auf `main` | `ubuntu-latest` | Job-Container `node:24-bookworm`, Cache-Server des Runners (siehe unten); ca. 1–2 Minuten |
+| `release.yml` | Tag `x.y.z` | `ubuntu-latest` | Job-Container `node:24-bookworm` (bringt `curl` und `git` mit), Cache-Server; Secret `RELEASE_TOKEN` |
 | `integration.yml` | Pull Request (bei Änderungen an `src/`, `tests/`, `scripts/dev-nextcloud/`, `package*.json`), Push auf `main`, Tag `x.y.z`, wöchentlich (Mo 03:00), manuell | **`docker-host`** | Docker mit Compose, siehe unten |
+
+## `ubuntu-latest` (Job-Container)
+
+- `ci.yml` und `release.yml` laufen im Image `node:24-bookworm`; Node wird nicht pro Lauf heruntergeladen. `jq` fehlt im Image, JSON wird mit `node -p` gelesen.
+- `actions/cache` legt `~/.npm` ab (Schlüssel: Hash von `package-lock.json`). Dafür muss im act_runner der Cache-Server eingeschaltet sein (`cache.enabled`, `host` aus den Job-Containern erreichbar, nicht `localhost`). Ohne ihn warnt der Schritt nur und `npm ci` lädt alles neu.
+- `container.force_pull: false` im Runner, damit das Image nicht bei jedem Job neu gezogen wird.
+- Umgesetzt im HomeLab (2026-10-20, act_runner v13.2): `cicd-runner1` und `cicd-runner2` haben je einen eigenen Cache-Server auf `172.17.0.1:8088` (nur von der Docker-Bridge im LXC erreichbar), Daten unter `/srv/act-runner/actcache`. Je Runner gibt es pro neuem Hash von `package-lock.json` einen ersten Lauf ohne Treffer. Der Runner räumt selbst auf: unbenutzte Einträge nach 7 Tagen, alle nach spätestens 30 Tagen.
 
 ## `docker-host` (Host-Runner auf den Docker-LXCs)
 
