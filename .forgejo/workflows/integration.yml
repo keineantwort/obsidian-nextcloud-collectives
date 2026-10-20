@@ -69,8 +69,9 @@ jobs:
         run: |
           sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
 
+      # Without a TTY the default reporter prints only whole files; verbose shows every test, so a hang is visible.
       - name: Integration tests
-        run: npm run test:int
+        run: npm run test:int -- --reporter=verbose
 
       - name: Server log on failure
         if: failure()
