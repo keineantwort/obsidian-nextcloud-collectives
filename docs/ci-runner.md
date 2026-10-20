@@ -15,6 +15,7 @@ Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung de
 - `ci.yml` und `release.yml` laufen im Image `node:24-bookworm`; Node wird nicht pro Lauf heruntergeladen. `jq` fehlt im Image, JSON wird mit `node -p` gelesen.
 - `actions/cache` legt `~/.npm` ab (Schlüssel: Hash von `package-lock.json`). Dafür muss im act_runner der Cache-Server eingeschaltet sein (`cache.enabled`, `host` aus den Job-Containern erreichbar, nicht `localhost`). Ohne ihn warnt der Schritt nur und `npm ci` lädt alles neu.
 - `container.force_pull: false` im Runner, damit das Image nicht bei jedem Job neu gezogen wird.
+- Umgesetzt im HomeLab (2026-10-20, act_runner v13.2): `cicd-runner1` und `cicd-runner2` haben je einen eigenen Cache-Server auf `172.17.0.1:8088` (nur von der Docker-Bridge im LXC erreichbar), Daten unter `/srv/act-runner/actcache`. Je Runner gibt es pro neuem Hash von `package-lock.json` einen ersten Lauf ohne Treffer. Der Runner räumt selbst auf: unbenutzte Einträge nach 7 Tagen, alle nach spätestens 30 Tagen.
 
 ## `docker-host` (Host-Runner auf den Docker-LXCs)
 
