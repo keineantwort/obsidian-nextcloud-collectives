@@ -22,8 +22,16 @@ Ein Release ist ein Git-Tag `x.y.z` (ohne `v`), das genau der `version` in `mani
 
 Diese Punkte aus ONC-11 lassen sich nicht per Code im Repo erledigen:
 
-- [ ] **Spiegelung nach Codeberg**: In Forgejo unter Repository › Einstellungen › Spiegel einen Push-Mirror auf das Codeberg-Repository einrichten (Codeberg-Zugangstoken mit Schreibrecht). Die Release-Dateien werden nicht mitgespiegelt; das Release auf Codeberg ggf. von Hand anlegen.
-- [ ] **BRAT**: BRAT liest nur GitHub. Für BRAT braucht es ein GitHub-Repository mit dem Release (ein weiterer Spiegel), sonst bleibt die manuelle Installation.
+- [ ] **GitHub-Repository anlegen** (Beschreibung und Lizenz MIT siehe unten) und die Spiegelung einschalten: In Forgejo unter Repository › Einstellungen › Actions › Variablen `MIRROR_GITHUB_REPO` (`owner/name`) und unter Secrets `MIRROR_GITHUB_TOKEN` (GitHub-Token, fein granular, nur dieses Repo, Berechtigung „Contents: Read and write“) anlegen. Danach pusht `ci.yml` jeden erfolgreichen Build auf `main` nach GitHub (ohne `--force`), und `release.yml` legt bei einem Tag das GitHub-Release mit den drei Dateien an. Codeberg entfällt (kein Code, der überwiegend mit KI entstanden ist).
+- [ ] **BRAT**: Funktioniert, sobald das GitHub-Release existiert: in BRAT „Add beta plugin“ mit `owner/name` des GitHub-Repositories.
 - [ ] **Veröffentlichung im Obsidian-Store**: Pull Request gegen `obsidianmd/obsidian-releases` (`community-plugins.json`), das Repository muss dafür öffentlich auf GitHub liegen und eine `README.md`, `LICENSE` und ein Release mit den drei Dateien enthalten. Vorher PLAN §15 Nr. 3 entscheiden.
 - [ ] **Screenshots** (Einstellungen, Konflikt-Dialog, Rückfrage beim Löschen, Dateiliste mit Emoji, Protokoll) für README, Obsidian-Detailseite und Community-Seite aufnehmen; ohne echte Servernamen oder Zugangsdaten.
 - [ ] **Hilfe- und Detailseiten** in Obsidian sowie die **Community-Seite** `https://community.obsidian.md/plugins/nextcloud-collectives` veröffentlichen, sobald der Store-Eintrag angenommen ist.
+
+## GitHub-Repository
+
+- **Beschreibung** (Feld „About“, höchstens 350 Zeichen): *Obsidian plugin that syncs all Nextcloud Collectives of a server with your vault in both directions – pages, hierarchy, tags, emoji, links and attachments. Conflicts become copies instead of overwrites. Works on desktop and mobile.*
+- **Themen**: `obsidian-plugin`, `obsidian-md`, `nextcloud`, `nextcloud-collectives`, `sync`, `markdown`, `webdav`
+- **Lizenz**: MIT (die Datei `LICENSE` liegt im Repo; beim Anlegen kein Template und keine README/`.gitignore` hinzufügen, damit der erste Push ohne Konflikt klappt)
+- **Sichtbarkeit**: öffentlich (für BRAT und den Store); Standard-Branch `main`
+- Issues dort optional ausschalten, wenn Rückmeldungen weiter über Forgejo laufen sollen.

@@ -530,7 +530,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M10 – Härtung und Release
 - Versions-Check, Log-Modal, README (Installation, Risiken, Backup-Hinweis), `manifest.json`, `versions.json`, Release-Build; Installation per BRAT.
 - Hinweis aus dem M4-Review: Verschobene Pushes (Remote-Stand unbestätigt, z. B. Proxy ohne `Last-Modified`/`Date` oder Server-Uhr in der Zukunft) zählen heute als unverändert; eigener Zähler `deferred` mit Warn-Notice.
-- Umsetzung (ONC-11, ADR 0023): `versionCheck.ts` (Warnung bei nicht getesteter Nextcloud-Hauptversion), Protokoll-Modal mit Befehl „Show log“ und `debugLogging`, Zähler `deferred`, `.forgejo/workflows/{ci,release}.yml`, `scripts/check-release.mjs`, Version 0.2.0, README (Installation, Risiken, Backup), `docs/release.md`. **Nicht im Repo lösbar:** Spiegelung nach Codeberg, Einreichung im Community-Store, Screenshots, Community-Seite – Checkliste in `docs/release.md`; Entscheidung §15 Nr. 3 steht beim Maintainer.
+- Umsetzung (ONC-11, ADR 0023): `versionCheck.ts` (Warnung bei nicht getesteter Nextcloud-Hauptversion), Protokoll-Modal mit Befehl „Show log“ und `debugLogging`, Zähler `deferred`, `.forgejo/workflows/{ci,release}.yml`, `scripts/check-release.mjs`, Version 0.2.0, README (Installation, Risiken, Backup), `docs/release.md`. **Nicht im Repo lösbar:** Spiegelung nach GitHub (Workflows fertig, Repository/Token fehlen), Einreichung im Community-Store, Screenshots, Community-Seite – Checkliste in `docs/release.md`; Entscheidung §15 Nr. 3 steht beim Maintainer.
 - Akzeptanz: Release-Artefakte (`main.js`, `manifest.json`, `styles.css`) gebaut; README vollständig.
 
 ## 15. Offene Entscheidungen
@@ -572,7 +572,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M7 | umgesetzt (ONC-8), gemergt |
 | M8 | umgesetzt (ONC-9), gemergt (PR #20) |
 | M9 | umgesetzt (ONC-10), gemergt; manuelle Checkliste `docs/manual-test.md` auf iOS/Android steht aus |
-| M10 | im Repo umgesetzt (ONC-11), PR offen; extern offen: Codeberg-Spiegel, Store-Einreichung, Screenshots, Community-Seite (`docs/release.md`) |
+| M10 | im Repo umgesetzt (ONC-11), PR offen; extern offen: GitHub-Repository und Mirror-Einrichtung, Store-Einreichung, Screenshots, Community-Seite (`docs/release.md`) |
 
 ## 18. Referenzen und Marktlage
 

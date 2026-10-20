@@ -53,3 +53,28 @@ jobs:
               -F "attachment=@${f};filename=${f}" \
               "${API}/releases/${RELEASE_ID}/assets?name=${f}"
           done
+
+      # BRAT and the Obsidian store read the release from GitHub. Skipped until MIRROR_GITHUB_REPO is set.
+      - name: Create GitHub release and upload the files
+        if: vars.MIRROR_GITHUB_REPO != ''
+        env:
+          TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          REPO: ${{ vars.MIRROR_GITHUB_REPO }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          AUTH=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          git -c "http.extraheader=Authorization: Basic ${AUTH}" push "https://github.com/${REPO}.git" "refs/tags/${TAG}"
+          RELEASE_ID=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\"}" \
+            "https://api.github.com/repos/${REPO}/releases" | jq -r '.id')
+          for f in main.js manifest.json styles.css; do
+            curl -sf -X POST \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${f}" \
+              "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${f}"
+          done

@@ -14,7 +14,7 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 
 Das Plugin ist noch nicht im Community-Store. Zwei Wege:
 
-1. **BRAT** (Plugin „Obsidian42 – BRAT“): „Add beta plugin“ mit dem Repository-Link des Plugins. BRAT lädt `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release und aktualisiert sie später. BRAT liest nur GitHub-Repositories; liegt das Release woanders, nimm den zweiten Weg.
+1. **BRAT** (Plugin „Obsidian42 – BRAT“): „Add beta plugin“ mit dem Repository-Link des Plugins. BRAT lädt `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release und aktualisiert sie später. BRAT liest GitHub-Releases; das Plugin wird nach GitHub gespiegelt (Repository-Link siehe Plugin-Seite). Solange es dort noch kein Release gibt, nimm den zweiten Weg.
 2. **Von Hand**: Lade `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release herunter, lege sie in `<Vault>/.obsidian/plugins/nextcloud-collectives/` und aktiviere das Plugin unter „Community plugins“. Auf dem Handy ist der Ordner `.obsidian` versteckt: Bereite den Vault am besten am Desktop vor.
 
 Danach in den Einstellungen die Server-URL eintragen und „Anmelden“ wählen. Die Release-Dateien baust du selbst mit `npm ci && npm run build` (erzeugt `main.js` im Projektordner).
