@@ -9,7 +9,9 @@ Nextcloud + Collectives + Circles in einem Container (SQLite), nur auf `127.0.0.
 ```
 
 - Weboberfläche: http://localhost:8080 (Admin bzw. Testnutzer `alice`, Passwörter in `.env`)
-- Version über `NC_VERSION` in `.env` wählbar (Default 33)
+- Version über `NC_VERSION` in `.env` wählbar (Default 33; getestet 33–35, siehe `docs/release.md`)
+- `./versions.sh [Projektname]` zeigt Nextcloud-, Collectives-, Circles- und Text-Version des laufenden Servers
+- `npm run test:int` nimmt `NC_PORT`, `NC_TEST_USER`, `NC_TEST_PASSWORD` auch aus der Umgebung (hat Vorrang vor `.env`)
 - `hooks/10-collectives.sh` läuft einmalig nach der Installation: Apps aktivieren, Testnutzer anlegen
 - App-Passwörter erzeugen Skripte bei Bedarf selbst per `occ user:auth-tokens:add`
 

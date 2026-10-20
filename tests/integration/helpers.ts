@@ -6,6 +6,8 @@ export interface TestServerEnv {
 	baseUrl: string;
 	user: string;
 	password: string;
+	/** NC_VERSION of the server image: a major version ('35') or a tag such as 'latest'. Empty if unknown. */
+	ncVersion: string;
 }
 
 const ENV_PATH = fileURLToPath(new URL('../../scripts/dev-nextcloud/.env', import.meta.url));
@@ -24,15 +26,21 @@ function parseEnvFile(content: string): Record<string, string> {
 	return vars;
 }
 
-/** Reads the throwaway test-server credentials from scripts/dev-nextcloud/.env at runtime. */
+/**
+ * Reads the throwaway test-server credentials from scripts/dev-nextcloud/.env at runtime. The same variables in the
+ * process environment win, so a second server (another NC_PORT, e.g. in CI per Nextcloud version) needs no .env edit.
+ */
 export function loadTestServerEnv(): TestServerEnv {
-	if (!existsSync(ENV_PATH)) throw new Error(NOT_CONFIGURED);
-	const vars = parseEnvFile(readFileSync(ENV_PATH, 'utf8'));
-	const port = vars['NC_PORT'];
-	const user = vars['NC_TEST_USER'];
-	const password = vars['NC_TEST_PASSWORD'];
+	const vars = existsSync(ENV_PATH) ? parseEnvFile(readFileSync(ENV_PATH, 'utf8')) : {};
+	const pick = (name: string): string | undefined => {
+		const fromProcess = process.env[name];
+		return fromProcess !== undefined && fromProcess !== '' ? fromProcess : vars[name];
+	};
+	const port = pick('NC_PORT');
+	const user = pick('NC_TEST_USER');
+	const password = pick('NC_TEST_PASSWORD');
 	if (!port || !user || !password) throw new Error(NOT_CONFIGURED);
-	return { baseUrl: 'http://localhost:' + port, user, password };
+	return { baseUrl: 'http://localhost:' + port, user, password, ncVersion: pick('NC_VERSION') ?? '' };
 }
 
 /** Test-only RequestFn backed by Node's global fetch. Resolves for every HTTP status; fetch rejections propagate. */

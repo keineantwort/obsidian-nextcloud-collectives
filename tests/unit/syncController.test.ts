@@ -384,3 +384,39 @@ describe('SyncController: dirty keys of unfinished runs', () => {
 		expect(controller.dirtyQueue.drain()).toEqual(new Set());
 	});
 });
+
+describe('SyncController: Nextcloud version check', () => {
+	/** A run that reports the given server version to the controller, as runSync does. */
+	function runReporting(major: number, minor = 0) {
+		runSyncMock.mockImplementationOnce((deps: { onServerVersion?: (v: unknown) => void }) => {
+			deps.onServerVersion?.({ major, minor, micro: 1, string: `${major}.${minor}.1` });
+			return Promise.resolve(done());
+		});
+	}
+
+	it('stays silent for a tested version', async () => {
+		runReporting(33);
+		const { controller } = setup();
+		await controller.runFromUi();
+		expect(texts().filter((x) => x.includes('not been tested'))).toEqual([]);
+	});
+
+	it('warns once per session and version about an untested version', async () => {
+		runReporting(40);
+		runReporting(40);
+		const { controller } = setup();
+		await controller.runFromUi();
+		await controller.runFromUi();
+		expect(texts().filter((x) => x.includes('Nextcloud 40.0.1 has not been tested'))).toHaveLength(1);
+		expect((shown.notices[0] as SyncNoticeSpec).level).toBe('warning');
+	});
+
+	it('warns again for another untested version', async () => {
+		runReporting(40);
+		runReporting(41);
+		const { controller } = setup();
+		await controller.runFromUi();
+		await controller.runFromUi();
+		expect(texts().filter((x) => x.includes('has not been tested'))).toHaveLength(2);
+	});
+});

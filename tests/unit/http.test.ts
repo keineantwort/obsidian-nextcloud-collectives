@@ -427,3 +427,30 @@ describe('HttpClient.send retries', () => {
 		expect(timing.delays).toEqual([]);
 	});
 });
+
+describe('HttpClient onAttempt (debug log)', () => {
+	it('reports method, path, status and duration of every attempt, without headers or body', async () => {
+		const seen: { method: string; path: string; status: number; ms: number }[] = [];
+		const fake = fakeRequest(reply(500), reply(200));
+		const client = new HttpClient({ baseUrl: BASE_URL, username: 'alice', appPassword: PASSWORD, request: fake.fn, sleep: async () => undefined, onAttempt: (info) => seen.push(info) });
+
+		await client.send({ method: 'GET', path: PATH });
+
+		expect(seen.map(({ method, path, status }) => ({ method, path, status }))).toEqual([
+			{ method: 'GET', path: PATH, status: 500 },
+			{ method: 'GET', path: PATH, status: 200 },
+		]);
+		expect(seen.every((s) => s.ms >= 0)).toBe(true);
+		expect(JSON.stringify(seen)).not.toContain(PASSWORD);
+	});
+
+	it('reports status 0 when no response arrived', async () => {
+		const seen: { status: number }[] = [];
+		const fake = fakeRequest(new Error('offline'));
+		const client = new HttpClient({ baseUrl: BASE_URL, username: 'alice', appPassword: PASSWORD, request: fake.fn, retry: false, onAttempt: (info) => seen.push(info) });
+
+		await expect(client.send({ method: 'PUT', path: PATH })).rejects.toBeInstanceOf(NetworkError);
+
+		expect(seen.map((s) => s.status)).toEqual([0]);
+	});
+});

@@ -2,7 +2,37 @@
 
 Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit einem Vault synchronisiert.
 
-**Status:** in Entwicklung (M5: Struktur) – noch nicht einsatzbereit. Spezifikation und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
+**Status:** Vorab-Version 0.2.0, noch nicht im Community-Store. Funktionsumfang und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
+
+## Voraussetzungen
+
+- Obsidian ab 1.11.4 (Desktop, iOS und Android).
+- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33, 34 und 35 (jeweils mit der dazu passenden Collectives-Version, zuletzt 4.7.1). Welche Versionen genau gelaufen sind, steht im Protokoll des wöchentlichen Integrationslaufs. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
+- Ein Nextcloud-Konto; das Plugin meldet sich per Login Flow oder mit einem App-Passwort an (kein Hauptpasswort).
+
+## Installation
+
+Das Plugin ist noch nicht im Community-Store. Zwei Wege:
+
+1. **BRAT** (Plugin „Obsidian42 – BRAT“): „Add beta plugin“ mit dem Repository-Link des Plugins. BRAT lädt `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release und aktualisiert sie später. BRAT liest GitHub-Releases; das Plugin wird nach GitHub gespiegelt (Repository-Link siehe Plugin-Seite). Solange es dort noch kein Release gibt, nimm den zweiten Weg.
+2. **Von Hand**: Lade `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release herunter, lege sie in `<Vault>/.obsidian/plugins/nextcloud-collectives/` und aktiviere das Plugin unter „Community plugins“. Auf dem Handy ist der Ordner `.obsidian` versteckt: Bereite den Vault am besten am Desktop vor.
+
+Danach in den Einstellungen die Server-URL eintragen und „Anmelden“ wählen. Die Release-Dateien baust du selbst mit `npm ci && npm run build` (erzeugt `main.js` im Projektordner).
+
+## Risiken und Backup
+
+Das Plugin schreibt in beide Richtungen: in deinen Vault **und** auf deinen Nextcloud-Server. Fehler können Seiten verändern, verschieben oder in den Papierkorb legen.
+
+- **Mache vor der ersten Synchronisierung eine Sicherung** des Vault-Ordners (und bei wichtigen Collectives eine Sicherung auf dem Server). Lege für die erste Synchronisierung am besten einen neuen, leeren Vault an.
+- Das Plugin überschreibt nichts still: Bei Konflikten bleibt deine Datei erhalten, gelöscht wird nur nach Rückfrage und nur in die Papierkörbe (Collectives bzw. Obsidian), siehe unten.
+- **Gleichzeitiges Bearbeiten im Browser** und in Obsidian kann Eingaben im Browser verlieren (Abschnitt „Konflikte“).
+- Ein Vault gehört zu **einem** Server und **einem** Konto. Ein anderes Konto braucht einen neuen Vault.
+- Die Collectives-Schnittstelle ist nicht offiziell stabil. Antwortet der Server unerwartet, stoppt das Plugin mit einer Meldung, statt zu raten.
+- Das App-Passwort liegt im Secret Storage von Obsidian, nicht in den Plugin-Einstellungen und nie im Protokoll.
+
+## Hilfe bei Problemen
+
+Der Befehl **„Protokoll anzeigen“** (auch in den Einstellungen unter „Diagnose“) zeigt, was das Plugin in dieser Sitzung getan hat, und kopiert es. Mit der Einstellung „Ausführliches Protokoll“ steht zusätzlich jede Anfrage an den Server darin (Methode, Pfad, Status, Dauer; nie Passwörter oder Inhalte). Hänge das Protokoll an eine Fehlermeldung. Es liegt nur im Speicher und ist nach einem Neustart weg.
 
 ## Hilfe
 

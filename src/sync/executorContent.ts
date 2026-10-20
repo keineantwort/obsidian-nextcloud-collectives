@@ -227,7 +227,7 @@ async function updatePage(op: ContentOp, deps: ExecutorDeps, result: SyncResult,
 		if (action === 'push' && !remote.confirmed) {
 			deps.log.info('Push deferred: remote version not confirmed', { pageId: op.page.id });
 			deps.state.pages[String(op.page.id)] = { ...s, ...remoteFields(op.page, remote), lastSyncedAt: now };
-			result.unchanged++;
+			result.deferred++;
 			return true;
 		}
 	}

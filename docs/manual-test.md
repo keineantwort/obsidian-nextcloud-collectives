@@ -49,3 +49,9 @@ Das Plugin ist nicht im Community-Store (PLAN §15 Nr. 3). Zwei Wege:
 ## 5. Performance (Desktop, Testserver im LAN)
 
 - [ ] Collective mit ≥ 500 Seiten: Leerlauf-Sync (nichts geändert) dauert < 5 s. Der Integrationstest `tests/integration/performance.test.ts` prüft das automatisiert gegen den Docker-Testserver.
+
+## 6. Diagnose (M10)
+
+- [ ] „Protokoll anzeigen“ (Befehl und Einstellungen) öffnet das Protokoll; „Protokoll kopieren“ legt es in die Zwischenablage; kein Passwort darin
+- [ ] Mit „Ausführliches Protokoll“ stehen die Anfragen (Methode, Pfad, Status) im Protokoll
+- [ ] Server mit nicht getesteter Nextcloud-Version: eine Warnung, danach läuft der Sync

@@ -344,6 +344,25 @@ export class NcSettingTab extends PluginSettingTab {
 					plugin.refreshEmojiTitles();
 				});
 			});
+
+		new Setting(containerEl).setName(t('settings.heading.diagnostics')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('settings.log.name'))
+			.setDesc(t('settings.log.desc'))
+			.addButton((btn) => {
+				btn.setButtonText(t('settings.log.button')).onClick(() => { plugin.showLog(); });
+			});
+
+		new Setting(containerEl)
+			.setName(t('settings.debugLogging.name'))
+			.setDesc(t('settings.debugLogging.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.debugLogging).onChange(async (value) => {
+					settings.debugLogging = value;
+					await plugin.saveSettings();
+				});
+			});
 	}
 
 	/** Login Flow v2: a button that opens the Nextcloud login page; username and app password are filled in afterwards. */

@@ -3,6 +3,7 @@
 import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import { obsidianRequest } from './api/obsidianRequest';
+import { versionStatus, type ServerVersion } from './api/versionCheck';
 import type { Translator } from './i18n';
 import { toRemote } from './mapping/frontmatter';
 import type { PageId } from './api/types';
@@ -82,6 +83,8 @@ export class SyncController {
 	private rerun: RunKind | null = null;
 	/** After a login failure automatic runs stop until the user runs a sync or changes the settings (PLAN §12). */
 	private paused = false;
+	/** Server versions already warned about in this session. */
+	private readonly warnedVersions = new Set<string>();
 	/** Last automatic notice; the same text is not shown again until something else happened. */
 	private lastAutoNotice: string | null = null;
 	/** Keys that the running sync took from the dirty queue; they go back if the run does not finish cleanly. */
@@ -204,6 +207,7 @@ export class SyncController {
 				stateStore: this.host.stateStore(),
 				t,
 				log,
+				onServerVersion: (version) => { this.noteServerVersion(version); },
 				onLinks: (links) => {
 					this.lastLinks = links;
 				},
@@ -252,6 +256,15 @@ export class SyncController {
 			await this.refreshState();
 			this.host.onStatusChange();
 		}
+	}
+
+	/** Version check (PLAN §12): logged every run, shown at most once per session and version. */
+	private noteServerVersion(version: ServerVersion): void {
+		const status = versionStatus(version);
+		this.host.log.info('Nextcloud version', { version: version.string, tested: status === 'tested' });
+		if (status === 'tested' || this.warnedVersions.has(version.string)) return;
+		this.warnedVersions.add(version.string);
+		showSyncNotice({ lines: [this.host.t('sync.versionUntested', { version: version.string })], level: 'warning' });
 	}
 
 	/** An automatic notice: only warnings and errors, and the same text only once in a row. */

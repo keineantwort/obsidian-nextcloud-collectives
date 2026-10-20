@@ -1130,7 +1130,7 @@ describe('executeSync: push after an unconfirmed remote ETag', () => {
 		expect(h.dav.puts()).toEqual([]);
 		expect(h.dav.content(NOTE)).toBe(REMOTE_V1);
 		expect(await h.vault.read(NOTE_PATH)).toBe(userText);
-		expect(result).toEqual({ ...ZERO_RESULT, unchanged: 1 });
+		expect(result).toEqual({ ...ZERO_RESULT, deferred: 1 });
 		expect(stateOf(h, NOTE)).toMatchObject({
 			remoteMtime: UNCONFIRMED_REMOTE_MTIME,
 			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),

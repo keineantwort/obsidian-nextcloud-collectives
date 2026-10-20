@@ -3,7 +3,8 @@ name: nc-collectives-dev
 
 services:
   nextcloud:
-    image: nextcloud:${NC_VERSION:-33}-apache
+    # NC_IMAGE_TAG overrides the tag as a whole: the newest image is "apache" (there is no "latest-apache").
+    image: nextcloud:${NC_IMAGE_TAG:-${NC_VERSION:-33}-apache}
     ports:
       - "127.0.0.1:${NC_PORT:-8080}:80"
     environment:

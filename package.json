@@ -1,6 +1,6 @@
 {
   "name": "nextcloud-collectives",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Obsidian plugin that syncs Nextcloud Collectives bidirectionally with a vault.",
   "main": "main.js",
   "type": "module",
@@ -11,6 +11,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "lint": "eslint .",
+    "release:check": "node scripts/check-release.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:int": "vitest run --config vitest.integration.config.ts",
     "nc:up": "sh scripts/dev-nextcloud/up.sh",

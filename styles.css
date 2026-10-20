@@ -140,3 +140,7 @@
 /* The note of a folder first in its folder (display only; the flag comes from src/ui/emojiTitles.ts). */
 .nav-folder-children:has(> .nav-file[data-nc-folder-note]) { display: flex; flex-direction: column; }
 .nav-folder-children > .nav-file[data-nc-folder-note] { order: -1; }
+
+/* Log view */
+.nc-log .nc-log-text { width: 100%; min-height: 40vh; font-family: var(--font-monospace); font-size: var(--font-smaller); resize: vertical; white-space: pre; }
+.is-mobile .nc-log .modal-button-container button { min-height: 44px; padding-inline: var(--size-4-4); }

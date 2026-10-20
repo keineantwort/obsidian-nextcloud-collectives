@@ -1,0 +1,83 @@
+name: Integration (Nextcloud versions)
+
+# Runs the integration tests (npm run test:int) against every Nextcloud version listed in TESTED_NEXTCLOUD_MAJORS
+# (src/api/versionCheck.ts; tests/unit/testedVersions.test.ts keeps both lists equal). Each run starts a fresh
+# Nextcloud with the newest Collectives that fits (hooks/10-collectives.sh) and prints both versions into the log.
+# The job "latest" tests the newest image as an early warning for the next major version; it may fail without
+# failing the workflow. Runs on the runner label docker-host (requirements: docs/ci-runner.md).
+on:
+  pull_request:
+    # Only changes that can affect the tests; a push to main or a tag always runs them (a paths filter would also hold back tags).
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/dev-nextcloud/**"
+      - ".forgejo/workflows/integration.yml"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches: [main]
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+# A new push to the same branch replaces the run that is still going (the cleanup step runs on cancel as well).
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Nextcloud ${{ matrix.nc }}
+    # Host runner on the Docker LXCs: no job container, it uses what is installed there (Node, curl, jq, git, Docker with Compose).
+    runs-on: docker-host
+    continue-on-error: ${{ matrix.experimental == true }}
+    timeout-minutes: 45
+    env:
+      # Own Compose project and port per version: the matrix jobs may run at the same time on one Docker host.
+      COMPOSE_PROJECT_NAME: nc-test-${{ matrix.nc }}
+    strategy:
+      fail-fast: false
+      matrix:
+        nc: [33, 34, 35]
+        include:
+          - { nc: 33, port: 8133 }
+          - { nc: 34, port: 8134 }
+          - { nc: 35, port: 8135 }
+          - { nc: latest, port: 8199, experimental: true }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure the test server
+        working-directory: scripts/dev-nextcloud
+        run: |
+          cp .env.example .env
+          sed -i -e "s/^NC_VERSION=.*/NC_VERSION=${{ matrix.nc }}/" -e "s/^NC_PORT=.*/NC_PORT=${{ matrix.port }}/" .env
+          # The image of the newest version is nextcloud:apache; "latest-apache" does not exist on Docker Hub.
+          if [ "${{ matrix.nc }}" = "latest" ]; then echo "NC_IMAGE_TAG=apache" >> .env; fi
+
+      - name: Start Nextcloud with Collectives
+        working-directory: scripts/dev-nextcloud
+        run: docker compose up -d --wait --wait-timeout 600
+
+      - name: Versions under test
+        run: |
+          sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Integration tests
+        run: npm run test:int
+
+      - name: Server log on failure
+        if: failure()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose logs --tail 200 nextcloud
+
+      - name: Stop and delete the test server
+        if: always()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose down -v

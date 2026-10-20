@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (typecheck and bundle)
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # Integration tests (npm run test:int) need the Docker test server and run locally (PLAN §15 no. 8).
+
+  # Every merge build (push to main) that passed is mirrored to GitHub (docs/release.md). Skipped until the repository
+  # variable MIRROR_GITHUB_REPO ("owner/name") is set; needs the secret MIRROR_GITHUB_TOKEN (contents: write).
+  mirror-github:
+    needs: build-and-test
+    if: github.event_name == 'push' && vars.MIRROR_GITHUB_REPO != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to GitHub
+        env:
+          TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          REPO: ${{ vars.MIRROR_GITHUB_REPO }}
+        run: |
+          AUTH=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          # No --force: if someone changed main on GitHub, the push fails instead of overwriting it.
+          git -c "http.extraheader=Authorization: Basic ${AUTH}" push "https://github.com/${REPO}.git" "${GITHUB_SHA}:refs/heads/main"

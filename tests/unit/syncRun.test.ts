@@ -99,6 +99,8 @@ class FakeNextcloud {
 	readonly pages: Record<string, unknown>[] = structuredClone(PAGES_FIXTURE);
 	readonly davFiles = new Map<string, DavFileEntry>();
 	private putCount = 0;
+	/** Answer of the capabilities endpoint; null = 404. */
+	capabilities: HttpResponse | null = null;
 
 	readonly request: RequestFn = async (req) => {
 		this.calls.push(req);
@@ -115,6 +117,7 @@ class FakeNextcloud {
 
 	private answer(req: HttpRequest): HttpResponse {
 		if (req.url === BASE + '/ocs/v2.php/cloud/user') return ocs({ id: 'alice-id' });
+		if (req.url === BASE + '/ocs/v2.php/cloud/capabilities') return this.capabilities ?? NOT_FOUND;
 		if (req.url === OCS + '/collectives') return ocs(HANDBUCH_ONLY);
 		if (req.url === OCS + '/collectives/1/pages') return ocs({ pages: this.pages });
 		if (req.url === OCS + '/collectives/1/tags') return ocs(TAGS_FIXTURE);
@@ -854,5 +857,53 @@ describe('runSync: local edits that keep the mtime', () => {
 		expect(server.davRequests(callsBefore)).toEqual([]);
 		expect(server.davFiles.get(PAGE_102_REMOTE)?.content).toBe(remoteBefore);
 		expect(await vault.read(PAGE_102_LOCAL)).toBe(edited);
+	});
+});
+
+describe('runSync: version check and debug log', () => {
+	it('reports the Nextcloud version of the server once per run', async () => {
+		const server = new FakeNextcloud();
+		server.capabilities = ocs({ version: { major: 33, minor: 0, micro: 10, string: '33.0.10' }, capabilities: {} });
+		const onServerVersion = vi.fn();
+
+		await runSync(makeDeps(server, new MemoryVault(), new FakeStateFile(), { onServerVersion }));
+
+		expect(onServerVersion).toHaveBeenCalledTimes(1);
+		expect(onServerVersion).toHaveBeenCalledWith({ major: 33, minor: 0, micro: 10, string: '33.0.10' });
+	});
+
+	it.each([
+		['the endpoint is missing', null],
+		['the answer has no version', ocs({ capabilities: {} })],
+	])('still syncs when %s, and only logs a warning', async (_name, capabilities) => {
+		const server = new FakeNextcloud();
+		server.capabilities = capabilities;
+		const deps = makeDeps(server, new MemoryVault(), new FakeStateFile(), { onServerVersion: vi.fn() });
+
+		const outcome = await runSync(deps);
+
+		expect(outcome).toMatchObject({ kind: 'done', result: { created: 6 } });
+		expect(deps.onServerVersion).not.toHaveBeenCalled();
+		expect(deps.log.entries().some((e) => e.level === 'warn' && e.message.startsWith('Server version'))).toBe(true);
+	});
+
+	it('logs no request details by default', async () => {
+		const deps = makeDeps(new FakeNextcloud(), new MemoryVault(), new FakeStateFile());
+		await runSync(deps);
+		expect(deps.log.entries().filter((e) => e.level === 'debug')).toEqual([]);
+	});
+
+	it('logs method, path, status and duration of every request with debugLogging, and never the password', async () => {
+		const deps = makeDeps(new FakeNextcloud(), new MemoryVault(), new FakeStateFile());
+		deps.settings.debugLogging = true;
+
+		await runSync(deps);
+
+		const debug = deps.log.entries().filter((e) => e.level === 'debug');
+		expect(debug.length).toBeGreaterThan(5);
+		const user = debug.find((e) => e.message === 'GET /ocs/v2.php/cloud/user');
+		expect(user?.data?.['status']).toBe(200);
+		expect(JSON.stringify(deps.log.entries())).not.toContain(PASSWORD);
+		expect(JSON.stringify(deps.log.entries())).not.toContain('Basic ');
 	});
 });

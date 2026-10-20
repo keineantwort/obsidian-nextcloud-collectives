@@ -428,7 +428,7 @@ Code-Blöcke und Inline-Code werden von der Konvertierung ausgenommen.
 
 - Fehlerklassen (Abbildung zentral in `src/api/http.ts`, ADR 0015): `AuthError` (401 → Sync pausieren, Notice), `ForbiddenError` (403 → keine Rechte an dieser Ressource; nur die Operation scheitert, Hinweis), `NotFound` (404), `Conflict` (412), `Network` (Retry mit Backoff 1/2/4 s, max. 3), `ServerError` (5xx und sonstige Nicht-2xx; Retry nur bei 5xx), `ApiChanged` (unerwartete Antwortstruktur → Sync stoppen, klare Meldung). Retry nur für lesende Requests (`GET`, `PROPFIND`); Schreibzugriffe wiederholt erst der nächste Lauf.
 - Beim Start Versions-Check: Nextcloud-Version aus `/ocs/v2.php/cloud/capabilities` gegen getestete Versionen prüfen; bei Abweichung Warnung. Die Collectives-Version ist für normale Nutzer nicht abfragbar (nicht in den Capabilities, App-API nur für Admins, M0). Kompatibilität sichert daher die Strukturprüfung der Antworten (`ApiChanged`).
-- Logger mit Ringpuffer (letzte 500 Einträge), anzeigbar im Modal, kopierbar; `debugLogging` schaltet Request-Details (ohne Auth-Header) zu.
+- Logger mit Ringpuffer (letzte 500 Einträge), anzeigbar im Modal, kopierbar; `debugLogging` schaltet Request-Details (ohne Auth-Header) zu. Umgesetzt in M10 (ADR 0023): Versions-Check warnt einmal je Sitzung bei nicht getesteter Hauptversion (`TESTED_NEXTCLOUD_MAJORS`).
 
 ## 13. Tests und Qualität
 
@@ -530,6 +530,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 ### M10 – Härtung und Release
 - Versions-Check, Log-Modal, README (Installation, Risiken, Backup-Hinweis), `manifest.json`, `versions.json`, Release-Build; Installation per BRAT.
 - Hinweis aus dem M4-Review: Verschobene Pushes (Remote-Stand unbestätigt, z. B. Proxy ohne `Last-Modified`/`Date` oder Server-Uhr in der Zukunft) zählen heute als unverändert; eigener Zähler `deferred` mit Warn-Notice.
+- Umsetzung (ONC-11, ADR 0023): `versionCheck.ts` (Warnung bei nicht getesteter Nextcloud-Hauptversion), Protokoll-Modal mit Befehl „Show log“ und `debugLogging`, Zähler `deferred`, `.forgejo/workflows/{ci,release}.yml`, `scripts/check-release.mjs`, Version 0.2.0, README (Installation, Risiken, Backup), `docs/release.md`. **Nicht im Repo lösbar:** Spiegelung nach GitHub (Workflows fertig, Repository/Token fehlen), Einreichung im Community-Store, Screenshots, Community-Seite – Checkliste in `docs/release.md`; Entscheidung §15 Nr. 3 steht beim Maintainer.
 - Akzeptanz: Release-Artefakte (`main.js`, `manifest.json`, `styles.css`) gebaut; README vollständig.
 
 ## 15. Offene Entscheidungen
@@ -538,12 +539,12 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 |---|---|---|
 | 1 | Plugin-Name und ID | **entschieden:** `nextcloud-collectives` |
 | 2 | Lizenz | **entschieden:** MIT |
-| 3 | Veröffentlichung im Community-Store | erst nach M10 entscheiden; bis dahin BRAT |
+| 3 | Veröffentlichung im Community-Store | erst nach M10 und bestandener Checkliste `docs/manual-test.md` entscheiden; bis dahin BRAT bzw. manuelle Installation (siehe `docs/release.md`) |
 | 4 | Mehrere Nextcloud-Server | **entschieden:** ein Server pro Vault; alle Collectives bilden den Vault |
 | 5 | Nutzer-Frontmatter mit hochladen? | **entschieden:** ja, nur `nc_*` entfernen |
-| 6 | Ziel-Version Nextcloud/Collectives | **erfasst (M0):** Nextcloud 33.0.10, Collectives 4.7.1 |
+| 6 | Ziel-Version Nextcloud/Collectives | **erfasst:** Nextcloud 33, 34, 35 (zuletzt 33.0.10, 34.0.5, 35.0.2), jeweils Collectives 4.7.1; Matrix in `.forgejo/workflows/integration.yml` |
 | 7 | Eigenes Plugin oder bestehendes nutzen/forken? | **entschieden:** eigenes Plugin; bestehende Plugins nur als Referenz (siehe 18) |
-| 8 | Integrationstests in CI | Remote-Testserver (z. B. im HomeLab) aufbauen, damit Forgejo Actions `test:int` ausführen kann. Bis dahin lokal per Docker. Entscheidung spätestens vor M4 |
+| 8 | Integrationstests in CI | **entschieden (M10, ADR 0023):** Docker-Testserver im Runner, Matrix über die getesteten Nextcloud-Hauptversionen (`integration.yml`), wöchentlich/manuell/bei Release-Tags |
 
 ## 16. Risiken
 
@@ -570,8 +571,8 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M6 | umgesetzt (ONC-7), gemergt |
 | M7 | umgesetzt (ONC-8), gemergt |
 | M8 | umgesetzt (ONC-9), gemergt (PR #20) |
-| M9 | umgesetzt (ONC-10), PR offen; manuelle Checkliste `docs/manual-test.md` auf iOS/Android steht aus |
-| M10 | offen |
+| M9 | umgesetzt (ONC-10), gemergt; manuelle Checkliste `docs/manual-test.md` auf iOS/Android steht aus |
+| M10 | im Repo umgesetzt (ONC-11), PR offen; extern offen: GitHub-Repository und Mirror-Einrichtung, Store-Einreichung, Screenshots, Community-Seite (`docs/release.md`) |
 
 ## 18. Referenzen und Marktlage
 
