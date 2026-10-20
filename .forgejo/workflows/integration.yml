@@ -4,7 +4,7 @@ name: Integration (Nextcloud versions)
 # (src/api/versionCheck.ts; tests/unit/testedVersions.test.ts keeps both lists equal). Each run starts a fresh
 # Nextcloud with the newest Collectives that fits (hooks/10-collectives.sh) and prints both versions into the log.
 # The job "latest" tests the newest image as an early warning for the next major version; it may fail without
-# failing the workflow. Needs a runner with Docker and the Compose plugin (requirements: docs/ci-runner.md).
+# failing the workflow. Runs on the runner label docker-host (requirements: docs/ci-runner.md).
 on:
   schedule:
     - cron: "0 3 * * 1"
@@ -16,7 +16,8 @@ on:
 jobs:
   integration:
     name: Nextcloud ${{ matrix.nc }}
-    runs-on: ubuntu-latest
+    # Host runner on the Docker LXCs: no job container, it uses what is installed there (Node, curl, jq, git, Docker with Compose).
+    runs-on: docker-host
     continue-on-error: ${{ matrix.experimental == true }}
     timeout-minutes: 45
     env:
@@ -33,11 +34,6 @@ jobs:
           - { nc: latest, port: 8199, experimental: true }
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
 
       - name: Install dependencies
         run: npm ci
