@@ -8,16 +8,20 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Node comes with the image, so no download per run (no actions/setup-node).
+    container: node:24-bookworm
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # The npm cache needs the cache server of the runner (docs/ci-runner.md); without it the step only warns.
+      - uses: actions/cache@v4
         with:
-          node-version: "22"
-          cache: npm
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Build (typecheck and bundle)
         run: npm run build

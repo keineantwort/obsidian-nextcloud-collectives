@@ -319,8 +319,8 @@ describe('formatSyncResult: deferred pushes', () => {
 		const one = formatSyncResult(result({ deferred: 1 }), 4, en);
 		expect(one.level).toBe('warning');
 		expect(one.lines[0]).not.toContain('up to date');
-		expect(one.lines.at(-1)).toBe('1 page was not sent: the server did not confirm its current version. It will be retried on the next sync.');
-		expect(formatSyncResult(result({ deferred: 2 }), 4, en).lines.at(-1)).toContain('2 pages were not sent');
-		expect(formatSyncResult(result({ deferred: 2 }), 4, de).lines.at(-1)).toContain('2 Seiten wurden nicht gesendet');
+		expect(one.lines.slice(-1)[0]).toBe('1 page was not sent: the server did not confirm its current version. It will be retried on the next sync.');
+		expect(formatSyncResult(result({ deferred: 2 }), 4, en).lines.slice(-1)[0]).toContain('2 pages were not sent');
+		expect(formatSyncResult(result({ deferred: 2 }), 4, de).lines.slice(-1)[0]).toContain('2 Seiten wurden nicht gesendet');
 	});
 });
