@@ -58,6 +58,8 @@ jobs:
         run: |
           cp .env.example .env
           sed -i -e "s/^NC_VERSION=.*/NC_VERSION=${{ matrix.nc }}/" -e "s/^NC_PORT=.*/NC_PORT=${{ matrix.port }}/" .env
+          # The image of the newest version is nextcloud:apache; "latest-apache" does not exist on Docker Hub.
+          if [ "${{ matrix.nc }}" = "latest" ]; then echo "NC_IMAGE_TAG=apache" >> .env; fi
 
       - name: Start Nextcloud with Collectives
         working-directory: scripts/dev-nextcloud
