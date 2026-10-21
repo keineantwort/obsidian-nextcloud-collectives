@@ -46,13 +46,15 @@ jobs:
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          RELEASE_ID=$(curl -sf -X POST \
+          # On an HTTP error, print status and server answer instead of failing silently.
+          RESPONSE=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: token ${FORGEJO_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\"}" \
-            "${API}/releases" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
+            "${API}/releases") || { echo "$RESPONSE" >&2; exit 1; }
+          RELEASE_ID=$(printf '%s' "$RESPONSE" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
           for f in main.js manifest.json styles.css; do
-            curl -sf -X POST \
+            curl -sS --fail-with-body -X POST \
               -H "Authorization: token ${FORGEJO_TOKEN}" \
               -F "attachment=@${f};filename=${f}" \
               "${API}/releases/${RELEASE_ID}/assets?name=${f}"
@@ -69,13 +71,15 @@ jobs:
           AUTH=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$AUTH"
           git -c "http.extraheader=Authorization: Basic ${AUTH}" push "https://github.com/${REPO}.git" "refs/tags/${TAG}"
-          RELEASE_ID=$(curl -sf -X POST \
+          # On an HTTP error, print status and server answer instead of failing silently.
+          RESPONSE=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\"}" \
-            "https://api.github.com/repos/${REPO}/releases" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
+            "https://api.github.com/repos/${REPO}/releases") || { echo "$RESPONSE" >&2; exit 1; }
+          RELEASE_ID=$(printf '%s' "$RESPONSE" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
           for f in main.js manifest.json styles.css; do
-            curl -sf -X POST \
+            curl -sS --fail-with-body -X POST \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/octet-stream" \
