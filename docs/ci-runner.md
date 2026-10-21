@@ -32,4 +32,4 @@ Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung de
 
 ## Aufräumen
 
-Abgebrochene Jobs (Timeout, Runner-Neustart) können Container und Volumes `nc-test-*` zurücklassen. Gezielt: `docker compose -p nc-test-<Version> down -v` auf dem betroffenen LXC, im Zweifel `docker system prune`.
+Abgebrochene Jobs (Timeout, Runner-Neustart) können Container und Volumes `nc-test-*` zurücklassen. Der nächste Lauf derselben Version räumt sie vor dem Start selbst weg (`docker compose down -v` im Schritt „Start Nextcloud“). Sonst würde er den alten Server mit allen Seiten des abgebrochenen Laufs weiterverwenden. Gezielt: `docker compose -p nc-test-<Version> down -v` auf dem betroffenen LXC, im Zweifel `docker system prune`.
