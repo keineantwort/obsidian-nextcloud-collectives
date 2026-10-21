@@ -61,9 +61,14 @@ jobs:
           # The image of the newest version is nextcloud:apache; "latest-apache" does not exist on Docker Hub.
           if [ "${{ matrix.nc }}" = "latest" ]; then echo "NC_IMAGE_TAG=apache" >> .env; fi
 
+      # A run that hit the timeout or was cancelled can leave the server of its version behind (the cleanup step does not
+      # always run then). "up" would reuse it with all pages of that run, which makes every later test slow (see
+      # tests/integration/performance.test.ts), so each run first deletes what is left.
       - name: Start Nextcloud with Collectives
         working-directory: scripts/dev-nextcloud
-        run: docker compose up -d --wait --wait-timeout 600
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose up -d --wait --wait-timeout 600
 
       - name: Versions under test
         run: |
