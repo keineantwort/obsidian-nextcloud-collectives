@@ -4,6 +4,7 @@ import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
+import { settingsManualUrl } from './manualLinks';
 import { isSyncDebounceSec, isSyncIntervalMinutes, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
@@ -27,6 +28,10 @@ export class NcSettingTab extends PluginSettingTab {
 		const settings = plugin.settings;
 		const t = plugin.t;
 		containerEl.empty();
+
+		const helpSetting = new Setting(containerEl).setName(t('settings.help.name'));
+		helpSetting.descEl.appendText(`${t('settings.help.desc')} `);
+		helpSetting.descEl.createEl('a', { text: t('settings.help.link'), href: settingsManualUrl(plugin.locale) });
 
 		new Setting(containerEl).setName(t('settings.heading.connection')).setHeading();
 

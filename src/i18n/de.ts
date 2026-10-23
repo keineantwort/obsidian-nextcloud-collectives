@@ -2,6 +2,9 @@ import type { MessageKey } from './en';
 
 /** German UI texts. Must contain every key of en.ts (enforced by the type). */
 export const de: Record<MessageKey, string> = {
+	'settings.help.name': 'Hilfe',
+	'settings.help.desc': 'Das Handbuch erklärt jede Einstellung ausführlich.',
+	'settings.help.link': 'Handbuch öffnen',
 	'settings.heading.connection': 'Verbindung',
 	'settings.serverUrl.name': 'Server-URL',
 	'settings.serverUrl.desc': 'Adresse deines Nextcloud-Servers. Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen.',

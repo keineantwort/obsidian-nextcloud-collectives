@@ -3,7 +3,7 @@ import type { Menu, TAbstractFile } from 'obsidian';
 import { normalizeServerUrl, testConnection, type ConnectionResult } from './api/connection';
 import { awaitLoginFlow, startLoginFlow, type LoginFlowStart } from './api/loginFlow';
 import { obsidianRequest } from './api/obsidianRequest';
-import { createTranslator, resolveLocale, type Translator } from './i18n';
+import { createTranslator, resolveLocale, type Locale, type Translator } from './i18n';
 import {
 	DEFAULT_SETTINGS, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour, isSyncDebounceSec, isSyncIntervalMinutes, NcSettings,
 } from './settings/types';
@@ -24,6 +24,7 @@ import { isRecord } from './util/isRecord';
 
 export default class NextcloudCollectivesPlugin extends Plugin {
 	settings: NcSettings = { ...DEFAULT_SETTINGS };
+	locale: Locale = 'en';
 	t: Translator = createTranslator('en');
 	/** In-memory log of this session; shown by the log modal (architecture §12). Never logs credentials. */
 	readonly log = new Logger();
@@ -47,7 +48,8 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		// Obsidian requires a restart after a language change, so the language is resolved once here.
-		this.t = createTranslator(resolveLocale(getLanguage()));
+		this.locale = resolveLocale(getLanguage());
+		this.t = createTranslator(this.locale);
 		await this.loadSettings();
 		const sync = new SyncController({
 			app: this.app,

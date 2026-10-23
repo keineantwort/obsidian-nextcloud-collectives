@@ -1,5 +1,8 @@
 /** English UI texts. Source of truth for the available keys. Placeholders: {name}. */
 export const en = {
+	'settings.help.name': 'Help',
+	'settings.help.desc': 'Every setting is explained in detail in the manual.',
+	'settings.help.link': 'Open the manual',
 	'settings.heading.connection': 'Connection',
 	'settings.serverUrl.name': 'Server URL',
 	'settings.serverUrl.desc': 'Address of your Nextcloud server. A vault is bound to one server – to use a different server, create a new vault.',
