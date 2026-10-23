@@ -118,6 +118,6 @@ Nach „Lokal behalten“ oder „Remote übernehmen“ wird die Konfliktkopie i
 
 Mit den beiden „bevorzugen“-Optionen gehen die Änderungen der jeweils anderen Seite verloren. Bereits bestehende Konflikte brauchen weiterhin deine Entscheidung.
 
-Gleichzeitige Bearbeitung im Browser: Lädt das Plugin eine Seite hoch, während sie im Browser offen ist, meldet der Editor „Die Bearbeitungssitzung ist abgelaufen“. Lade die Seite dann neu. Was du danach im Browser noch eingibst, wird nicht mehr gespeichert ([ADR 0012](docs/adr/0012-gleichzeitige-bearbeitung-im-browser.md)).
+Gleichzeitige Bearbeitung im Browser: Lädt das Plugin eine Seite hoch, während sie im Browser offen ist, meldet der Editor „Die Bearbeitungssitzung ist abgelaufen“. Lade die Seite dann neu. Was du danach im Browser noch eingibst, wird nicht mehr gespeichert ([ADR 0012](docs/adr/0012-concurrent-editing-in-the-browser.md)).
 
 Lizenz: [MIT](LICENSE)

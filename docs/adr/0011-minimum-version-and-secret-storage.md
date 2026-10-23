@@ -1,6 +1,6 @@
 # 0011 – Obsidian ≥ 1.11.4, App-Passwort im Secret Storage
 
-- Status: akzeptiert; Eingabe-UI abgelöst durch [0014](0014-app-passwort-eingabe-ohne-secretcomponent.md)
+- Status: akzeptiert; Eingabe-UI abgelöst durch [0014](0014-app-password-input-without-secretcomponent.md)
 - Datum: 2026-10-16
 - Bezug: PLAN.md §3, §10.1, ONC-1
 

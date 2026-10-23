@@ -2,7 +2,7 @@
 
 - Status: akzeptiert
 - Datum: 2026-10-16
-- Bezug: PLAN.md §10.1, ADR [0011](0011-mindestversion-und-secret-storage.md), Issue ONC-2
+- Bezug: PLAN.md §10.1, ADR [0011](0011-minimum-version-and-secret-storage.md), Issue ONC-2
 
 ## Kontext
 
