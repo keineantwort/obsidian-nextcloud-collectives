@@ -1,0 +1,164 @@
+name: Nightly (older Nextcloud, performance)
+
+# The slow part of the tests, on main only (integration.yml covers pull requests and merges):
+# - the integration tests (npm run test:int) against the two Nextcloud major versions before the current one,
+# - the performance test (npm run test:perf, 500 pages) against every version in TESTED_NEXTCLOUD_MAJORS and the newest image.
+# A night runs only if main has changed since the night before; the night from Wednesday to Thursday always runs, so every
+# version is tested at least once a week. The job "latest" tests the newest image as an early warning for the next major
+# version; it may fail without failing the workflow, and it skips its steps while the newest image is the current version
+# (scripts/dev-nextcloud/latest-is-current.sh). Runs on the runner label docker-host (requirements: docs/ci-runner.md).
+on:
+  schedule:
+    # 01:00 UTC; Forgejo starts scheduled runs on the default branch.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Changes since last night
+    runs-on: ubuntu-latest
+    container: node:24-bookworm
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A merge in Forgejo sets the committer date of the new head of main to the time of the merge. 25 hours instead of
+      # 24 so that a night that starts a little late does not miss a merge from the evening before.
+      - name: Decide whether to run
+        id: check
+        run: |
+          AGE=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          if [ "${{ github.event_name }}" != "schedule" ]; then RUN=true; REASON="started by hand"
+          elif [ "$(date -u +%u)" = "4" ]; then RUN=true; REASON="weekly run (night from Wednesday to Thursday)"
+          elif [ "$AGE" -lt 90000 ]; then RUN=true; REASON="main changed in the last 25 hours"
+          else RUN=false; REASON="no change on main since the last night"
+          fi
+          echo "run=${RUN}" >> "$GITHUB_OUTPUT"
+          echo "Head of main: $(git log -1 --format='%h %ci %s'). Run: ${RUN} (${REASON})." | tee "$GITHUB_STEP_SUMMARY"
+
+  integration:
+    name: Integration / Nextcloud ${{ matrix.nc }}
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    # Host runner on the Docker LXCs: no job container, it uses what is installed there (Node, curl, jq, git, Docker with Compose).
+    runs-on: docker-host
+    timeout-minutes: 45
+    env:
+      # Own Compose project and port per job: the jobs may run at the same time on one Docker host.
+      COMPOSE_PROJECT_NAME: nc-test-${{ matrix.nc }}
+    strategy:
+      fail-fast: false
+      matrix:
+        nc: [33, 34]
+        include:
+          - { nc: 33, port: 8133 }
+          - { nc: 34, port: 8134 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure the test server
+        working-directory: scripts/dev-nextcloud
+        run: |
+          cp .env.example .env
+          sed -i -e "s/^NC_VERSION=.*/NC_VERSION=${{ matrix.nc }}/" -e "s/^NC_PORT=.*/NC_PORT=${{ matrix.port }}/" .env
+
+      # A cancelled run can leave its server behind; "up" would reuse it with all its pages (see integration.yml).
+      - name: Start Nextcloud with Collectives
+        working-directory: scripts/dev-nextcloud
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose up -d --wait --wait-timeout 600
+
+      - name: Versions under test
+        run: |
+          sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Integration tests
+        run: npm run test:int -- --reporter=verbose
+
+      - name: Server log on failure
+        if: failure()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose logs --tail 200 nextcloud
+
+      - name: Stop and delete the test server
+        if: always()
+        working-directory: scripts/dev-nextcloud
+        run: docker compose down -v
+
+  performance:
+    name: Performance / Nextcloud ${{ matrix.nc }}
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: docker-host
+    continue-on-error: ${{ matrix.experimental == true }}
+    timeout-minutes: 60
+    env:
+      # Project and ports differ from the integration jobs (nc-test-*, 81xx), so both may run on one host at the same time.
+      COMPOSE_PROJECT_NAME: nc-perf-${{ matrix.nc }}
+    strategy:
+      fail-fast: false
+      matrix:
+        nc: [33, 34, 35]
+        include:
+          - { nc: 33, port: 8233 }
+          - { nc: 34, port: 8234 }
+          - { nc: 35, port: 8235 }
+          - { nc: latest, port: 8299, experimental: true }
+    steps:
+      - uses: actions/checkout@v4
+
+      # "latest" is often the same image as the current version; then its job would only repeat that one and is skipped.
+      - name: Skip latest if it is the current version
+        if: matrix.nc == 'latest'
+        run: |
+          SAME=$(sh scripts/dev-nextcloud/latest-is-current.sh)
+          echo "SAME_AS_CURRENT=${SAME}" >> "$GITHUB_ENV"
+          if [ "$SAME" = "true" ]; then echo "nextcloud:apache is the current version, nothing to test." | tee "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Install dependencies
+        if: env.SAME_AS_CURRENT != 'true'
+        run: npm ci
+
+      - name: Configure the test server
+        if: env.SAME_AS_CURRENT != 'true'
+        working-directory: scripts/dev-nextcloud
+        run: |
+          cp .env.example .env
+          sed -i -e "s/^NC_VERSION=.*/NC_VERSION=${{ matrix.nc }}/" -e "s/^NC_PORT=.*/NC_PORT=${{ matrix.port }}/" .env
+          # The image of the newest version is nextcloud:apache; "latest-apache" does not exist on Docker Hub.
+          if [ "${{ matrix.nc }}" = "latest" ]; then echo "NC_IMAGE_TAG=apache" >> .env; fi
+
+      - name: Start Nextcloud with Collectives
+        if: env.SAME_AS_CURRENT != 'true'
+        working-directory: scripts/dev-nextcloud
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose up -d --wait --wait-timeout 600
+
+      - name: Versions under test
+        if: env.SAME_AS_CURRENT != 'true'
+        run: |
+          sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Performance tests
+        if: env.SAME_AS_CURRENT != 'true'
+        run: npm run test:perf -- --reporter=verbose
+
+      - name: Server log on failure
+        if: failure() && env.SAME_AS_CURRENT != 'true'
+        working-directory: scripts/dev-nextcloud
+        run: docker compose logs --tail 200 nextcloud
+
+      - name: Stop and delete the test server
+        if: always() && env.SAME_AS_CURRENT != 'true'
+        working-directory: scripts/dev-nextcloud
+        run: docker compose down -v

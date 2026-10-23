@@ -21,6 +21,7 @@ npm run build        # Typecheck + Produktions-Build
 npm run lint         # ESLint inkl. eslint-plugin-obsidianmd
 npm test             # Vitest (Unit)
 npm run test:int     # Integrationstests, benötigt laufenden Testserver
+npm run test:perf    # Performance-Test (500 Seiten, mehrere Minuten), benötigt laufenden Testserver
 npm run nc:up        # Docker-Testserver starten (scripts/dev-nextcloud)
 npm run nc:down
 ```

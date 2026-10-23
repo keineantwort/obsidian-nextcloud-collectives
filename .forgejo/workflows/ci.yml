@@ -32,7 +32,7 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # Integration tests (npm run test:int) need the Docker test server and run locally (PLAN §15 no. 8).
+      # Integration tests need the Docker test server and run in integration.yml and nightly.yml (runner docker-host).
 
   # Every merge build (push to main) that passed is mirrored to GitHub (docs/release.md). Skipped until the repository
   # variable MIRROR_GITHUB_REPO ("owner/name") is set; needs the secret MIRROR_GITHUB_TOKEN (contents: write).
