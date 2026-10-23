@@ -7,17 +7,40 @@ Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit 
 ## Voraussetzungen
 
 - Obsidian ab 1.11.4 (Desktop, iOS und Android).
-- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33, 34 und 35 (jeweils mit der dazu passenden Collectives-Version, zuletzt 4.7.1). Welche Versionen genau gelaufen sind, steht im Protokoll des wöchentlichen Integrationslaufs. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
+- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33, 34 und 35 (jeweils mit der dazu passenden Collectives-Version, zuletzt 4.7.1). Welche Versionen genau gelaufen sind, steht im Protokoll des nächtlichen Integrationslaufs. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
 - Ein Nextcloud-Konto; das Plugin meldet sich per Login Flow oder mit einem App-Passwort an (kein Hauptpasswort).
 
 ## Installation
 
-Das Plugin ist noch nicht im Community-Store. Zwei Wege:
+Das Plugin ist noch nicht im Community-Store von Obsidian. Die Releases liegen auf GitHub: [keineantwort/obsidian-nextcloud-collectives](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases). Lies vor der ersten Synchronisierung den Abschnitt [Risiken und Backup](#risiken-und-backup).
 
-1. **BRAT** (Plugin „Obsidian42 – BRAT“): „Add beta plugin“ mit dem Repository-Link des Plugins. BRAT lädt `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release und aktualisiert sie später. BRAT liest GitHub-Releases; das Plugin wird nach GitHub gespiegelt (Repository-Link siehe Plugin-Seite). Solange es dort noch kein Release gibt, nimm den zweiten Weg.
-2. **Von Hand**: Lade `main.js`, `manifest.json` und `styles.css` aus dem neuesten Release herunter, lege sie in `<Vault>/.obsidian/plugins/nextcloud-collectives/` und aktiviere das Plugin unter „Community plugins“. Auf dem Handy ist der Ordner `.obsidian` versteckt: Bereite den Vault am besten am Desktop vor.
+Voraussetzung für beide Wege: Unter „Einstellungen › Community plugins“ ist der eingeschränkte Modus aus (Community-Plugins sind erlaubt).
 
-Danach in den Einstellungen die Server-URL eintragen und „Anmelden“ wählen. Die Release-Dateien baust du selbst mit `npm ci && npm run build` (erzeugt `main.js` im Projektordner).
+### Mit BRAT (empfohlen, auch auf dem Handy)
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) installiert Plugins direkt aus einem GitHub-Repository und hält sie aktuell.
+
+1. In Obsidian unter „Community plugins › Durchsuchen“ das Plugin **„BRAT“** (Obsidian42 – BRAT) installieren und aktivieren.
+2. In den Einstellungen von BRAT **„Add beta plugin“** wählen (oder den Befehl „BRAT: Plugins: Add a beta plugin for testing (with or without version)“).
+3. Als Repository eintragen: `https://github.com/keineantwort/obsidian-nextcloud-collectives` (oder kurz `keineantwort/obsidian-nextcloud-collectives`).
+4. Als Version „Latest version“ lassen (oder ein bestimmtes Release wählen), „Enable after installing the plugin“ anhaken und mit „Add plugin“ bestätigen.
+5. Falls das Plugin danach noch nicht aktiv ist: unter „Community plugins“ **„Nextcloud Collectives Sync“** aktivieren.
+
+BRAT prüft danach beim Start von Obsidian auf neue Releases (von Hand: Befehl „BRAT: Plugins: Check for updates to all beta plugins and UPDATE“). Hast du ein bestimmtes Release gewählt, bleibt das Plugin auf diesem Stand, bis du in BRAT eine andere Version einstellst.
+
+### Von Hand
+
+1. Aus dem [neuesten Release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) die Dateien `main.js`, `manifest.json` und `styles.css` herunterladen.
+2. Im Vault den Ordner `.obsidian/plugins/nextcloud-collectives/` anlegen und die drei Dateien hineinlegen.
+3. Obsidian neu starten (oder unter „Community plugins“ die Liste neu laden) und **„Nextcloud Collectives Sync“** aktivieren.
+
+Auf dem Handy ist der Ordner `.obsidian` versteckt: Bereite den Vault am besten am Desktop vor. Updates installierst du auf diesem Weg ebenfalls von Hand.
+
+### Danach
+
+In den Einstellungen des Plugins die Server-URL eintragen und „Anmelden“ wählen (Abschnitt [Anmeldung](#anmeldung-und-automatische-synchronisierung)).
+
+Selbst bauen: `npm ci && npm run build` erzeugt `main.js` im Projektordner; `manifest.json` und `styles.css` liegen dort bereits.
 
 ## Risiken und Backup
 
@@ -42,7 +65,7 @@ In den Einstellungen meldest du dich entweder mit „Anmelden“ im Browser an (
 
 ### Emoji und Tags
 
-Emoji (`nc_emoji`) und Tags (Obsidians Eigenschaft `tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, verhält es sich wie bei einer Textänderung auf beiden Seiten: Je nach Einstellung „Konfliktstrategie“ entsteht eine Konfliktkopie (die Notiz bleibt wie sie ist, die Werte des Servers stehen in der Kopie) oder die lokale bzw. die Server-Fassung gewinnt. Die Eigenschaften des Plugins (`nc_…`) sind standardmäßig ausgeblendet (Einstellung „Eigenschaften des Plugins ausblenden“). Im Kontextmenü einer Notiz oder eines Ordners (und im Editor-Menü) findest du „Seiten-Emoji setzen“ und „Seite umbenennen“; letzteres benennt bei einer Seite mit Unterseiten die Notiz und ihren Ordner zusammen um. Das Emoji setzt du am einfachsten mit dem Befehl „Seiten-Emoji setzen“ (Auswahl und Prüfung); legst du in der Notiz selbst eine Eigenschaft `Emoji` an, öffnet sich dieselbe Auswahl. Erlaubt ist genau ein Emoji, anderes wird nicht gesendet und beim Sync gemeldet. Die Tags sind Obsidians Eigenschaft `tags`; auch `#Tags` im Text zählen und werden hinzugefügt (entfernst du ein `#Tag` aus dem Text, bleibt es bestehen, bis du es aus der Eigenschaft löschst). Ein Leerzeichen im Tag-Namen auf dem Server erscheint in Obsidian als `-`; ein `-` bleibt ein `-`, auch wenn du es in Obsidian neu tippst. Die Tags erscheinen in Collectives als Tags, nicht als Text. In der Dateiliste zeigt ein Ordner das Emoji seiner Seite, und die Seite des Ordners steht zuerst im Ordner (nur die Anzeige, abschaltbar).
+Emoji (`nc_emoji`) und Tags (Obsidians Eigenschaft `tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, verhält es sich wie bei einer Textänderung auf beiden Seiten: Je nach Einstellung „Konflikte“ entsteht eine Konfliktkopie (die Notiz bleibt wie sie ist, die Werte des Servers stehen in der Kopie) oder die lokale bzw. die Server-Fassung gewinnt. Die Eigenschaften des Plugins (`nc_…`) sind standardmäßig ausgeblendet (Einstellung „Eigenschaften des Plugins ausblenden“). Im Kontextmenü einer Notiz oder eines Ordners (und im Editor-Menü) findest du „Seiten-Emoji setzen“ und „Seite umbenennen“; letzteres benennt bei einer Seite mit Unterseiten die Notiz und ihren Ordner zusammen um. Das Emoji setzt du am einfachsten mit dem Befehl „Seiten-Emoji setzen“ (Auswahl und Prüfung); legst du in der Notiz selbst eine Eigenschaft `Emoji` an, öffnet sich dieselbe Auswahl. Erlaubt ist genau ein Emoji, anderes wird nicht gesendet und beim Sync gemeldet. Die Tags sind Obsidians Eigenschaft `tags`; auch `#Tags` im Text zählen und werden hinzugefügt (entfernst du ein `#Tag` aus dem Text, bleibt es bestehen, bis du es aus der Eigenschaft löschst). Ein Leerzeichen im Tag-Namen auf dem Server erscheint in Obsidian als `-`; ein `-` bleibt ein `-`, auch wenn du es in Obsidian neu tippst. Die Tags erscheinen in Collectives als Tags, nicht als Text. In der Dateiliste zeigt ein Ordner das Emoji seiner Seite, und die Seite des Ordners steht zuerst im Ordner (nur die Anzeige, abschaltbar).
 
 ### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
 

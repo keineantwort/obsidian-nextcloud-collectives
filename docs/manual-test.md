@@ -8,8 +8,8 @@ Gerät/OS: ______  Obsidian: ______  Nextcloud/Collectives: ______  Datum: _____
 
 Das Plugin ist nicht im Community-Store (PLAN §15 Nr. 3). Zwei Wege:
 
-- **BRAT** (empfohlen): In Obsidian Mobile das Plugin „BRAT“ installieren, „Add beta plugin“ mit dem Repository-URL, danach in „Community plugins“ aktivieren.
-- **Manuell**: `main.js`, `manifest.json` und `styles.css` in `<Vault>/.obsidian/plugins/nextcloud-collectives/` legen (z. B. über die Dateien-App/iCloud auf iOS, per USB oder Nextcloud-App auf Android), Obsidian neu starten, Plugin aktivieren. Der Ordner `.obsidian` ist auf dem Handy versteckt: ggf. den Vault von einem Desktop aus mit dem Plugin vorbereiten.
+- **BRAT** (empfohlen): In Obsidian Mobile das Plugin „BRAT“ installieren, „Add beta plugin“ mit `keineantwort/obsidian-nextcloud-collectives`, danach in „Community plugins“ aktivieren. Schritte: [README › Installation](../README.md#installation).
+- **Manuell**: `main.js`, `manifest.json` und `styles.css` aus dem [neuesten GitHub-Release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) in `<Vault>/.obsidian/plugins/nextcloud-collectives/` legen (z. B. über die Dateien-App/iCloud auf iOS, per USB oder Nextcloud-App auf Android), Obsidian neu starten, Plugin aktivieren. Der Ordner `.obsidian` ist auf dem Handy versteckt: ggf. den Vault von einem Desktop aus mit dem Plugin vorbereiten.
 
 - [ ] iOS: Plugin erscheint unter „Community plugins“ und lässt sich aktivieren
 - [ ] Android: dasselbe

@@ -572,7 +572,7 @@ Jeder Meilenstein = ein Branch/PR, später je ein Forgejo-Issue. Ein Meilenstein
 | M7 | umgesetzt (ONC-8), gemergt |
 | M8 | umgesetzt (ONC-9), gemergt (PR #20) |
 | M9 | umgesetzt (ONC-10), gemergt; manuelle Checkliste `docs/manual-test.md` auf iOS/Android steht aus |
-| M10 | im Repo umgesetzt (ONC-11), PR offen; extern offen: GitHub-Repository und Mirror-Einrichtung, Store-Einreichung, Screenshots, Community-Seite (`docs/release.md`) |
+| M10 | umgesetzt (ONC-11), gemergt (PR #22, #23); GitHub-Spiegel und Releases aktiv (0.2.0, 0.2.1), Installation per BRAT möglich; extern offen: Store-Einreichung, Screenshots, Community-Seite (`docs/release.md`) |
 
 ## 18. Referenzen und Marktlage
 
