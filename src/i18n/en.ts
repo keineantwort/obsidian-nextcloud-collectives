@@ -233,6 +233,8 @@ export const en = {
 	'settings.syncInterval.invalid': 'Not saved: enter a whole number from 0 to 1440.',
 	'settings.syncOnStartup.name': 'Sync on startup',
 	'settings.syncOnStartup.desc': 'Syncs once when Obsidian has loaded the vault.',
+	'settings.syncOnForeground.name': 'Sync when returning to Obsidian',
+	'settings.syncOnForeground.desc': 'Syncs when Obsidian becomes visible again, for example when you switch back to the app on your phone. At most once within 30 seconds of the last automatic sync.',
 	'settings.syncOnSave.name': 'Sync after changes',
 	'settings.syncOnSave.desc': 'Syncs a few seconds after you stopped editing a synced note. Obsidian saves automatically while you type, so there is no separate save action.',
 	'settings.syncDebounce.name': 'Wait after the last change (seconds)',

@@ -183,6 +183,16 @@ export class NcSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName(t('settings.syncOnForeground.name'))
+			.setDesc(t('settings.syncOnForeground.desc'))
+			.addToggle((toggle) => {
+				toggle.setValue(settings.syncOnForeground).onChange(async (value) => {
+					settings.syncOnForeground = value;
+					await plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
 			.setName(t('settings.syncOnSave.name'))
 			.setDesc(t('settings.syncOnSave.desc'))
 			.addToggle((toggle) => {

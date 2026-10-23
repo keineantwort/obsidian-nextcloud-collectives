@@ -37,7 +37,7 @@ function fakeClock() {
 	return { timers, advance, now: () => now };
 }
 
-const CONFIG: SchedulerConfig = { intervalMinutes: 5, syncOnStartup: true, syncOnSave: true, debounceSec: 10 };
+const CONFIG: SchedulerConfig = { intervalMinutes: 5, syncOnStartup: true, syncOnSave: true, syncOnForeground: true, debounceSec: 10 };
 
 function setup(config: SchedulerConfig = CONFIG) {
 	const clock = fakeClock();
@@ -187,6 +187,14 @@ describe('SyncScheduler: foreground', () => {
 		clock.advance(FOREGROUND_MIN_GAP_MS - 1);
 		scheduler.noteForeground();
 		expect(fired).toEqual(['startup']);
+	});
+
+	it('requests nothing when the foreground trigger is off', () => {
+		const { clock, fired, scheduler } = setup({ ...CONFIG, syncOnStartup: false, intervalMinutes: 0, syncOnForeground: false });
+		scheduler.start();
+		clock.advance(FOREGROUND_MIN_GAP_MS);
+		scheduler.noteForeground();
+		expect(fired).toEqual([]);
 	});
 
 	it('ignores a burst of foreground events', () => {

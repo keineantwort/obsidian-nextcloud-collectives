@@ -154,8 +154,8 @@ export class SyncController {
 	}
 
 	private applySettings(): void {
-		const { syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnSaveDebounceSec } = this.host.settings();
-		this.scheduler.configure({ intervalMinutes: syncIntervalMinutes, syncOnStartup, syncOnSave, debounceSec: syncOnSaveDebounceSec });
+		const { syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnForeground, syncOnSaveDebounceSec } = this.host.settings();
+		this.scheduler.configure({ intervalMinutes: syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnForeground, debounceSec: syncOnSaveDebounceSec });
 	}
 
 	/** A synced note was changed, created, renamed or deleted by the user. */

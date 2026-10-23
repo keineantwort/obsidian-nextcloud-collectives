@@ -32,6 +32,8 @@ export interface NcSettings {
 	syncOnStartup: boolean;
 	/** Run a sync a few seconds after the last change of a synced note. */
 	syncOnSave: boolean;
+	/** Run a sync when Obsidian becomes visible again (mobile: back in the foreground). */
+	syncOnForeground: boolean;
 	/** Seconds of quiet after the last change before the save sync starts. */
 	syncOnSaveDebounceSec: number;
 	/** Show the note of a folder first in its folder in the file list (display only). */
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: NcSettings = {
 	syncIntervalMinutes: 5,
 	syncOnStartup: true,
 	syncOnSave: true,
+	syncOnForeground: true,
 	syncOnSaveDebounceSec: 10,
 	folderNoteFirst: true,
 	debugLogging: false,

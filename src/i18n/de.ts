@@ -235,6 +235,8 @@ export const de: Record<MessageKey, string> = {
 	'settings.syncInterval.invalid': 'Nicht gespeichert: Bitte eine ganze Zahl von 0 bis 1440 eingeben.',
 	'settings.syncOnStartup.name': 'Beim Start synchronisieren',
 	'settings.syncOnStartup.desc': 'Synchronisiert einmal, sobald Obsidian den Vault geladen hat.',
+	'settings.syncOnForeground.name': 'Bei Rückkehr zu Obsidian synchronisieren',
+	'settings.syncOnForeground.desc': 'Synchronisiert, wenn Obsidian wieder sichtbar wird, zum Beispiel wenn du auf dem Handy zur App zurückwechselst. Höchstens einmal innerhalb von 30 Sekunden nach der letzten automatischen Synchronisierung.',
 	'settings.syncOnSave.name': 'Nach Änderungen synchronisieren',
 	'settings.syncOnSave.desc': 'Synchronisiert einige Sekunden, nachdem du eine synchronisierte Notiz nicht mehr bearbeitest. Obsidian speichert beim Tippen automatisch, eine eigene Speichern-Aktion gibt es nicht.',
 	'settings.syncDebounce.name': 'Wartezeit nach der letzten Änderung (Sekunden)',

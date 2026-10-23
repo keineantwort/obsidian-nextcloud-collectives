@@ -142,6 +142,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isSyncDebounceSec(data['syncOnSaveDebounceSec'])) loaded.syncOnSaveDebounceSec = data['syncOnSaveDebounceSec'];
 			if (typeof data['syncOnStartup'] === 'boolean') loaded.syncOnStartup = data['syncOnStartup'];
 			if (typeof data['syncOnSave'] === 'boolean') loaded.syncOnSave = data['syncOnSave'];
+			if (typeof data['syncOnForeground'] === 'boolean') loaded.syncOnForeground = data['syncOnForeground'];
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
 			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];

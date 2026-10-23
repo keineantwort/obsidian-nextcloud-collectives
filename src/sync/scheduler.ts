@@ -8,6 +8,7 @@ export interface SchedulerConfig {
 	intervalMinutes: number;
 	syncOnStartup: boolean;
 	syncOnSave: boolean;
+	syncOnForeground: boolean;
 	/** Seconds after the last change before a run starts. */
 	debounceSec: number;
 }
@@ -75,7 +76,7 @@ export class SyncScheduler {
 
 	/** The app came to the foreground again. */
 	noteForeground(): void {
-		if (!this.started || this.config === null) return;
+		if (!this.started || this.config === null || !this.config.syncOnForeground) return;
 		if (this.now() - this.lastRequestAt < FOREGROUND_MIN_GAP_MS) return;
 		this.fire('foreground');
 	}
