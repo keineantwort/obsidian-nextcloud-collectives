@@ -1,4 +1,4 @@
-// M7 (PLAN §9): the executor converts page links on pull and push and hashes the remote format.
+// M7 (architecture §9): the executor converts page links on pull and push and hashes the remote format.
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';

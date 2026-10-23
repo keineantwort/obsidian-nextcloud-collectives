@@ -1,4 +1,4 @@
-// Collective-level planning (PLAN §7.4): new, renamed, deleted and vanished collectives. Pure.
+// Collective-level planning (architecture §7.4): new, renamed, deleted and vanished collectives. Pure.
 import type { CollectiveId } from '../api/types';
 import { pathKey, sanitizeName, withSuffix } from '../mapping/paths';
 import type { LocalFile } from './localScanner';
@@ -7,7 +7,7 @@ import type { Context } from './plannerContext';
 import { lastSegment } from './plannerContext';
 import type { CollectiveState } from './state';
 
-/** Circle level from which a member may rename or delete a collective (PLAN §4.2, M0). */
+/** Circle level from which a member may rename or delete a collective (architecture §4.2, M0). */
 const ADMIN_LEVEL = 8;
 
 /** Top-level folder of a path. */
@@ -175,7 +175,7 @@ function freeFolderName(ctx: Context, collectiveId: CollectiveId, name: string, 
 	return withSuffix(sanitizeName(name), taken);
 }
 
-/** New top-level folders with notes become collectives (PLAN §7.4), as the setting says. */
+/** New top-level folders with notes become collectives (architecture §7.4), as the setting says. */
 function planNewFolders(ctx: Context, folders: string[]): void {
 	for (const folder of folders) {
 		const files = ctx.input.local.files.filter((file) => pathKey(topOf(file.path)) === pathKey(folder));

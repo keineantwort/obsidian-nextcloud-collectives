@@ -1,4 +1,4 @@
-// M6 (PLAN §7.5): names of tags between the server and a note.
+// M6 (architecture §7.5): names of tags between the server and a note.
 import { describe, expect, it } from 'vitest';
 import { findTagByName, inlineTags, resolveTagNames, toObsidianTag } from '../../src/mapping/tags';
 

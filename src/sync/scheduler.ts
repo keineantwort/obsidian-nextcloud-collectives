@@ -1,4 +1,4 @@
-// Automatic sync triggers (PLAN §7.1): start, interval, debounce after saving, foreground. Obsidian-free; timers are injected.
+// Automatic sync triggers (architecture §7.1): start, interval, debounce after saving, foreground. Obsidian-free; timers are injected.
 // The scheduler only decides when to ask for a run; the controller serializes the runs (mutex with re-run flag).
 
 export type AutoTrigger = 'startup' | 'interval' | 'save' | 'foreground';

@@ -1,4 +1,4 @@
-// Builds the index of pages that links are converted with (PLAN §9). Pure: no Obsidian, no network imports.
+// Builds the index of pages that links are converted with (architecture §9). Pure: no Obsidian, no network imports.
 import type { PageId } from '../api/types';
 import { AttachmentIndex, attachmentFolderFor } from '../mapping/attachments';
 import type { AttachmentOptions } from '../mapping/attachments';

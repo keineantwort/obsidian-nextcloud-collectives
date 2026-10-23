@@ -1,4 +1,4 @@
-// Remote scan (PLAN §5): collectives, pages and tags from the Collectives OCS API.
+// Remote scan (architecture §5): collectives, pages and tags from the Collectives OCS API.
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { Collective, PageInfo, Tag } from '../api/types';
 import { isRunFatal } from '../util/errors';

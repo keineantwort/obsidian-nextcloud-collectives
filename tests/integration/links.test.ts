@@ -1,4 +1,4 @@
-// M7 (PLAN §9): page links in both directions against the local Docker Nextcloud, with an in-memory vault.
+// M7 (architecture §9): page links in both directions against the local Docker Nextcloud, with an in-memory vault.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { remotePagePath } from '../../src/mapping/paths';

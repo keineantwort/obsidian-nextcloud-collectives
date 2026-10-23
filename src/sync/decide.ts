@@ -1,4 +1,4 @@
-// Content decision for one page (PLAN §7.3): which side's text wins, given the base both sides were last synced from.
+// Content decision for one page (architecture §7.3): which side's text wins, given the base both sides were last synced from.
 // Pure: no Obsidian, no network imports.
 import type { PageStatus } from './state';
 
@@ -25,7 +25,7 @@ const STRATEGY_ACTION: Record<ConflictStrategy, ContentAction> = {
 };
 
 /**
- * Pure: decides the content action of one page. A page in status 'conflict' or 'collision' is never pushed (PLAN §8)
+ * Pure: decides the content action of one page. A page in status 'conflict' or 'collision' is never pushed (architecture §8)
  * and always reports a conflict when both sides changed, whatever the strategy.
  */
 export function decideContent(input: ContentInput): ContentAction {

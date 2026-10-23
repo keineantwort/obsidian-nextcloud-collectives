@@ -1,4 +1,4 @@
-// Lookups over the remote page trees (PLAN §4.4). Pure: no Obsidian, no network imports.
+// Lookups over the remote page trees (architecture §4.4). Pure: no Obsidian, no network imports.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import type { RemoteSnapshot } from './remoteScanner';
 

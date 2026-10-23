@@ -1,4 +1,4 @@
-// Conflict list: per page a short reason, the diff and the three actions (PLAN §9). Consequences are tooltips and descriptions.
+// Conflict list: per page a short reason, the diff and the three actions (architecture §9). Consequences are tooltips and descriptions.
 // The only UI file for conflicts that imports 'obsidian'; all texts come from the translator, all DOM is built with createEl.
 import { ButtonComponent, Modal } from 'obsidian';
 import type { App } from 'obsidian';

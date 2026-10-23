@@ -1,4 +1,4 @@
-// Page emoji in front of note titles, display only (PLAN §6.2): the file name is not changed. The emoji is the note's
+// Page emoji in front of note titles, display only (architecture §6.2): the file name is not changed. The emoji is the note's
 // `nc_emoji`; a CSS rule (styles.css) shows it from a data attribute on the title elements of the file explorer, the
 // inline title and the view header. Pure DOM helpers; the wiring to Obsidian's events is in main.ts.
 

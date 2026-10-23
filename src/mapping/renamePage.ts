@@ -1,4 +1,4 @@
-// Renaming a page in the vault (PLAN §7.4, ADR 0004/0018): the note of a page with sub-pages and its folder carry the same
+// Renaming a page in the vault (architecture §7.4, ADR 0004/0018): the note of a page with sub-pages and its folder carry the same
 // name and are renamed together. Pure: no Obsidian, no network.
 import { pathKey, sanitizeName } from './paths';
 

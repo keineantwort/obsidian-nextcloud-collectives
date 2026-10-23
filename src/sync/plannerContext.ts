@@ -1,4 +1,4 @@
-// Shared state of one planning run (PLAN §7.2). Pure: no Obsidian, no network imports.
+// Shared state of one planning run (architecture §7.2). Pure: no Obsidian, no network imports.
 import type { CollectiveId, PageId } from '../api/types';
 import { pathKey } from '../mapping/paths';
 import type { LocalFile } from './localScanner';

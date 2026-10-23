@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// M0 spike: exercises every endpoint from PLAN.md §4.2 against the LOCAL Docker
+// M0 spike: exercises every endpoint from architecture §4.2 against the LOCAL Docker
 // test server and stores anonymised responses under tests/fixtures/m0/.
 // Dev tooling only (runs in Node, never bundled into the plugin).
 //

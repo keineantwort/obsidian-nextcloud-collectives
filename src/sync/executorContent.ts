@@ -1,4 +1,4 @@
-// Content operations of the sync executor (PLAN §7.3, spec M4 §9): create, adopt, update, push and metadata of linked pages.
+// Content operations of the sync executor (architecture §7.3, spec M4 §9): create, adopt, update, push and metadata of linked pages.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import { isEtagConfirmed } from '../api/webdavClient';
 import type { PageId, PageInfo } from '../api/types';
@@ -209,7 +209,7 @@ async function adoptPage(op: Extract<SyncOp, { kind: 'adopt' }>, deps: ExecutorD
 
 /**
  * Update of a known page (GET first). At most MAX_ATTEMPTS attempts; `attempt` is the number of this one. The content
- * decision (PLAN §7.3) picks the action. A push on an unconfirmed ETag waits, fetches again and decides once more.
+ * decision (architecture §7.3) picks the action. A push on an unconfirmed ETag waits, fetches again and decides once more.
  */
 async function updatePage(op: ContentOp, deps: ExecutorDeps, result: SyncResult, attempt = 1): Promise<boolean> {
 	const s = requireState(deps, op.page.id);

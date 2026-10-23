@@ -1,4 +1,4 @@
-// Where a local file belongs in the page tree of its collective (PLAN §7.4, ADR 0004, ADR 0018). Pure.
+// Where a local file belongs in the page tree of its collective (architecture §7.4, ADR 0004, ADR 0018). Pure.
 import type { CollectiveId, PageId } from '../api/types';
 import { pathKey } from '../mapping/paths';
 import type { LocalFile } from './localScanner';

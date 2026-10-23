@@ -153,7 +153,7 @@ function requireEtag(res: HttpResponse, what: string): string {
 }
 
 /**
- * True if the ETag of a GET can be trusted for If-Match (PLAN §4.5, api-notes §10a: ETags have one-second resolution).
+ * True if the ETag of a GET can be trusted for If-Match (architecture §4.5, api-notes §10a: ETags have one-second resolution).
  * Confirmed iff both headers parse (Date.parse not NaN) and floor(lastModified/1000) < floor(date/1000), i.e. the file
  * was last written in an earlier server second than the one the response was produced in. Missing/unparsable → false.
  */

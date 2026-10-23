@@ -1,4 +1,4 @@
-// M8 (PLAN §9.4, ADR 0021): the executor transfers, compares and deletes attachments after the content step of a page.
+// M8 (architecture §9.4, ADR 0021): the executor transfers, compares and deletes attachments after the content step of a page.
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';

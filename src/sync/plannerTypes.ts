@@ -1,4 +1,4 @@
-// Types of the sync planner (PLAN §7.2, §7.4). Types only, no runtime code.
+// Types of the sync planner (architecture §7.2, §7.4). Types only, no runtime code.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
 import type { PathPlan } from '../mapping/paths';
@@ -7,7 +7,7 @@ import type { RemoteSnapshot } from './remoteScanner';
 import type { CollectiveState, SyncState } from './state';
 import type { Decision, Proposal, Skip } from './types';
 
-/** Settings that change what the planner proposes (PLAN §10.2). */
+/** Settings that change what the planner proposes (architecture §10.2). */
 export interface PlannerBehaviour {
 	/** What happens to the local file of a page deleted on the server. */
 	remoteDelete: 'obsidianTrash' | 'keepUnlinked';
@@ -19,7 +19,7 @@ export interface PlannerBehaviour {
 
 export const DEFAULT_BEHAVIOUR: PlannerBehaviour = { remoteDelete: 'obsidianTrash', localDelete: 'ask', newFolder: 'createCollective' };
 
-/** A run deleting more than this share of a collective's pages is stopped and asked (PLAN §16). */
+/** A run deleting more than this share of a collective's pages is stopped and asked (architecture §14). */
 export const MASS_DELETE_SHARE = 0.2;
 /** ...but only from this many pages on: deleting one page of a tiny collective is no incident. */
 export const MASS_DELETE_MIN = 3;
@@ -111,7 +111,7 @@ export type SyncOp =
 	| { kind: 'renameCollective'; collectiveId: CollectiveId; circleId: string; name: string; folder: string }
 	/** The local folder takes another name: the server's new name, or the old name again (no right to rename). */
 	| { kind: 'renameCollectiveFolder'; collectiveId: CollectiveId; from: string; to: string; name: string }
-	/** The folder of a folder page takes the page's name again (the user renamed only the note, PLAN §7.4, ADR 0018). */
+	/** The folder of a folder page takes the page's name again (the user renamed only the note, architecture §7.4, ADR 0018). */
 	| { kind: 'renameFolderLocal'; collectiveId: CollectiveId; from: string; to: string }
 	/** Local folder deletion confirmed: the collective goes to the Collectives trash. */
 	| { kind: 'trashCollective'; collectiveId: CollectiveId; folder: string }
@@ -123,7 +123,7 @@ export interface SyncPlan {
 	skips: Skip[];
 	/** Questions for the user. The runner asks them and plans again with the decisions. */
 	proposals: Proposal[];
-	/** True if the plan changes the structure so that another scan and plan can find more to do (PLAN §7.2, passes). */
+	/** True if the plan changes the structure so that another scan and plan can find more to do (architecture §7.2, passes). */
 	followUp: boolean;
 }
 

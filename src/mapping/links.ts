@@ -1,4 +1,4 @@
-// Page links between the Collectives format and Obsidian wikilinks (PLAN §9.1–9.3, ADR 0008, ADR 0020). Pure: no Obsidian,
+// Page links between the Collectives format and Obsidian wikilinks (architecture §9.1–9.3, ADR 0008, ADR 0020). Pure: no Obsidian,
 // no network imports. The index of pages comes from the caller.
 import type { CollectiveId, PageId } from '../api/types';
 import { attachmentUrl, parseAttachmentUrl } from './attachments';

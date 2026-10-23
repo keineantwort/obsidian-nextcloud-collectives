@@ -1,4 +1,4 @@
-// Structure operations of the sync executor (PLAN §7.4): create, move, rename, trash and restore pages and collectives.
+// Structure operations of the sync executor (architecture §7.4): create, move, rename, trash and restore pages and collectives.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import { readLocalFields, readNcMeta, replaceNcMeta, stripNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
@@ -361,7 +361,7 @@ async function trashRemote(op: Op<'trashRemote'>, deps: ExecutorDeps, result: Sy
 
 /**
  * The server deleted the page. An unchanged file follows (Obsidian trash, or unlinked); a changed file wins: the page is
- * restored from the Collectives trash and the change is pushed (PLAN §7.4). If it cannot be restored, the file loses its
+ * restored from the Collectives trash and the change is pushed (architecture §7.4). If it cannot be restored, the file loses its
  * nc fields and becomes a new page in the next pass.
  */
 async function removeLocal(op: Op<'removeLocal'>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
@@ -417,7 +417,7 @@ async function dropState(op: Op<'dropState'>, deps: ExecutorDeps): Promise<boole
 	return true;
 }
 
-/** A file with an nc_page_id reappeared in the vault and its page is in the Collectives trash: restore the page (PLAN §7.4). */
+/** A file with an nc_page_id reappeared in the vault and its page is in the Collectives trash: restore the page (architecture §7.4). */
 async function restoreRemote(op: Op<'restoreRemote'>, deps: ExecutorDeps, result: SyncResult): Promise<boolean> {
 	let page: PageInfo;
 	try {

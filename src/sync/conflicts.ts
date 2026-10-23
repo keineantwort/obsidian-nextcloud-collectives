@@ -1,4 +1,4 @@
-// Conflict list and resolution (PLAN §7.6, spec §7). No 'obsidian' import: trash and file access come through ResolutionVault.
+// Conflict list and resolution (architecture §7.6, spec §7). No 'obsidian' import: trash and file access come through ResolutionVault.
 import type { CollectiveId, PageId } from '../api/types';
 import { replaceNcMeta, toRemote } from '../mapping/frontmatter';
 import type { LinkIndex } from '../mapping/links';

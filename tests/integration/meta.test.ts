@@ -1,4 +1,4 @@
-// M6 (PLAN §7.5): emoji and tags in both directions against the local Docker Nextcloud, with an in-memory vault.
+// M6 (architecture §7.5): emoji and tags in both directions against the local Docker Nextcloud, with an in-memory vault.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { readLocalFields, readNcMeta, replaceNcMeta, toRemote } from '../../src/mapping/frontmatter';

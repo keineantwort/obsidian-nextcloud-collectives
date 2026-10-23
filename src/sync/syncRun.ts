@@ -48,11 +48,11 @@ export interface SyncRunDeps {
 		newFolderBehaviour: PlannerBehaviour['newFolder'];
 		localDeleteBehaviour: PlannerBehaviour['localDelete'];
 		remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
-		/** Attachment settings (PLAN §9.4); the defaults apply where absent. */
+		/** Attachment settings (architecture §9.4); the defaults apply where absent. */
 		attachmentFolderPattern?: string;
 		maxAttachmentSizeMb?: number;
 		deleteRemoteAttachments?: boolean;
-		/** Log the details of every request (PLAN §12). */
+		/** Log the details of every request (architecture §12). */
 		debugLogging?: boolean;
 	};
 	readPassword: () => Promise<string | null>;
@@ -64,13 +64,13 @@ export interface SyncRunDeps {
 	/** pathKeys of the files changed since the last run; called once per pass, after the scans (DirtyQueue.drain()). */
 	dirty: () => ReadonlySet<string>;
 	/**
-	 * Asks the user the planner's questions (PLAN §7.4). Resolves with an answer per proposal id; a missing answer counts as
+	 * Asks the user the planner's questions (architecture §7.4). Resolves with an answer per proposal id; a missing answer counts as
 	 * 'defer' (ask again in the next run).
 	 */
 	confirm: (proposals: Proposal[]) => Promise<ReadonlyMap<string, Decision>>;
 	/** Called with the page index of each pass, so the conflict dialog can hash and show texts like the sync does. */
 	onLinks?: (links: LinkIndex) => void;
-	/** Called once per run with the Nextcloud version of the server (PLAN §12); not called if it could not be read. */
+	/** Called once per run with the Nextcloud version of the server (architecture §12); not called if it could not be read. */
 	onServerVersion?: (version: ServerVersion) => void;
 	t: Translator;
 	log: Logger;
@@ -192,7 +192,7 @@ export async function runSync(deps: SyncRunDeps): Promise<SyncRunOutcome> {
 	return { kind: 'done', result: total, skips, openConflicts: countConflicts(state), pages: Object.keys(state.pages).length };
 }
 
-/** Passes of one run: collectives and moved folder pages need a second look at the vault and the server (PLAN §7.2). */
+/** Passes of one run: collectives and moved folder pages need a second look at the vault and the server (architecture §7.2). */
 const MAX_PASSES = 3;
 /** Rounds of questions per pass; answers can reveal further questions (e.g. sub-pages). */
 const MAX_ROUNDS = 3;
@@ -317,7 +317,7 @@ function logSkip(skip: Skip, log: Logger): void {
 	log.info('Sync item skipped', { ...skip });
 }
 
-/** Version check (PLAN §12). Only informs; a server that does not answer or answers oddly never stops the sync. */
+/** Version check (architecture §12). Only informs; a server that does not answer or answers oddly never stops the sync. */
 async function reportServerVersion(ocs: OcsClient, deps: SyncRunDeps): Promise<void> {
 	try {
 		const version = await fetchServerVersion(ocs);

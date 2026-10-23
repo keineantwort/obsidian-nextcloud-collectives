@@ -1,4 +1,4 @@
-// Planning of what the user did in the vault and of what the server removed (PLAN §7.4). Pure.
+// Planning of what the user did in the vault and of what the server removed (architecture §7.4). Pure.
 import { asPageId } from '../api/types';
 import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import { pathKey, sanitizeName } from '../mapping/paths';

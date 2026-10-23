@@ -1,4 +1,4 @@
-// Finding the local file of a linked page (PLAN §6.3). Pure: no Obsidian, no network imports.
+// Finding the local file of a linked page (architecture §6.3). Pure: no Obsidian, no network imports.
 import type { PageId } from '../api/types';
 import { pathKey } from '../mapping/paths';
 import type { PageState } from './state';

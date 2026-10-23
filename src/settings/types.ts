@@ -8,25 +8,25 @@ export interface NcSettings {
 	username: string;
 	/** ID of the secret in Obsidian's secret storage holding the app password. Never the password itself. */
 	appPasswordSecretId: string;
-	/** What happens when a page changed both in the vault and on the server (PLAN §7.3). */
+	/** What happens when a page changed both in the vault and on the server (architecture §7.3). */
 	conflictStrategy: ConflictStrategy;
-	/** What a new top-level folder becomes (PLAN §7.4). */
+	/** What a new top-level folder becomes (architecture §7.4). */
 	newFolderBehaviour: PlannerBehaviour['newFolder'];
-	/** Whether a local deletion needs a confirmation before it reaches the server (PLAN §7.4). */
+	/** Whether a local deletion needs a confirmation before it reaches the server (architecture §7.4). */
 	localDeleteBehaviour: PlannerBehaviour['localDelete'];
-	/** What happens to the local file of a page deleted on the server (PLAN §7.4). */
+	/** What happens to the local file of a page deleted on the server (architecture §7.4). */
 	remoteDeleteBehaviour: PlannerBehaviour['remoteDelete'];
 	/** Show the page emoji in front of note titles (display only). */
 	showEmojiInTitles: boolean;
 	/** Hide the nc_* properties in the properties view of a note (display only). */
 	hidePluginProperties: boolean;
-	/** Folder for the attachments of a note, relative to the note's folder; `{title}` = the note's name (PLAN §9.4). */
+	/** Folder for the attachments of a note, relative to the note's folder; `{title}` = the note's name (architecture §9.4). */
 	attachmentFolderPattern: string;
-	/** Largest attachment that is transferred, in MB (PLAN §9.4). */
+	/** Largest attachment that is transferred, in MB (architecture §9.4). */
 	maxAttachmentSizeMb: number;
-	/** Delete the server file of an attachment deleted in the vault and no longer used (PLAN §9.4). */
+	/** Delete the server file of an attachment deleted in the vault and no longer used (architecture §9.4). */
 	deleteRemoteAttachments: boolean;
-	/** Minutes between automatic syncs; 0 = off (PLAN §7.1). */
+	/** Minutes between automatic syncs; 0 = off (architecture §7.1). */
 	syncIntervalMinutes: number;
 	/** Run a sync when the plugin starts. */
 	syncOnStartup: boolean;
@@ -36,7 +36,7 @@ export interface NcSettings {
 	syncOnSaveDebounceSec: number;
 	/** Show the note of a folder first in its folder in the file list (display only). */
 	folderNoteFirst: boolean;
-	/** Also write the details of every request (method, path, status, duration; no credentials) to the log (PLAN §12). */
+	/** Also write the details of every request (method, path, status, duration; no credentials) to the log (architecture §12). */
 	debugLogging: boolean;
 }
 

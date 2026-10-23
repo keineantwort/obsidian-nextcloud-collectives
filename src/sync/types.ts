@@ -24,10 +24,10 @@ export type Skip =
 
 export type SkipReason = Skip['reason'];
 
-/** Answer to a question the planner asked (PLAN §7.4). 'defer' = ask again in the next run. */
+/** Answer to a question the planner asked (architecture §7.4). 'defer' = ask again in the next run. */
 export type Decision = 'accept' | 'reject' | 'defer';
 
-/** More than the mass-delete limit of a collective's pages is deleted in one run (PLAN §16). */
+/** More than the mass-delete limit of a collective's pages is deleted in one run (architecture §14). */
 export interface MassDelete {
 	collectiveName: string;
 	deleted: number;
@@ -35,7 +35,7 @@ export interface MassDelete {
 }
 
 /**
- * A destructive or surprising change the user must approve (PLAN §7.4). The planner returns proposals in its first
+ * A destructive or surprising change the user must approve (architecture §7.4). The planner returns proposals in its first
  * pass; the runner asks and plans again with the answers keyed by `id`.
  */
 export type Proposal =
@@ -74,7 +74,7 @@ export interface SyncResult {
 	restored: number;
 	/** Attachment files transferred in either direction, or removed. */
 	attachments: number;
-	/** Pushes postponed because the remote version could not be confirmed (PLAN §16); retried in the next run. */
+	/** Pushes postponed because the remote version could not be confirmed (architecture §14); retried in the next run. */
 	deferred: number;
 }
 

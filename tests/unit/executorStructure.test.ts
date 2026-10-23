@@ -1,4 +1,4 @@
-// M5 (PLAN §7.4): the executor's structure operations against a fake Collectives API, a fake WebDAV and an in-memory vault.
+// M5 (architecture §7.4): the executor's structure operations against a fake Collectives API, a fake WebDAV and an in-memory vault.
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';

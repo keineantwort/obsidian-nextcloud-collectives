@@ -1,5 +1,6 @@
-// M9 (PLAN §14): a collective with 500 pages. The idle sync must stay below 5 s, and the first sync must not write the
-// state once per page. The server is the local Docker Nextcloud (LAN-like latency), so the limit is a regression guard.
+// Performance target (architecture §13, ADR 0022): a collective with 500 pages. The idle sync must stay below 5 s,
+// and the first sync must not write the state once per page. The server is the local Docker Nextcloud (LAN-like
+// latency), so the limit is a regression guard.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { basicAuthHeader } from '../../src/api/http';

@@ -146,7 +146,7 @@ describe('linksToRemote', () => {
 	});
 });
 
-describe('round trip (PLAN §9.3)', () => {
+describe('round trip (architecture §9.3)', () => {
 	const remoteFixtures = [
 		'[Urlaub](Prozesse/Urlaub.md?fileId=100)',
 		'[freie Tage](Prozesse/Urlaub.md?fileId=100#Antrag%20stellen)',

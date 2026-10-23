@@ -1,4 +1,4 @@
-// Texts and answers of the confirmation dialog (PLAN §7.4). No 'obsidian' import: the modal only renders what is built here.
+// Texts and answers of the confirmation dialog (architecture §7.4). No 'obsidian' import: the modal only renders what is built here.
 import type { Translator } from '../i18n';
 import type { Decision, Proposal } from '../sync/types';
 
@@ -9,7 +9,7 @@ export interface ConfirmRow {
 	label: string;
 	/** Further short lines: where and how much. Explanations live in the README, not in the dialog. */
 	details: string[];
-	/** Warning for a mass deletion (PLAN §16), or null. */
+	/** Warning for a mass deletion (architecture §14), or null. */
 	warning: string | null;
 }
 

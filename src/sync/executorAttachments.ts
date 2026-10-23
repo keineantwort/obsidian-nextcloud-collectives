@@ -1,4 +1,4 @@
-// Attachments of a page (PLAN §9.4, ADR 0021): download, upload and deletion, after the content step of the page.
+// Attachments of a page (architecture §9.4, ADR 0021): download, upload and deletion, after the content step of the page.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import type { DavEntry } from '../api/webdavClient';
 import type { PageId, PageInfo } from '../api/types';

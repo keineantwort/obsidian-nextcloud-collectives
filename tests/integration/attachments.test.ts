@@ -1,4 +1,4 @@
-// M8 (PLAN §9.4): attachments in both directions against the local Docker Nextcloud, with an in-memory vault.
+// M8 (architecture §9.4): attachments in both directions against the local Docker Nextcloud, with an in-memory vault.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { remotePagePath } from '../../src/mapping/paths';
