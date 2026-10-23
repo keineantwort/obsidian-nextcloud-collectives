@@ -1,57 +1,57 @@
-# Manuelle Testcheckliste (iOS und Android)
+# Manual test checklist (iOS and Android)
 
-Gilt für M9 (PLAN §14). Jeden Punkt auf **iOS** und **Android** abhaken; Fehler mit Gerät, Obsidian- und Nextcloud-Version festhalten. Verwende einen **neuen, leeren Vault** und einen Testserver bzw. ein Test-Konto – keine produktiven Daten.
+Applies to M9 (see [architecture](architecture.md)). Check every item on **iOS** and **Android**; record failures with the device, Obsidian version and Nextcloud version. Use a **new, empty vault** and a test server or test account – no production data.
 
-Gerät/OS: ______  Obsidian: ______  Nextcloud/Collectives: ______  Datum: ______
+Device/OS: ______  Obsidian: ______  Nextcloud/Collectives: ______  Date: ______
 
-## 0. Installation auf dem Handy
+## 0. Installation on the phone
 
-Das Plugin ist nicht im Community-Store (PLAN §15 Nr. 3). Zwei Wege:
+The plugin is not in the community store (open decision on store publication). Two ways:
 
-- **BRAT** (empfohlen): In Obsidian Mobile das Plugin „BRAT“ installieren, „Add beta plugin“ mit `keineantwort/obsidian-nextcloud-collectives`, danach in „Community plugins“ aktivieren. Schritte: [README › Installation](../README.md#installation).
-- **Manuell**: `main.js`, `manifest.json` und `styles.css` aus dem [neuesten GitHub-Release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) in `<Vault>/.obsidian/plugins/nextcloud-collectives/` legen (z. B. über die Dateien-App/iCloud auf iOS, per USB oder Nextcloud-App auf Android), Obsidian neu starten, Plugin aktivieren. Der Ordner `.obsidian` ist auf dem Handy versteckt: ggf. den Vault von einem Desktop aus mit dem Plugin vorbereiten.
+- **BRAT** (recommended): Install the "BRAT" plugin in Obsidian Mobile, use "Add beta plugin" with `keineantwort/obsidian-nextcloud-collectives`, then enable it under "Community plugins". Steps: [README › Installation](../README.md#installation).
+- **Manual**: Put `main.js`, `manifest.json` and `styles.css` from the [latest GitHub release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) into `<Vault>/.obsidian/plugins/nextcloud-collectives/` (e.g. via the Files app/iCloud on iOS, via USB or the Nextcloud app on Android), restart Obsidian, enable the plugin. The `.obsidian` folder is hidden on the phone: if necessary, prepare the vault with the plugin from a desktop.
 
-- [ ] iOS: Plugin erscheint unter „Community plugins“ und lässt sich aktivieren
-- [ ] Android: dasselbe
+- [ ] iOS: the plugin appears under "Community plugins" and can be enabled
+- [ ] Android: same
 
-## 1. Anmeldung
+## 1. Sign-in
 
-- [ ] Server-URL eingeben, „Anmelden“ (Login Flow) tippen: Der Browser öffnet die Nextcloud-Anmeldeseite
-- [ ] Nach Bestätigung im Browser und Rückkehr zu Obsidian sind Benutzername und App-Passwort-Platzhalter („Gespeichert“) gesetzt – ohne manuelles Kopieren
-- [ ] Wird der Browser nicht geöffnet, funktioniert der Link „Anmeldeseite erneut öffnen“
-- [ ] „Abbrechen“ beendet das Warten; „Verbindung testen“ meldet danach die Zahl der Collectives
-- [ ] Falsche Server-URL: verständliche Fehlermeldung statt Absturz
-- [ ] Alternativ: App-Passwort von Hand eingeben, Verbindungstest erfolgreich
+- [ ] Enter the server URL, tap "Sign in" (Login Flow): the browser opens the Nextcloud login page
+- [ ] After confirming in the browser and returning to Obsidian, the username and the app password placeholder ("Saved – type to replace") are set – without copying anything manually
+- [ ] If the browser does not open, the "Open the login page again" link works
+- [ ] "Cancel" ends the waiting; "Test connection" then reports the number of collectives
+- [ ] Wrong server URL: understandable error message instead of a crash
+- [ ] Alternatively: enter the app password by hand, connection test succeeds
 
-## 2. Erster Sync und Automatik
+## 2. First sync and automation
 
-- [ ] „Jetzt synchronisieren“ (Ribbon-Icon) lädt alle Collectives; ein Ergebnis-Notice erscheint
-- [ ] Plugin-Start bei laufender Verbindung: Nach wenigen Sekunden läuft ein Sync ohne Notice (Einstellung „Beim Start synchronisieren“)
-- [ ] Notiz bearbeiten, Tippen beenden: ca. 10 s später ist die Änderung in Nextcloud (Einstellung „Nach Änderungen synchronisieren“)
-- [ ] Änderung in Nextcloud, Obsidian in den Hintergrund und zurück in den Vordergrund holen: Die Änderung erscheint ohne manuelles Auslösen
-- [ ] Intervall 1 Minute einstellen: Änderung in Nextcloud kommt innerhalb ca. 1 Minute an, solange Obsidian im Vordergrund ist
-- [ ] Intervall 0, „Beim Start“ und „Nach Änderungen“ aus: Es passiert nichts von selbst; „Jetzt synchronisieren“ funktioniert weiter
-- [ ] Mehrere schnelle Änderungen hintereinander lösen nur einen Sync aus; während eines Syncs ausgelöste Änderungen laufen danach noch einmal (kein Parallel-Lauf, keine Fehlermeldung)
+- [ ] "Sync now" (ribbon icon) downloads all collectives; a result notice appears
+- [ ] Plugin start with a working connection: after a few seconds a sync runs without a notice (setting "Sync on startup")
+- [ ] Edit a note, stop typing: about 10 s later the change is in Nextcloud (setting "Sync after changes")
+- [ ] Change something in Nextcloud, move Obsidian to the background and back to the foreground: the change appears without triggering anything manually
+- [ ] Set the interval to 1 minute: a change in Nextcloud arrives within about 1 minute while Obsidian is in the foreground
+- [ ] Interval 0, "Sync on startup" and "Sync after changes" off: nothing happens on its own; "Sync now" still works
+- [ ] Several quick changes in a row trigger only one sync; changes made during a sync run once more afterwards (no parallel run, no error message)
 
-## 3. Ruhige Läufe und Fehler
+## 3. Quiet runs and errors
 
-- [ ] Flugmodus, Notiz ändern, 10 s warten: keine Fehlermeldung. Flugmodus aus, Foreground-Wechsel: Änderung wird hochgeladen
-- [ ] Ungültiges App-Passwort (in Nextcloud widerrufen): Der nächste automatische Lauf zeigt **einmal** eine Fehlermeldung, danach laufen keine automatischen Läufe mehr; nach erneuter Anmeldung (oder Speichern der Einstellungen) wieder
-- [ ] Notiz lokal löschen, 10 s warten: Es erscheint kein Dialog mitten im Schreiben, sondern der Hinweis „Einige Änderungen brauchen deine Entscheidung“; „Jetzt synchronisieren“ zeigt dann die Rückfrage
+- [ ] Airplane mode, edit a note, wait 10 s: no error message. Airplane mode off, switch to the foreground: the change is uploaded
+- [ ] Invalid app password (revoked in Nextcloud): the next automatic run shows an error message **once**, after that no automatic runs happen; after signing in again (or saving the settings) they resume
+- [ ] Delete a note locally, wait 10 s: no dialog appears in the middle of writing, but the notice "Some changes need your decision. Run “Sync now” to answer."; "Sync now" then shows the question
 
-## 4. Sonstiges
+## 4. Miscellaneous
 
-- [ ] Umbenennen, Verschieben, Anhang einfügen (Bild per Foto): kommt in Nextcloud an
-- [ ] Konflikt (gleiche Seite lokal und in Nextcloud geändert): Konfliktkopie, Hinweis, Konflikt-Dialog bedienbar (Touch-Größen, Scrollen)
-- [ ] Deutsche und englische Oberfläche: Texte vollständig (Obsidian-Sprache umstellen, neu starten)
-- [ ] Akkuverbrauch/Hitze nach 30 Minuten im Vordergrund unauffällig
+- [ ] Rename, move, insert an attachment (image from the camera): arrives in Nextcloud
+- [ ] Conflict (same page changed locally and in Nextcloud): conflict copy, notice, conflict dialog is usable (touch sizes, scrolling)
+- [ ] German and English UI: texts complete (switch the Obsidian language, restart)
+- [ ] Battery drain/heat after 30 minutes in the foreground is unremarkable
 
-## 5. Performance (Desktop, Testserver im LAN)
+## 5. Performance (desktop, test server on the LAN)
 
-- [ ] Collective mit ≥ 500 Seiten: Leerlauf-Sync (nichts geändert) dauert < 5 s. Der Performance-Test `tests/integration/performance.test.ts` (`npm run test:perf`, nachts in `nightly.yml`) prüft das automatisiert gegen den Docker-Testserver.
+- [ ] Collective with ≥ 500 pages: an idle sync (nothing changed) takes < 5 s. The performance test `tests/integration/performance.test.ts` (`npm run test:perf`, nightly in `nightly.yml`) checks this automatically against the Docker test server.
 
-## 6. Diagnose (M10)
+## 6. Diagnostics (M10)
 
-- [ ] „Protokoll anzeigen“ (Befehl und Einstellungen) öffnet das Protokoll; „Protokoll kopieren“ legt es in die Zwischenablage; kein Passwort darin
-- [ ] Mit „Ausführliches Protokoll“ stehen die Anfragen (Methode, Pfad, Status) im Protokoll
-- [ ] Server mit nicht getesteter Nextcloud-Version: eine Warnung, danach läuft der Sync
+- [ ] "Show log" (command and settings) opens the log; "Copy log" puts it on the clipboard; no password in it
+- [ ] With "Detailed log", the requests (method, path, status) appear in the log
+- [ ] Server with an untested Nextcloud version: one warning, then the sync runs
