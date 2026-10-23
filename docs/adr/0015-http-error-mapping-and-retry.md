@@ -1,35 +1,35 @@
-# 0015 – HTTP-Fehlerabbildung und Retry zentral im HTTP-Client
+# 0015 – HTTP error mapping and retry centrally in the HTTP client
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §12, §14 (M2), Issue ONC-3
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §12, milestone M2, issue ONC-3
 
-## Kontext
+## Context
 
-Bis M1 bildete nur der Verbindungstest HTTP-Status auf Fehlerklassen ab und behandelte 401 und 403 gleich als `AuthError`. Ab M2 sprechen alle Clients (OCS, Circles, WebDAV) über denselben Transport. Ein 403 bedeutet bei Nextcloud nicht nur „Zugangsdaten falsch“. Die Antwort kommt auch, wenn ein angemeldeter Nutzer eine Ressource nicht ändern darf, etwa wenn ein Mitglied ein Collective löschen will (M0, Fixture `collective-trash-as-member.json`). Würde das als `AuthError` gelten, pausierte der Sync (PLAN §12) wegen einer einzelnen verbotenen Aktion.
+Until M1 only the connection test mapped HTTP status codes to error classes, and it treated 401 and 403 alike as `AuthError`. From M2 on, all clients (OCS, Circles, WebDAV) use the same transport. In Nextcloud a 403 does not just mean "wrong credentials". The response also occurs when a signed-in user is not allowed to change a resource, for example when a member tries to delete a collective (M0, fixture `collective-trash-as-member.json`). If that counted as `AuthError`, the sync would pause (architecture §12) because of a single forbidden action.
 
-PLAN §12 verlangt außerdem Retry mit Backoff 1/2/4 s für Netzwerk- und Serverfehler.
+Architecture §12 also requires retry with 1/2/4 s backoff for network and server errors.
 
-## Entscheidung
+## Decision
 
-- Die Statusabbildung steht an genau einer Stelle: `errorForStatus` in `src/api/http.ts`, aufgerufen von `HttpClient.send`.
-  - 401 → `AuthError` (Zugangsdaten abgelehnt, Sync pausieren)
-  - 403 → neue Klasse `ForbiddenError` (keine Rechte an dieser Ressource, nur die eine Aktion scheitert)
+- The status mapping lives in exactly one place: `errorForStatus` in `src/api/http.ts`, called by `HttpClient.send`.
+  - 401 → `AuthError` (credentials rejected, pause the sync)
+  - 403 → new class `ForbiddenError` (no permission for this resource, only that one action fails)
   - 404 → `NotFoundError`, 412 → `ConflictError`
-  - jeder andere Nicht-2xx-Status → `ServerError(status)`
-  - keine Antwort / Timeout → `NetworkError`
-- Retry nur für **lesende** Methoden (`GET`, `PROPFIND`), nur bei `NetworkError` und Status ≥ 500, mit 1/2/4 s Pause, höchstens drei Wiederholungen. 4xx wird nie wiederholt.
-- Schreibende Methoden (`PUT`, `POST`, `PATCH`, `DELETE`, `MKCOL`, `MOVE`) werden nie automatisch wiederholt. Ist ein `PUT` beim Server angekommen, aber die Antwort verloren gegangen, würde die Wiederholung mit dem alten `If-Match` einen falschen 412 erzeugen. Ein wiederholtes `POST` würde eine Seite doppelt anlegen. Der nächste Sync-Lauf übernimmt die Wiederholung, nachdem er den Stand neu gelesen hat.
-- Der Verbindungstest in den Settings läuft ohne Retry, damit die Rückmeldung sofort kommt.
+  - any other non-2xx status → `ServerError(status)`
+  - no response / timeout → `NetworkError`
+- Retry only for **reading** methods (`GET`, `PROPFIND`), only on `NetworkError` and status ≥ 500, with pauses of 1/2/4 s, at most three retries. 4xx is never retried.
+- Writing methods (`PUT`, `POST`, `PATCH`, `DELETE`, `MKCOL`, `MOVE`) are never retried automatically. If a `PUT` reached the server but the response was lost, retrying with the old `If-Match` would produce a false 412. A repeated `POST` would create a page twice. The next sync run takes over the retry after re-reading the state.
+- The connection test in the settings runs without retry so that feedback is immediate.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **403 weiter als `AuthError`** – pausiert den Sync für alle Collectives, obwohl nur eine Aktion verboten ist.
-- **Retry für alle Methoden** – riskiert doppelte Seiten und Scheinkonflikte, siehe oben.
-- **Statusabbildung je Client** – drei Kopien derselben Tabelle, die auseinanderlaufen.
+- **Keep 403 as `AuthError`** – pauses the sync for all collectives although only one action is forbidden.
+- **Retry for all methods** – risks duplicate pages and phantom conflicts, see above.
+- **Status mapping per client** – three copies of the same table that drift apart.
 
-## Konsequenzen
+## Consequences
 
-- positiv: Einheitliche Fehler in allen Clients. Aufrufer können `ForbiddenError` gezielt behandeln, etwa einen gelöschten Collective-Ordner wiederherstellen (PLAN §7.4).
-- negativ: Ein Netzwerkfehler beim Schreiben scheitert sofort. Das ist gewollt, der nächste Lauf korrigiert ihn.
-- Folgearbeiten: Der Sync (ab M3/M4) pausiert bei `AuthError` und meldet `ForbiddenError` pro Operation, ohne den Lauf abzubrechen.
+- positive: Uniform errors in all clients. Callers can handle `ForbiddenError` specifically, for example restoring a deleted collective folder (architecture §7.4).
+- negative: A network error while writing fails immediately. This is intended; the next run corrects it.
+- Follow-up work: The sync (from M3/M4) pauses on `AuthError` and reports `ForbiddenError` per operation without aborting the run.

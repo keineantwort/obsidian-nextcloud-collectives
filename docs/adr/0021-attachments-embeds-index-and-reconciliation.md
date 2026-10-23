@@ -1,60 +1,60 @@
-# 0021 – Anhänge: Einbettungen über den Index, Abgleich über ETags, Schritt nach dem Inhalt
+# 0021 – Attachments: embeds via the index, reconciliation via ETags, step after the content
 
-- Status: akzeptiert
-- Datum: 2026-10-17
-- Bezug: PLAN §9.2–9.4, ADR 0009, ADR 0020, Issue ONC-9
+- Status: accepted
+- Date: 2026-10-17
+- Related: architecture §9.2–9.4, ADR 0009, ADR 0020, issue ONC-9
 
-## Kontext
+## Context
 
-M8 bringt Bilder und Dateien in beide Richtungen: Collectives schreibt `![name](.attachments.{pageId}/name)`, Obsidian bettet `![[bild.png]]` ein (Dateien liegen irgendwo im Vault, meist wo Obsidian eingefügte Bilder ablegt). Hash und Basis (`baseHash`) laufen über das Remote-Format (ADR 0020), die Einbettung muss sich also ohne zusätzlichen Zustand in beide Richtungen umrechnen lassen. Anhänge dürfen nicht bei jedem Lauf übertragen werden, und Nutzerdaten dürfen nie ohne Rückfrage überschrieben oder gelöscht werden (AGENTS Regel 4).
+M8 brings images and files in both directions: Collectives writes `![name](.attachments.{pageId}/name)`, Obsidian embeds `![[image.png]]` (files lie somewhere in the vault, usually where Obsidian puts pasted images). Hash and base (`baseHash`) are computed over the remote format (ADR 0020), so the embed must be convertible in both directions without additional state. Attachments must not be transferred on every run, and user data must never be overwritten or deleted without asking (AGENTS rule 4).
 
-## Entscheidung
+## Decision
 
-- **Einbettungen im Text.** `links.ts` wandelt `![alt](.attachments.{id}/name)` ⇄ `![[Vault/Pfad/name]]` (`![[Pfad|alt]]`, wenn der Alt-Text vom Dateinamen abweicht; leerer Alt-Text wird zum Dateinamen kanonisiert). Lokal werden `![[…]]` und `![alt](pfad)` auf Dateien im Vault erkannt (Pfad ab Wurzel, relativ zur Notiz oder ein Name, den nur eine Datei hat). Notizen, fehlende Dateien, Dateien über dem Größenlimit, Code und Einbettungen mit Überschrift bleiben unverändert.
-- **`AttachmentIndex`** (`mapping/attachments.ts`, rein) gehört zum `LinkIndex` und wird pro Durchlauf gebaut: Dateien des Vaults mit Größe (`LocalSnapshot.attachmentFiles`), Standardordner je Seite (Muster, relativ zum Ordner der Notiz, `{title}` = Dateiname der Notiz) und die schon gesyncten Pfade aus dem State. Ein Pfad im Standardordner oder aus dem State zählt auch dann als Anhang der Seite, wenn die Datei noch fehlt – so bleibt der Hash stabil, solange der Download aussteht.
-- **Ablage.** Heruntergeladene Dateien liegen in `{Ordner der Notiz}/_attachments/{Notizname}/` (Setting `attachmentFolderPattern`). Eingefügte Dateien bleiben, wo der Nutzer sie hat; der State merkt sich den tatsächlichen Pfad. Beim Umbenennen oder Verschieben einer Notiz werden Anhänge nicht mitgezogen (der State-Pfad bleibt gültig).
-- **Eigener Schritt nach dem Inhalt** (`executorAttachments.ts`). Nach `create`/`adopt`/`update`/`push` einer Seite läuft der Anhang-Schritt; für Seiten, an denen sonst nichts zu tun ist und die Anhänge im State haben, plant der Planer eine Operation `attachments` (damit Änderungen auf dem Server ohne Änderung des Seitentextes auffallen). Der Schritt liest den Ordner `.attachments.{id}` per PROPFIND Depth 1 (ETag, Größe, `fileid`) und entscheidet je Datei. Pro Seite also höchstens ein PROPFIND, wenn nichts zu tun ist.
-- **State.** `attachments: { id, name, etag, localPath, hash }`; `hash` = SHA-256 der Bytes, die beide Seiten zuletzt hatten. `etag: ''` markiert „noch nicht übertragen“ (Fehler beim Transfer, Name auf dem Server belegt): der nächste Lauf versucht es erneut. Die Anhang-Id ist die `fileid` aus PROPFIND (im Integrationstest gegen die OCS-Liste bestätigt); `0` = unbekannt.
-- **Abgleich je Datei.**
-  - Nur lokal und von der Notiz eingebettet → Upload per `MKCOL` (falls nötig) und `PUT` mit `If-None-Match: *` (nie über eine vorhandene Datei). Danach ein PROPFIND für ETag und Id.
-  - Nur auf dem Server und eingebettet → Download. Gleicher ETag wie im State → keine Übertragung.
-  - Server-ETag geändert → Download; die Vault-Datei wird nur ersetzt, wenn sie noch dem State-Hash entspricht; sonst bleibt sie, die Serverfassung wird als Konfliktdatei (`name (Konflikt …).ext`) daneben gelegt.
-  - Auf beiden Seiten ohne gemeinsamen Stand → Bytes vergleichen: gleich übernehmen, verschieden: Konfliktdatei.
-  - Auf dem Server gelöscht → Vault-Datei in den Obsidian-Papierkorb (`remoteDeleteBehaviour`), aber nur, wenn sie unverändert ist.
-  - Im Vault gelöscht und nicht mehr eingebettet → auf dem Server löschen (Papierkorb von Collectives; Setting `deleteRemoteAttachments`, Standard an). Ist sie noch eingebettet, wird sie wiederhergestellt.
-  - Verschoben im Vault → die Einbettung (von Obsidian nachgezogen) liefert den neuen Pfad; keine Übertragung.
-  - Fehlt der Ordner auf dem Server, obwohl der State Anhänge kennt, bleibt alles unangetastet.
-- **Größenlimit.** `maxAttachmentSizeMb` (1–1000, Standard 20). Größere Dateien werden weder hoch- noch heruntergeladen; eine zu große lokale Datei wird nicht umgewandelt (die Einbettung bleibt `![[…]]` im Seitentext).
-- **Transport.** `HttpRequest.body` darf ein `ArrayBuffer` sein, `binaryResponse` liefert `HttpResponse.data`, `timeoutMs` pro Request (Anhänge 180 s statt 30 s). `WebdavClient.getBinary`/`putBinary`. Schreibende Requests werden weiterhin nie wiederholt.
+- **Embeds in the text.** `links.ts` converts `![alt](.attachments.{id}/name)` ⇄ `![[Vault/Path/name]]` (`![[Path|alt]]` if the alt text differs from the file name; an empty alt text is canonicalized to the file name). Locally, `![[…]]` and `![alt](path)` are recognized for files in the vault (path from the root, relative to the note, or a name that only one file has). Notes, missing files, files above the size limit, code and embeds with a heading stay unchanged.
+- **`AttachmentIndex`** (`mapping/attachments.ts`, pure) belongs to the `LinkIndex` and is built per pass: files of the vault with size (`LocalSnapshot.attachmentFiles`), default folder per page (pattern, relative to the note's folder, `{title}` = file name of the note) and the already synced paths from the state. A path in the default folder or from the state counts as an attachment of the page even if the file is still missing – this keeps the hash stable while the download is pending.
+- **Storage.** Downloaded files are placed in `{folder of the note}/_attachments/{note name}/` (setting `attachmentFolderPattern`). Pasted files stay where the user has them; the state remembers the actual path. When a note is renamed or moved, attachments are not moved along (the state path stays valid).
+- **Own step after the content** (`executorAttachments.ts`). After `create`/`adopt`/`update`/`push` of a page, the attachment step runs; for pages where nothing else is to be done and that have attachments in the state, the planner plans an operation `attachments` (so that changes on the server are noticed without a change to the page text). The step reads the folder `.attachments.{id}` via PROPFIND depth 1 (ETag, size, `fileid`) and decides per file. So at most one PROPFIND per page when nothing is to be done.
+- **State.** `attachments: { id, name, etag, localPath, hash }`; `hash` = SHA-256 of the bytes that both sides last had. `etag: ''` marks "not yet transferred" (error during transfer, name on the server occupied): the next run tries again. The attachment ID is the `fileid` from PROPFIND (confirmed against the OCS list in the integration test); `0` = unknown.
+- **Reconciliation per file.**
+  - Only local and embedded by the note → upload via `MKCOL` (if necessary) and `PUT` with `If-None-Match: *` (never over an existing file). Then a PROPFIND for ETag and ID.
+  - Only on the server and embedded → download. Same ETag as in the state → no transfer.
+  - Server ETag changed → download; the vault file is only replaced if it still matches the state hash; otherwise it stays, and the server version is placed next to it as a conflict file (`name (Conflict …).ext`).
+  - On both sides without a common state → compare bytes: identical, adopt; different: conflict file.
+  - Deleted on the server → vault file to the Obsidian trash (`remoteDeleteBehaviour`), but only if it is unchanged.
+  - Deleted in the vault and no longer embedded → delete on the server (Collectives trash; setting `deleteRemoteAttachments`, default on). If it is still embedded, it is restored.
+  - Moved in the vault → the embed (updated by Obsidian) provides the new path; no transfer.
+  - If the folder is missing on the server although the state knows attachments, everything is left untouched.
+- **Size limit.** `maxAttachmentSizeMb` (1–1000, default 20). Larger files are neither uploaded nor downloaded; a local file that is too large is not converted (the embed stays `![[…]]` in the page text).
+- **Transport.** `HttpRequest.body` may be an `ArrayBuffer`, `binaryResponse` delivers `HttpResponse.data`, `timeoutMs` per request (attachments 180 s instead of 30 s). `WebdavClient.getBinary`/`putBinary`. Writing requests are still never retried.
 
-## Sicherheit (Review ONC-9)
+## Security (review ONC-9)
 
-- Der Seitentext kommt vom Server und darf das Plugin nicht dazu bringen, Dateien des Vaults hochzuladen. Hochgeladen werden nur Dateien unterhalb des Ordners des eigenen Collectives sowie Bilder direkt im Vault-Wurzelordner (dorthin legt Obsidian eingefügte Bilder standardmäßig). Andere Anhang-Ordner von Obsidian müssen im Collective-Ordner liegen (z. B. „im Ordner der Notiz“).
-- Verschoben, ersetzt oder in den Papierkorb gelegt wird auf Veranlassung des Servers nur unterhalb des Collective-Ordners; Dateinamen vom Server sind einfache Namen (keine Trenner, Steuerzeichen, führender Punkt, in Obsidian verbotene Zeichen).
-- Ohne gemeldete Größe (`getcontentlength`) wird nicht heruntergeladen; die Größe der Bytes wird vor jedem Schreiben erneut geprüft.
-- Eine Seite im Zustand `conflict` löscht keine Anhänge, weder im Vault noch auf dem Server.
+- The page text comes from the server and must not be able to make the plugin upload files from the vault. Only files below the folder of the own collective and images directly in the vault root folder are uploaded (that is where Obsidian puts pasted images by default). Other attachment folders of Obsidian must lie within the collective folder (e.g. "in the note's folder").
+- At the server's initiative, files are only moved, replaced or put into the trash below the collective folder; file names from the server are plain names (no separators, control characters, leading dot, characters forbidden in Obsidian).
+- Without a reported size (`getcontentlength`), nothing is downloaded; the size of the bytes is checked again before every write.
+- A page in the state `conflict` deletes no attachments, neither in the vault nor on the server.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **OCS-Multipart-Upload** – siehe ADR 0009 (Umbenennung bei Kollision).
-- **Anhänge nur im Planer entscheiden** – der Planer kennt die Einbettungen nicht (Text), der Schritt braucht den Seitentext nach dem Inhalt.
-- **Lokale Änderungen vorhandener Anhänge hochladen** – nicht umgesetzt (siehe Einschränkungen).
-- **Datei-Hashes vor jedem Lauf** – Kosten auf Mobilgeräten; Server-Änderungen werden per ETag erkannt, Bytes nur gelesen, wenn der ETag abweicht.
+- **OCS multipart upload** – see ADR 0009 (renaming on collision).
+- **Decide attachments in the planner only** – the planner does not know the embeds (text); the step needs the page text after the content.
+- **Upload local changes of existing attachments** – not implemented (see limitations).
+- **File hashes before every run** – cost on mobile devices; server changes are detected via ETag, bytes are only read if the ETag differs.
 
-## Konsequenzen
+## Consequences
 
-- Pro Lauf ein PROPFIND je Seite mit gesyncten Anhängen.
-- Wird dieselbe Datei in mehreren Seiten eingebettet, wird sie je Seite hochgeladen (eigener `.attachments.{id}`-Ordner).
+- One PROPFIND per page with synced attachments per run.
+- If the same file is embedded in several pages, it is uploaded per page (own `.attachments.{id}` folder).
 
-## Bekannte Einschränkungen
+## Known limitations
 
-- Eine lokal geänderte Datei mit gleichem Namen wird nicht hochgeladen; ändert sich die Datei auf dem Server, entsteht eine Konfliktdatei.
-- Heißen zwei eingebettete Dateien einer Seite gleich (verschiedene Ordner), wird nur eine hochgeladen.
-- Dateien, deren Name `[ ] | # ^` enthält, werden heruntergeladen, aber nicht als Wikilink eingebettet.
-- Nicht-Bild-Links (`[Name](.attachments.{id}/datei.pdf)`) werden nicht umgewandelt und nicht heruntergeladen.
-- Ist ein Anhang beim Pull einer neuen Seite schon durch eine fremde Datei am Zielpfad belegt, werden die Bytes verglichen (gleich: übernommen; verschieden: Konfliktdatei).
-- Seiten, die in einem State aus M7 ohne Anhänge stehen, holen vorhandene Anhänge erst, wenn sich ihr Text auf dem Server ändert; Dateien über dem Limit werden nicht gemerkt und nach einer Erhöhung des Limits erst bei der nächsten Textänderung geholt.
-- Schlägt ein Transfer dauerhaft fehl (z. B. Quota), wird er in jedem Lauf neu versucht.
-- Eine neue lokale Notiz mit Bild geht zuerst mit `![[…]]` zum Server; Umwandlung und Upload folgen im nächsten Lauf.
-- Anhänge werden beim Umbenennen oder Verschieben der Notiz nicht mitgezogen.
-- Der Seitentext einer Seite im Zustand `conflict` verweist nur auf Anhänge, die die Notiz selbst einbettet; Anhänge, die nur in der Serverfassung stehen, kommen nach der Auflösung.
+- A locally changed file with the same name is not uploaded; if the file changes on the server, a conflict file arises.
+- If two embedded files of a page have the same name (different folders), only one is uploaded.
+- Files whose name contains `[ ] | # ^` are downloaded but not embedded as a wikilink.
+- Non-image links (`[Name](.attachments.{id}/file.pdf)`) are neither converted nor downloaded.
+- If an attachment is already occupied by a foreign file at the target path when pulling a new page, the bytes are compared (identical: adopted; different: conflict file).
+- Pages that stand without attachments in a state from M7 only fetch existing attachments when their text changes on the server; files above the limit are not remembered and, after the limit is raised, are only fetched on the next text change.
+- If a transfer fails permanently (e.g. quota), it is retried on every run.
+- A new local note with an image first goes to the server with `![[…]]`; conversion and upload follow in the next run.
+- Attachments are not moved along when the note is renamed or moved.
+- The page text of a page in the state `conflict` only refers to attachments that the note itself embeds; attachments that appear only in the server version arrive after resolution.

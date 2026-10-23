@@ -1,49 +1,49 @@
-# 0017 – Push: bestätigte ETags, Entscheidung als reine Funktion, Konfliktauflösung über den State
+# 0017 – Push: confirmed ETags, decision as a pure function, conflict resolution via the state
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §6.3, §7.3, §7.6, §8, §10.2, §14 M4, `docs/api-notes.md` §10a, Issue ONC-5 (M4)
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §6.3, §7.3, §7.6, §8, §10.2, milestone M4, `docs/api-notes.md` §10a, issue ONC-5 (M4)
 
-## Kontext
+## Context
 
-M4 lädt lokale Änderungen hoch. Vier Fragen waren offen:
+M4 uploads local changes. Four questions were open:
 
-1. **ETag-Sekundenauflösung** (M2 nachgewiesen): Nextcloud bildet den ETag aus der mtime in ganzen Sekunden. Schreibt ein anderer Client in derselben Sekunde, in der das Plugin liest, bleibt der ETag gleich. Ein späterer `PUT` mit `If-Match` würde dessen Änderung überschreiben. Umgekehrt kann ein Schreibzugriff in derselben Sekunde *nach* dem Plugin-`PUT` unsichtbar bleiben.
-2. Wo fällt die Entscheidung aus Tabelle 7.3 (lokal/remote geändert), wenn Pull, Push und die Strategien `preferLocal`/`preferRemote` zusammenkommen?
-3. Wie wirken „Lokal behalten“ und „Remote übernehmen“ im Konflikt-Dialog, ohne eine zweite Sync-Logik neben dem Lauf aufzubauen?
-4. Wie werden eigene Schreibzugriffe von Nutzer-Änderungen unterschieden (PLAN §7.6)?
+1. **ETag one-second resolution** (proven in M2): Nextcloud derives the ETag from the mtime in whole seconds. If another client writes in the same second in which the plugin reads, the ETag stays the same. A later `PUT` with `If-Match` would overwrite that change. Conversely, a write in the same second *after* the plugin's `PUT` can remain invisible.
+2. Where is the decision from table 7.3 (locally/remotely changed) made when pull, push and the strategies `preferLocal`/`preferRemote` come together?
+3. How do "Keep local" and "Take remote" work in the conflict dialog without building a second sync logic next to the run?
+4. How are the plugin's own writes distinguished from user changes (architecture §7.6)?
 
-## Entscheidung
+## Decision
 
-- **Bestätigte ETags.** Ein per `GET` gelesener ETag gilt als bestätigt, wenn die Sekunde von `Last-Modified` vor der Sekunde von `Date` derselben Antwort liegt. Dann ändert jeder spätere Schreibzugriff die Sekunde und damit den ETag, `If-Match` schützt also. Fehlt einer der Header, gilt der ETag als unbestätigt.
-  - Unbestätigter Stand: `remoteMtime` wird im State als `-1` gespeichert (`UNCONFIRMED_REMOTE_MTIME`). Der nächste Lauf liest die Seite dann erneut und vergleicht Hashes. Ein Schema-Wechsel ist nicht nötig.
-  - Soll auf Basis eines unbestätigten ETags gepusht werden, wartet der Lauf 1,1 s und liest erneut. Bleibt der Stand unbestätigt, wird der Push auf den nächsten Lauf verschoben.
-  - Nach einem eigenen `PUT` ist der Stand **immer** unbestätigt. Der nächste Lauf prüft ihn mit einem `GET` und Hash-Vergleich, schreibt dabei aber nichts. Erst der Lauf danach ist ein Leerlauf ohne Requests auf Inhalte. So bleibt auch ein Browser-Schreibzugriff in der Sekunde nach dem Plugin-`PUT` nicht unbemerkt.
-  - Fehlt der ETag in einer erfolgreichen `PUT`-Antwort, wird er per Depth-0-`PROPFIND` nachgeholt.
-- **Entscheidung als reine Funktion** `decideContent` in `src/sync/decide.ts` (unter der ESLint-Reinheitsregel): Eingaben sind `baseHash`, `localHash`, `remoteHash`, Seitenstatus und Strategie. Die Ausgabe ist `none`/`push`/`pull`/`adoptBase`/`conflict`. Der Executor führt nur aus. Für Seiten mit Status `conflict`/`collision` gilt immer `conflictFile`, und aus `push` wird `none`. Solche Seiten werden erst nach der Auflösung hochgeladen.
-- **Strategien** `conflictFile` (Default), `preferLocal`, `preferRemote` als Setting. Die beiden `prefer`-Strategien überschreiben die Gegenseite ohne Rückfrage. Die Einwilligung dazu liegt in der Auswahl im Setting, die Beschreibung dort sagt das ausdrücklich.
-- **Planner**: `planPull` heißt jetzt `planSync`. Eine bekannte Seite bekommt die Operation `push`, wenn remote unverändert ist (Listing-`timestamp`/`size` = State) und lokal ein Kandidat vorliegt. Kandidat ist eine Datei, deren mtime von `localMtime` abweicht oder die in der Dirty-Queue steht. Ob wirklich hochgeladen wird, entscheidet erst der Hash. Eine abweichende mtime bei gleichem Inhalt führt nur zu einem neuen `localMtime`. Das macht die offene M3-Frage unkritisch, ob `file.stat.mtime` direkt nach `vault.process` aktuell ist.
-- **Konfliktauflösung als State-Übergang** (`src/sync/conflicts.ts`). Der Dialog ändert nur den State, danach läuft ein normaler Sync:
-  - **Basis eines Konflikts**: Legt der Executor eine Konfliktkopie an, wird `baseHash` zum Hash genau dieser Remote-Fassung. Solange sich remote nichts ändert, gilt die Seite damit nur lokal als geändert. Ein Konflikt aus einem unbestätigten `GET` erzeugt im nächsten Lauf deshalb keine zweite Kopie (Review-Befund).
-  - „Lokal behalten“: `status: synced`, `localMtime: -1`, die Basis bleibt die Remote-Fassung zum Konfliktzeitpunkt. Der nächste Lauf lädt die lokale Datei hoch, unabhängig von der Strategie, solange sich die Remote-Fassung nicht erneut geändert hat. Hat sie sich erneut geändert (auch per `412` beim Upload), entscheidet die eingestellte Strategie wie bei jeder beidseitigen Änderung: `conflictFile` erzeugt einen neuen Konflikt, `preferRemote` übernimmt die Server-Fassung (vom Nutzer so entschieden). States aus der Zeit vor M4 mit `baseHash: ''` nehmen ersatzweise den Hash der Konfliktkopie.
-  - „Remote übernehmen“: `status: synced`, `baseHash` = Hash der aktuellen lokalen Datei, `remoteMtime: -1`. Der nächste Lauf liest remote, sieht „nur remote geändert“ und überschreibt die lokale Datei über `vault.process`, nur wenn sie sich zwischen Lesen und Schreiben nicht geändert hat.
-  - Bei Kollisionen (Nutzerdatei ohne `nc_page_id`) schreibt die Auflösung zuerst minimale `nc_*`-Felder in die Datei. `metaHash: ''` sorgt dafür, dass der nächste Lauf die vollständigen Felder setzt.
-  - Die Konfliktkopie wandert nach der Auflösung über `fileManager.trashFile` in den Papierkorb, wie in Obsidian eingestellt. Die Auswahl im Dialog gilt als Rückfrage im Sinne von AGENTS Regel 4.
-- **Eigene Schreibzugriffe** (`src/sync/dirtyQueue.ts`): Der Vault-Port des Laufs markiert jeden Pfad vor `create`/`process` für 5 s als unterdrückt. Die Markierung wird beim ersten Event nicht verbraucht (Muster aus Nextcloud Sync, `docs/api-notes.md` §11). `modify`-Events auf andere Pfade landen in der Dirty-Queue, die der nächste Lauf leert. Automatische Auslöser (Debounce nach Speichern) bleiben M9.
+- **Confirmed ETags.** An ETag read via `GET` counts as confirmed if the second of `Last-Modified` lies before the second of `Date` of the same response. Then any later write changes the second and thereby the ETag, so `If-Match` protects. If one of the headers is missing, the ETag counts as unconfirmed.
+  - Unconfirmed state: `remoteMtime` is stored in the state as `-1` (`UNCONFIRMED_REMOTE_MTIME`). The next run then reads the page again and compares hashes. No schema change is needed.
+  - If a push is to be made on the basis of an unconfirmed ETag, the run waits 1.1 s and reads again. If the state stays unconfirmed, the push is deferred to the next run.
+  - After the plugin's own `PUT` the state is **always** unconfirmed. The next run checks it with a `GET` and hash comparison but writes nothing. Only the run after that is an idle run without content requests. This way even a browser write in the second after the plugin's `PUT` does not go unnoticed.
+  - If the ETag is missing from a successful `PUT` response, it is fetched afterwards with a depth-0 `PROPFIND`.
+- **Decision as a pure function** `decideContent` in `src/sync/decide.ts` (under the ESLint purity rule): inputs are `baseHash`, `localHash`, `remoteHash`, page status and strategy. The output is `none`/`push`/`pull`/`adoptBase`/`conflict`. The executor only carries out. For pages with status `conflict`/`collision`, `conflictFile` always applies, and `push` becomes `none`. Such pages are only uploaded after resolution.
+- **Strategies** `conflictFile` (default), `preferLocal`, `preferRemote` as a setting. The two `prefer` strategies overwrite the other side without asking. The consent lies in the selection in the setting; the description there says so explicitly.
+- **Planner**: `planPull` is now called `planSync`. A known page gets the operation `push` if it is unchanged remotely (listing `timestamp`/`size` = state) and a local candidate exists. A candidate is a file whose mtime differs from `localMtime` or that is in the dirty queue. Whether anything is really uploaded is decided only by the hash. A differing mtime with identical content only leads to a new `localMtime`. This makes the open M3 question whether `file.stat.mtime` is current directly after `vault.process` uncritical.
+- **Conflict resolution as a state transition** (`src/sync/conflicts.ts`). The dialog only changes the state; a normal sync follows:
+  - **Base of a conflict**: When the executor creates a conflict copy, `baseHash` becomes the hash of exactly this remote version. As long as nothing changes remotely, the page therefore counts as changed locally only. A conflict from an unconfirmed `GET` therefore does not produce a second copy in the next run (review finding).
+  - "Keep local": `status: synced`, `localMtime: -1`, the base stays the remote version at the time of the conflict. The next run uploads the local file regardless of the strategy, as long as the remote version has not changed again. If it has changed again (also via `412` on upload), the configured strategy decides as for any change on both sides: `conflictFile` creates a new conflict, `preferRemote` takes the server version (decided that way by the user). States from before M4 with `baseHash: ''` use the hash of the conflict copy as a substitute.
+  - "Take remote": `status: synced`, `baseHash` = hash of the current local file, `remoteMtime: -1`. The next run reads remotely, sees "changed remotely only" and overwrites the local file via `vault.process`, only if it did not change between reading and writing.
+  - For collisions (user file without `nc_page_id`), the resolution first writes minimal `nc_*` fields into the file. `metaHash: ''` ensures that the next run sets the full fields.
+  - After resolution the conflict copy is moved to the trash via `fileManager.trashFile`, as configured in Obsidian. The choice in the dialog counts as asking first in the sense of AGENTS rule 4.
+- **Own writes** (`src/sync/dirtyQueue.ts`): The run's vault port marks every path as suppressed for 5 s before `create`/`process`. The mark is not consumed by the first event (pattern from Nextcloud Sync, `docs/api-notes.md` §11). `modify` events on other paths land in the dirty queue, which the next run empties. Automatic triggers (debounce after saving) remain M9.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Push zurückstellen, solange die Remote-mtime jünger als 2 s ist** – kein Warten im Lauf, aber ein manueller Sync tut dann scheinbar nichts. Vom Nutzer verworfen.
-- **Eigenes Feld `remoteConfirmed` im State** – klarer lesbar, erfordert aber ein neues `schemaVersion` samt Migration. Der Sentinel `-1` erzwingt dieselbe Prüfung über den bestehenden mtime-Vergleich.
-- **„Lokal behalten“ mit `baseHash: ''`** (erste Fassung) – bei unbestätigtem Konflikt-Stand galten danach beide Seiten als geändert. Mit `conflictFile` ging die Wahl verloren, mit `preferRemote` wurde die lokale Datei überschrieben. Im Review gefunden und verworfen.
-- **Nach einer Dialog-Entscheidung immer einen neuen Konflikt statt der Strategie** – bräuchte ein zusätzliches State-Feld (Schema-Wechsel). Vom Nutzer verworfen: Die Strategie gilt.
-- **Konfliktauflösung direkt im Dialog** (sofort `PUT` bzw. Datei überschreiben) – das wäre eine zweite Schreiblogik neben dem Executor, mit eigener ETag- und Race-Behandlung. Über den State-Übergang gelten dieselben Schutzmechanismen wie im Lauf.
-- **Konfliktkopie liegen lassen** – sicherer, aber der Vault füllt sich mit erledigten Kopien. Vom Nutzer verworfen.
+- **Defer push as long as the remote mtime is younger than 2 s** – no waiting in the run, but a manual sync then apparently does nothing. Rejected by the user.
+- **Own field `remoteConfirmed` in the state** – easier to read, but requires a new `schemaVersion` with migration. The sentinel `-1` forces the same check via the existing mtime comparison.
+- **"Keep local" with `baseHash: ''`** (first version) – with an unconfirmed conflict state, both sides then counted as changed. With `conflictFile` the choice was lost, with `preferRemote` the local file was overwritten. Found in review and rejected.
+- **After a dialog decision always a new conflict instead of the strategy** – would need an additional state field (schema change). Rejected by the user: the strategy applies.
+- **Conflict resolution directly in the dialog** (immediate `PUT` or overwriting the file) – that would be a second write logic next to the executor, with its own ETag and race handling. With the state transition the same protections apply as in the run.
+- **Leave the conflict copy in place** – safer, but the vault fills up with resolved copies. Rejected by the user.
 
-## Konsequenzen
+## Consequences
 
-- positiv: kein stilles Überschreiben bei Schreibzugriffen in derselben Sekunde; Pull, Push und Strategien folgen einer einzigen, vollständig unit-getesteten Entscheidungstabelle; nach dem Push kein Ping-Pong.
-- negativ / Kosten: Nach jedem Push kostet der folgende Lauf ein `GET` pro hochgeladener Seite. In seltenen Fällen wartet ein Lauf 1,1 s pro Seite. Mit `preferRemote` können lokale Änderungen ohne Kopie verloren gehen. Das ist gewollt und wird im Setting erklärt.
-- `localPath` im State bedeutet „Pfad, an dem das Plugin die Datei zuletzt angelegt bzw. verknüpft hat“. Der Inhalts-Sync zieht ihn nach einer lokalen Umbenennung nicht nach, er bleibt die Basis der Umbenennungs-Erkennung in M5. Die aktuelle Datei wird über `nc_page_id` gefunden, auch im Konflikt-Dialog.
-- Eine Auflösung gilt nur für die Konfliktkopie, die der Dialog angezeigt hat. Hat ein Lauf inzwischen eine neuere Kopie angelegt, wird die Wahl verworfen und die Liste neu geladen.
-- Folgearbeiten: M5 (neue lokale Dateien, Strukturfälle; Kollisionsdateien nicht als neue Seite hochladen), M6 (Metadaten-Push), M9 (Debounce nach Speichern nutzt die Dirty-Queue als Auslöser).
+- positive: no silent overwriting for writes in the same second; pull, push and strategies follow a single, fully unit-tested decision table; no ping-pong after the push.
+- negative / cost: After every push, the following run costs one `GET` per uploaded page. In rare cases a run waits 1.1 s per page. With `preferRemote`, local changes can be lost without a copy. This is intended and explained in the setting.
+- `localPath` in the state means "the path at which the plugin last created or linked the file". Content sync does not update it after a local rename; it stays the basis of rename detection in M5. The current file is found via `nc_page_id`, also in the conflict dialog.
+- A resolution only applies to the conflict copy that the dialog showed. If a run has meanwhile created a newer copy, the choice is discarded and the list is reloaded.
+- Follow-up work: M5 (new local files, structural cases; do not upload collision files as a new page), M6 (metadata push), M9 (debounce after saving uses the dirty queue as a trigger).

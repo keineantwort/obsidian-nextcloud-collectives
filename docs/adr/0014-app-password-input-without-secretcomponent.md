@@ -1,28 +1,28 @@
-# 0014 – App-Passwort über ein Passwortfeld, Secret-ID vergibt das Plugin
+# 0014 – App password via a password field, the plugin assigns the secret ID
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §10.1, ADR [0011](0011-minimum-version-and-secret-storage.md), Issue ONC-2
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §10.1, ADR [0011](0011-minimum-version-and-secret-storage.md), issue ONC-2
 
-## Kontext
+## Context
 
-ADR 0011 sah für die Eingabe des App-Passworts Obsidians `SecretComponent` vor. Im manuellen Test von M1 zeigte sich: Die Komponente öffnet einen Dialog, in dem der Nutzer selbst eine Geheimnis-ID vergeben oder auswählen muss. Das ist für eine einmalige Passworteingabe unnötig kompliziert. Die Möglichkeit, ein Secret zwischen Plugins zu teilen, brauchen wir nicht. Mit dem Login Flow (M9) legt das Plugin das Passwort ohnehin selbst ab.
+ADR 0011 provided for Obsidian's `SecretComponent` as the input for the app password. The manual test of M1 showed that the component opens a dialog in which the user has to assign or select a secret ID themselves. That is needlessly complicated for entering a password once. We do not need the ability to share a secret between plugins. With the login flow (M9) the plugin stores the password itself anyway.
 
-## Entscheidung
+## Decision
 
-Der Settings-Tab zeigt ein normales Passwortfeld. Beim Bestätigen (Verlassen des Felds bzw. Enter) speichert das Plugin den Wert per `app.secretStorage.setSecret(id, …)`. Die ID erzeugt das Plugin beim ersten Speichern zufällig (`nextcloud-collectives-` + 16 Hex-Zeichen) und legt sie in `data.json` ab. Das Plugin liest und schreibt nur IDs, die es selbst erzeugt hat (Präfix `nextcloud-collectives-` + Hex). Jede andere ID in `data.json` wird ignoriert bzw. beim nächsten Speichern ersetzt – sonst könnte ein manipuliertes `data.json` das Secret eines anderen Plugins an einen fremden Server senden lassen (Security-Review M1). Das Feld zeigt das gespeicherte Passwort nie an, nur einen Platzhalter „Gespeichert – zum Ersetzen neu eingeben“. Ein leeres Feld ändert nichts.
+The settings tab shows a normal password field. On confirmation (leaving the field or Enter) the plugin stores the value via `app.secretStorage.setSecret(id, …)`. The plugin generates the ID randomly on first save (`nextcloud-collectives-` + 16 hex characters) and stores it in `data.json`. The plugin only reads and writes IDs it generated itself (prefix `nextcloud-collectives-` + hex). Any other ID in `data.json` is ignored or replaced on the next save – otherwise a manipulated `data.json` could make the plugin send another plugin's secret to a foreign server (security review M1). The field never displays the stored password, only the placeholder "Saved – type to replace". An empty field changes nothing.
 
-Weiterhin gilt aus ADR 0011: Obsidian ≥ 1.11.4, Passwort nur im Secret Storage, nie im Klartext in `data.json`.
+From ADR 0011 the following still applies: Obsidian ≥ 1.11.4, password only in the secret storage, never in plain text in `data.json`.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **`SecretComponent` behalten** – Obsidian-Standard, aber unnötiger Dialog mit ID-Vergabe für den Nutzer.
-- **Feste Secret-ID** (z. B. `nextcloud-collectives-app-password`) – einfacher, aber zwei Vaults mit unterschiedlichen Servern könnten sich das Secret teilen, falls der Secret Storage vault-übergreifend ist.
+- **Keep `SecretComponent`** – Obsidian standard, but an unnecessary dialog with ID assignment for the user.
+- **Fixed secret ID** (e.g. `nextcloud-collectives-app-password`) – simpler, but two vaults with different servers might share the secret if the secret storage spans vaults.
 
-## Konsequenzen
+## Consequences
 
-- Einfachere Einrichtung; die Secret-ID ist für Nutzer unsichtbar.
-- Ein gespeichertes Passwort lässt sich im Feld nicht ansehen, nur ersetzen.
-- Ein vorher über `SecretComponent` gewähltes Secret wird nicht übernommen; das App-Passwort muss einmal neu eingegeben werden.
-- Bei `http://` zu einem Server außerhalb des Geräts warnt der Settings-Tab, dass das App-Passwort unverschlüsselt übertragen wird.
-- Löschen des Passworts ist in M1 nicht vorgesehen; ggf. mit dem Login Flow (M9) nachziehen.
+- Simpler setup; the secret ID is invisible to the user.
+- A stored password cannot be viewed in the field, only replaced.
+- A secret previously chosen via `SecretComponent` is not adopted; the app password has to be entered once more.
+- For `http://` to a server outside the device, the settings tab warns that the app password is transmitted unencrypted.
+- Deleting the password is not planned in M1; if needed, add it with the login flow (M9).

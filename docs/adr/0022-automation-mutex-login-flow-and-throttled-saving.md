@@ -1,33 +1,33 @@
-# 0022 – Automatik: Mutex mit Re-Run-Flag, stille Auto-Läufe, Login Flow v2, gedrosseltes Speichern
+# 0022 – Automation: mutex with re-run flag, silent automatic runs, Login Flow v2, throttled saving
 
-- Status: akzeptiert
-- Datum: 2026-10-17
-- Bezug: PLAN.md §7.1, §10.1, §12, §14 M9, Issue ONC-10
+- Status: accepted
+- Date: 2026-10-17
+- Related: architecture §7.1, §10.1, §12, milestone M9, issue ONC-10
 
-## Kontext
+## Context
 
-Bis M8 läuft ein Sync nur auf Befehl. M9 ergänzt Auslöser (Start, Intervall, Speichern, Vordergrund), die auch auf dem Handy laufen müssen, wo es keine Hintergrundausführung gibt und Rückfragen mitten im Schreiben stören. Ein erster Sync großer Collectives schrieb außerdem nach jeder Seite den gesamten State (O(N²)).
+Until M8 a sync only runs on command. M9 adds triggers (startup, interval, saving, foreground) that must also work on the phone, where there is no background execution and questions in the middle of writing are disruptive. In addition, a first sync of large collectives wrote the entire state after every page (O(N²)).
 
-## Entscheidung
+## Decision
 
-- **Scheduler** (`src/sync/scheduler.ts`, rein, Timer injiziert): Start (2 s nach `onLayoutReady`), Intervall, Debounce nach Änderungen, Vordergrund (`visibilitychange`, höchstens alle 30 s). Er fordert Läufe nur an.
-- **Mutex mit Re-Run-Flag** im `SyncController`: Läufe und Konfliktauflösungen laufen über eine Warteschlange. Ein Auslöser während eines Laufs setzt das Flag; danach folgt genau ein weiterer Lauf. Ein manueller Auslöser gewinnt gegen automatische und zeigt „läuft danach noch einmal“.
-- **Auto-Läufe sind still**: kein Fortschritts-Notice, kein Dialog. Die Erstsynchronisation eines nicht leeren Vaults wird nicht gestartet, Rückfragen (Löschen, neue Ordner) werden zurückgestellt und mit einem Hinweis gemeldet („Jetzt synchronisieren“ fragt). Notices nur bei Warnung/Fehler und nicht zweimal mit gleichem Text hintereinander. Kein Netz und fehlende Konfiguration bleiben still.
-- **Pause bei `AuthError`/`ApiChanged`** (PLAN §12): Auto-Läufe stoppen, bis der Nutzer manuell synchronisiert (Erfolg) oder Einstellungen speichert.
-- **Dirty-Schlüssel eines nicht sauber beendeten Laufs** (Fehler, Abbruch, `failed > 0`) kommen in die Queue zurück.
-- **Speichern nach Änderung = `modify`-Event mit Debounce.** Obsidian hat kein Speichern-Ereignis, speichert beim Tippen selbst. Eigene Schreibzugriffe (TTL-Unterdrückung der `DirtyQueue`) lösen nichts aus. Der Lauf ist ein voller Lauf, nicht „nur diese Seite“ (siehe Konsequenzen).
-- **Gedrosseltes Speichern** (`src/sync/throttledPersist.ts`): Nur die Operation `create` speichert „lazy“ (höchstens 1× pro Sekunde, Abschluss/Abbruch des Laufs schreibt nach). Alles andere (Push, Struktur, Konfliktkopien, neue Server-IDs) bleibt sofort. Eine neue Seite lässt sich nach einem Absturz aus ihrer Datei (`nc_page_id`) wieder zuordnen; ein verlorener `push`- oder `update`-Eintrag würde als Konflikt erscheinen.
-- **Login Flow v2** (`src/api/loginFlow.ts`): `POST /index.php/login/v2`, Polling alle 2 s bis 20 min. Login-URL und Poll-Endpunkt müssen denselben Origin (Schema, Host, Port) wie die Server-URL haben; sonst `ApiChangedError`. Nur 404 gilt als „noch nicht fertig“. Zwischen den Polls wird auf Timer **oder** Rückkehr in den Vordergrund gewartet (Android friert Timer ein, solange der Browser vorne ist). Das App-Passwort geht direkt in den Secret Storage, nie in Logs oder `data.json`. Fallback-Link neben dem Abbrechen-Button, falls `window.open` blockiert wird.
+- **Scheduler** (`src/sync/scheduler.ts`, pure, timers injected): startup (2 s after `onLayoutReady`), interval, debounce after changes, foreground (`visibilitychange`, at most every 30 s). It only requests runs.
+- **Mutex with re-run flag** in the `SyncController`: runs and conflict resolutions go through a queue. A trigger during a run sets the flag; exactly one further run follows. A manual trigger wins against automatic ones and shows "will run once more afterwards".
+- **Automatic runs are silent**: no progress notice, no dialog. The first sync of a non-empty vault is not started, questions (deleting, new folders) are deferred and reported with a hint ("Sync now" asks). Notices only on warning/error and not twice in a row with the same text. No network and missing configuration stay silent.
+- **Pause on `AuthError`/`ApiChanged`** (architecture §12): automatic runs stop until the user syncs manually (success) or saves settings.
+- **Dirty keys of a run that did not end cleanly** (error, abort, `failed > 0`) go back into the queue.
+- **Saving after a change = `modify` event with debounce.** Obsidian has no save event, it saves itself while typing. Own writes (TTL suppression of the `DirtyQueue`) trigger nothing. The run is a full run, not "only this page" (see consequences).
+- **Throttled saving** (`src/sync/throttledPersist.ts`): Only the operation `create` saves "lazily" (at most once per second, completion/abort of the run writes afterwards). Everything else (push, structure, conflict copies, new server IDs) stays immediate. A new page can be reassigned from its file (`nc_page_id`) after a crash; a lost `push` or `update` entry would show up as a conflict.
+- **Login Flow v2** (`src/api/loginFlow.ts`): `POST /index.php/login/v2`, polling every 2 s up to 20 min. Login URL and poll endpoint must have the same origin (scheme, host, port) as the server URL; otherwise `ApiChangedError`. Only 404 counts as "not finished yet". Between polls it waits for a timer **or** return to the foreground (Android freezes timers while the browser is in front). The app password goes directly into the secret storage, never into logs or `data.json`. Fallback link next to the cancel button in case `window.open` is blocked.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Sofort-Speichern beibehalten** – bei 500 Seiten ca. 500 Serialisierungen des State; Messwerte stehen in PLAN §17.
-- **Auto-Läufe mit Dialogen** – Dialoge erscheinen zu zufälligen Zeitpunkten (auch im Hintergrund-Fenster) und blockieren das Schreiben.
-- **Lauf „nur diese Seite“ nach Speichern** – würde Planner und Remote-Scan um einen Filter erweitern; der volle Lauf ist bei unveränderten Seiten günstig (ein Request je Collective), und der Filter ist bei Bedarf in M10 nachrüstbar.
-- **Intervall nur auf Desktop** – auf dem Handy feuert der Timer nur im Vordergrund, schadet also nicht; der Nutzer behält die Wahl über die Einstellung.
+- **Keep immediate saving** – with 500 pages about 500 serializations of the state; measured values are recorded with milestone M9 (git history).
+- **Automatic runs with dialogs** – dialogs appear at random times (also in a background window) and block writing.
+- **Run "only this page" after saving** – would extend planner and remote scan by a filter; the full run is cheap for unchanged pages (one request per collective), and the filter can be added in M10 if needed.
+- **Interval on desktop only** – on the phone the timer fires only in the foreground, so it does no harm; the user keeps the choice through the setting.
 
-## Konsequenzen
+## Consequences
 
-- positiv: Läufe überlappen nie; der Nutzer wird auf dem Handy nicht unterbrochen; große Erstsyncs schreiben den State selten.
-- negativ / Kosten: Löschungen werden erst nach einem manuellen Lauf bestätigt. Ein Absturz innerhalb der lazy-Sekunde kostet die Zuordnung der zuletzt angelegten Seiten (wird beim nächsten Lauf aus der Datei wiederhergestellt).
-- Folgearbeiten: „Aktuelle Seite synchronisieren“ als Befehl (M10); Konfliktkopie bei erneuter Server-Änderung aktualisieren (Hinweis aus M4, nicht Teil von M9).
+- positive: Runs never overlap; the user is not interrupted on the phone; large first syncs write the state rarely.
+- negative / cost: Deletions are only confirmed after a manual run. A crash within the lazy second costs the assignment of the most recently created pages (restored from the file on the next run).
+- Follow-up work: "Sync current page" as a command (M10); update the conflict copy when the server changes again (note from M4, not part of M9).

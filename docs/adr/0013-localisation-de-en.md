@@ -1,24 +1,24 @@
-# 0013 – Benutzer-Texte auf Deutsch und Englisch nach Obsidian-Sprache
+# 0013 – User-facing texts in German and English, following the Obsidian language
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §11, AGENTS.md (Code-Stil), Issue ONC-2
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §11, AGENTS.md (code style), issue ONC-2
 
-## Kontext
+## Context
 
-Bisher galt: Benutzer-Texte auf Deutsch. Das Plugin soll aber auch Nutzern mit englischer Obsidian-Oberfläche dienen, und eine spätere Veröffentlichung im Community-Store (PLAN §15 #3) setzt Englisch praktisch voraus. In M1 gibt es erst rund 25 Texte – der Umbau ist jetzt billig, später teuer.
+Until now the rule was: user-facing texts in German. The plugin should also serve users with an English Obsidian interface, and a later publication in the community store (open decision on store publication) practically requires English. In M1 there are only about 25 texts – the change is cheap now and expensive later.
 
-## Entscheidung
+## Decision
 
-Alle Benutzer-Texte (Settings, Notices, Modals, Statusleiste) kommen aus `src/i18n/`: `en.ts` definiert die Schlüssel, `de.ts` muss per Typ `Record<MessageKey, string>` vollständig sein. Die Sprache wird beim Laden des Plugins über `getLanguage()` (Obsidian ≥ 1.8.7) bestimmt: `de*` → Deutsch, alles andere → Englisch. Platzhalter im Format `{name}`. Kein Laufzeit-Wechsel nötig, weil Obsidian nach einem Sprachwechsel ohnehin neu startet.
+All user-facing texts (settings, notices, modals, status bar) come from `src/i18n/`: `en.ts` defines the keys, `de.ts` must be complete via the type `Record<MessageKey, string>`. The language is determined when the plugin loads via `getLanguage()` (Obsidian ≥ 1.8.7): `de*` → German, everything else → English. Placeholders use the format `{name}`. No runtime switching is needed because Obsidian restarts after a language change anyway.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Nur Deutsch** (bisherige Regel) – schließt englischsprachige Nutzer aus.
-- **i18n-Bibliothek (z. B. i18next)** – unnötige Abhängigkeit für zwei Sprachen und einfache Platzhalter (AGENTS Regel 8).
+- **German only** (previous rule) – excludes English-speaking users.
+- **i18n library (e.g. i18next)** – unnecessary dependency for two languages and simple placeholders (AGENTS rule 8).
 
-## Konsequenzen
+## Consequences
 
-- Jeder neue Benutzer-Text braucht einen Schlüssel in `en.ts` und `de.ts`; der Typecheck erzwingt die Vollständigkeit.
-- Reine Module (z. B. `connectionMessages.ts`) bekommen einen `Translator` übergeben statt Texte fest zu kodieren.
-- Weitere Sprachen sind möglich, indem `Locale` und `resolveLocale` erweitert werden.
+- Every new user-facing text needs a key in `en.ts` and `de.ts`; the type check enforces completeness.
+- Pure modules (e.g. `connectionMessages.ts`) receive a `Translator` instead of hard-coding texts.
+- More languages are possible by extending `Locale` and `resolveLocale`.
