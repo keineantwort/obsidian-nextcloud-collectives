@@ -1,123 +1,102 @@
-# Nextcloud Collectives Sync (Obsidian-Plugin)
+# Nextcloud Collectives Sync
 
-Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit einem Vault synchronisiert.
+**English** | [Deutsch](README.de.md)
 
-**Status:** Vorab-Version 0.2.1, noch nicht im Community-Store. Funktionsumfang und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
+An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) of a Nextcloud server with your vault, in both directions. Each collective becomes a folder in your vault, each page a note. You edit in Obsidian, on desktop or on your phone, and your colleagues keep working in Collectives in the browser. When both sides change the same page, the plugin keeps both versions instead of overwriting one.
 
-## Voraussetzungen
+**Status:** pre-release, version 0.2.1. The plugin is not in the Obsidian community store yet; install it with BRAT or by hand (see [Installation](#installation)).
 
-- Obsidian ab 1.11.4 (Desktop, iOS und Android).
-- Ein Nextcloud-Server mit der App **Collectives**. Getestet mit Nextcloud 33, 34 und 35 (jeweils mit der dazu passenden Collectives-Version, zuletzt 4.7.1). Welche Versionen genau gelaufen sind, steht im Protokoll des nächtlichen Integrationslaufs. Bei einer anderen Nextcloud-Hauptversion zeigt das Plugin einmal eine Warnung und synchronisiert trotzdem.
-- Ein Nextcloud-Konto; das Plugin meldet sich per Login Flow oder mit einem App-Passwort an (kein Hauptpasswort).
+## Features
+
+- All collectives of your account, each as a top-level folder of the vault.
+- Pages and their hierarchy: a page with sub-pages is a folder with a note of the same name.
+- New, renamed, moved and deleted pages and collectives in both directions. Deleting on the server asks you first, and deleted pages go to the Collectives trash, where you can restore them.
+- Page emoji and tags in the note's properties (frontmatter), synced both ways.
+- Links between pages: Obsidian wikilinks in the vault, Collectives links on the server.
+- Attachments (images and other embedded files) in both directions, with a size limit.
+- Conflict copies instead of overwrites, and a dialog to decide which version to keep.
+- Automatic sync: on startup, at an interval, after you stop editing, and when you return to the app on your phone.
+- Sign-in with the browser (Nextcloud Login Flow) or with an app password. Your main password is never needed.
+- User interface in English and German.
+
+## Requirements
+
+- Obsidian 1.11.4 or later (desktop, iOS and Android).
+- A Nextcloud server with the **Collectives** app. Tested with Nextcloud 33, 34 and 35, each with its matching Collectives version (most recently 4.7.1). With another major version of Nextcloud, the plugin shows a warning once and keeps syncing.
+- A Nextcloud account. The plugin signs in with the Login Flow or with an app password.
 
 ## Installation
 
-Das Plugin ist noch nicht im Community-Store von Obsidian. Die Releases liegen auf GitHub: [keineantwort/obsidian-nextcloud-collectives](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases). Lies vor der ersten Synchronisierung den Abschnitt [Risiken und Backup](#risiken-und-backup).
+The plugin is not in the Obsidian community store yet. Releases are published on GitHub: [keineantwort/obsidian-nextcloud-collectives](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases). Read [Risks and backup](#risks-and-backup) before your first sync.
 
-Voraussetzung für beide Wege: Unter „Einstellungen › Community plugins“ ist der eingeschränkte Modus aus (Community-Plugins sind erlaubt).
+For both ways, restricted mode must be off: in Obsidian under "Settings › Community plugins", community plugins must be allowed.
 
-### Mit BRAT (empfohlen, auch auf dem Handy)
+### With BRAT (recommended, also on your phone)
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) installiert Plugins direkt aus einem GitHub-Repository und hält sie aktuell.
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs plugins straight from a GitHub repository and keeps them up to date.
 
-1. In Obsidian unter „Community plugins › Durchsuchen“ das Plugin **„BRAT“** (Obsidian42 – BRAT) installieren und aktivieren.
-2. In den Einstellungen von BRAT **„Add beta plugin“** wählen (oder den Befehl „BRAT: Plugins: Add a beta plugin for testing (with or without version)“).
-3. Als Repository eintragen: `https://github.com/keineantwort/obsidian-nextcloud-collectives` (oder kurz `keineantwort/obsidian-nextcloud-collectives`).
-4. Als Version „Latest version“ lassen (oder ein bestimmtes Release wählen), „Enable after installing the plugin“ anhaken und mit „Add plugin“ bestätigen.
-5. Falls das Plugin danach noch nicht aktiv ist: unter „Community plugins“ **„Nextcloud Collectives Sync“** aktivieren.
+1. In Obsidian, under "Community plugins › Browse", install and enable the plugin **"BRAT"** (Obsidian42 – BRAT).
+2. In the settings of BRAT, choose **"Add beta plugin"** (or run the command "BRAT: Plugins: Add a beta plugin for testing (with or without version)").
+3. Enter the repository: `https://github.com/keineantwort/obsidian-nextcloud-collectives` (or short: `keineantwort/obsidian-nextcloud-collectives`).
+4. Leave the version at "Latest version" (or pick a specific release), tick "Enable after installing the plugin" and confirm with "Add plugin".
+5. If the plugin is not enabled afterwards: enable **"Nextcloud Collectives Sync"** under "Community plugins".
 
-BRAT prüft danach beim Start von Obsidian auf neue Releases (von Hand: Befehl „BRAT: Plugins: Check for updates to all beta plugins and UPDATE“). Hast du ein bestimmtes Release gewählt, bleibt das Plugin auf diesem Stand, bis du in BRAT eine andere Version einstellst.
+From then on, BRAT checks for new releases when Obsidian starts (by hand: command "BRAT: Plugins: Check for updates to all beta plugins and UPDATE"). If you picked a specific release, the plugin stays at that version until you choose another one in BRAT.
 
-### Von Hand
+### By hand
 
-1. Aus dem [neuesten Release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) die Dateien `main.js`, `manifest.json` und `styles.css` herunterladen.
-2. Im Vault den Ordner `.obsidian/plugins/nextcloud-collectives/` anlegen und die drei Dateien hineinlegen.
-3. Obsidian neu starten (oder unter „Community plugins“ die Liste neu laden) und **„Nextcloud Collectives Sync“** aktivieren.
+1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest).
+2. In your vault, create the folder `.obsidian/plugins/nextcloud-collectives/` and put the three files into it.
+3. Restart Obsidian (or reload the list under "Community plugins") and enable **"Nextcloud Collectives Sync"**.
 
-Auf dem Handy ist der Ordner `.obsidian` versteckt: Bereite den Vault am besten am Desktop vor. Updates installierst du auf diesem Weg ebenfalls von Hand.
+On a phone, the `.obsidian` folder is hidden, so it is easiest to prepare the vault on a desktop computer. With this way, you also install updates by hand.
 
-### Danach
+To build it yourself: `npm ci && npm run build` creates `main.js` in the project folder; `manifest.json` and `styles.css` are already there.
 
-In den Einstellungen des Plugins die Server-URL eintragen und „Anmelden“ wählen (Abschnitt [Anmeldung](#anmeldung-und-automatische-synchronisierung)).
+## Getting started
 
-Selbst bauen: `npm ci && npm run build` erzeugt `main.js` im Projektordner; `manifest.json` und `styles.css` liegen dort bereits.
+1. **Make a backup** of your vault folder, and of important collectives on the server.
+2. **Use a new, empty vault** for the first sync. A vault that already contains notes works too, but the plugin then merges your notes into your collectives and uploads them.
+3. Open the plugin settings and enter the **Server URL** of your Nextcloud, for example `https://cloud.example.com`.
+4. Choose **Sign in** next to "Sign in with the browser" and confirm the access in your Nextcloud. Username and app password are filled in automatically. Alternatively, enter your username and an app password by hand.
+5. Run the command **Sync now** (or click the ribbon icon "Sync with Nextcloud Collectives"). After that, the plugin syncs by itself.
 
-## Risiken und Backup
+Details: [Getting started](docs/user/en/getting-started.md) in the manual.
 
-Das Plugin schreibt in beide Richtungen: in deinen Vault **und** auf deinen Nextcloud-Server. Fehler können Seiten verändern, verschieben oder in den Papierkorb legen.
+## Risks and backup
 
-- **Mache vor der ersten Synchronisierung eine Sicherung** des Vault-Ordners (und bei wichtigen Collectives eine Sicherung auf dem Server). Lege für die erste Synchronisierung am besten einen neuen, leeren Vault an.
-- Das Plugin überschreibt nichts still: Bei Konflikten bleibt deine Datei erhalten, gelöscht wird nur nach Rückfrage und nur in die Papierkörbe (Collectives bzw. Obsidian), siehe unten.
-- **Gleichzeitiges Bearbeiten im Browser** und in Obsidian kann Eingaben im Browser verlieren (Abschnitt „Konflikte“).
-- Ein Vault gehört zu **einem** Server und **einem** Konto. Ein anderes Konto braucht einen neuen Vault.
-- Die Collectives-Schnittstelle ist nicht offiziell stabil. Antwortet der Server unerwartet, stoppt das Plugin mit einer Meldung, statt zu raten.
-- Das App-Passwort liegt im Secret Storage von Obsidian, nicht in den Plugin-Einstellungen und nie im Protokoll.
+The plugin writes in both directions: into your vault **and** to your Nextcloud server. A bug can change, move or trash pages.
 
-## Hilfe bei Problemen
+- **Make a backup before the first sync** of your vault folder (and, for important collectives, on the server). Ideally, create a new, empty vault for the first sync.
+- The plugin never overwrites silently: in a conflict your file is kept. It deletes only after asking, and only into the trash (Collectives trash on the server, Obsidian's trash in the vault). See [Structure](docs/user/en/structure.md) and [Conflicts](docs/user/en/conflicts.md).
+- **Editing the same page in the browser** and in Obsidian at the same time can lose what you type in the browser (see [Conflicts](docs/user/en/conflicts.md#editing-in-the-browser-at-the-same-time)).
+- A vault belongs to **one** server and **one** account. Another account needs a new vault.
+- The Collectives interface is not officially stable. If the server answers in an unexpected way, the plugin stops with a message instead of guessing.
+- The app password is kept in Obsidian's secret storage, not in the plugin settings, and never in the log.
 
-Der Befehl **„Protokoll anzeigen“** (auch in den Einstellungen unter „Diagnose“) zeigt, was das Plugin in dieser Sitzung getan hat, und kopiert es. Mit der Einstellung „Ausführliches Protokoll“ steht zusätzlich jede Anfrage an den Server darin (Methode, Pfad, Status, Dauer; nie Passwörter oder Inhalte). Hänge das Protokoll an eine Fehlermeldung. Es liegt nur im Speicher und ist nach einem Neustart weg.
+## Documentation
 
-## Hilfe
+The user manual explains every part of the plugin:
 
-### Anmeldung und automatische Synchronisierung
+- [Getting started](docs/user/en/getting-started.md): sign-in, first sync, what the vault looks like afterwards.
+- [When the plugin syncs](docs/user/en/sync.md): automatic and manual sync, status bar, what is not synced.
+- [Structure](docs/user/en/structure.md): new, renamed, moved and deleted pages and collectives.
+- [Conflicts](docs/user/en/conflicts.md): conflict copies, the conflict dialog, the conflict setting.
+- [Emoji, tags, links and attachments](docs/user/en/tags-emoji-links-attachments.md).
+- [Settings](docs/user/en/settings.md): every setting with its default and its risks.
+- [Commands and menus](docs/user/en/commands.md).
+- [Troubleshooting](docs/user/en/troubleshooting.md): log, error messages, FAQ.
 
-In den Einstellungen meldest du dich entweder mit „Anmelden“ im Browser an (Nextcloud Login Flow: Benutzername und App-Passwort werden danach automatisch eingetragen, das App-Passwort liegt im Secret Storage von Obsidian) oder trägst ein App-Passwort von Hand ein. Danach synchronisiert das Plugin von selbst: kurz nach dem Start, im eingestellten Intervall (Standard 5 Minuten, 0 = aus), einige Sekunden nachdem du eine Notiz zuletzt geändert hast und wenn Obsidian auf dem Handy wieder in den Vordergrund kommt. Automatische Läufe sind still und öffnen keine Dialoge: Rückfragen (z. B. beim Löschen) werden zurückgestellt, ein Hinweis erinnert dich daran, „Jetzt synchronisieren“ auszuführen. Weist der Server das Passwort ab, pausieren die automatischen Läufe, bis du dich neu anmeldest. Die Erstsynchronisierung eines Vaults mit Inhalt startest du immer selbst. Eine Checkliste für Tests auf dem Handy steht in [docs/manual-test.md](docs/manual-test.md).
+## Help and reporting problems
 
-### Emoji und Tags
+The command **Show log** (also in the settings under "Diagnostics") shows what the plugin did in this session and lets you copy it. With the setting "Detailed log", every request to the server is listed too (method, path, status, duration; never passwords or contents). The log is kept in memory only and is gone after a restart. More in [Troubleshooting](docs/user/en/troubleshooting.md).
 
-Emoji (`nc_emoji`) und Tags (Obsidians Eigenschaft `tags`) einer Seite stehen im Frontmatter der Notiz und werden in beide Richtungen abgeglichen: Änderst du sie in der Notiz, gehen sie beim nächsten Sync zum Server (fehlende Tags werden im Collective angelegt, ohne Beachtung der Groß-/Kleinschreibung gegen vorhandene geprüft). Änderst du sie auf dem Server und in der Notiz, verhält es sich wie bei einer Textänderung auf beiden Seiten: Je nach Einstellung „Konflikte“ entsteht eine Konfliktkopie (die Notiz bleibt wie sie ist, die Werte des Servers stehen in der Kopie) oder die lokale bzw. die Server-Fassung gewinnt. Die Eigenschaften des Plugins (`nc_…`) sind standardmäßig ausgeblendet (Einstellung „Eigenschaften des Plugins ausblenden“). Im Kontextmenü einer Notiz oder eines Ordners (und im Editor-Menü) findest du „Seiten-Emoji setzen“ und „Seite umbenennen“; letzteres benennt bei einer Seite mit Unterseiten die Notiz und ihren Ordner zusammen um. Das Emoji setzt du am einfachsten mit dem Befehl „Seiten-Emoji setzen“ (Auswahl und Prüfung); legst du in der Notiz selbst eine Eigenschaft `Emoji` an, öffnet sich dieselbe Auswahl. Erlaubt ist genau ein Emoji, anderes wird nicht gesendet und beim Sync gemeldet. Die Tags sind Obsidians Eigenschaft `tags`; auch `#Tags` im Text zählen und werden hinzugefügt (entfernst du ein `#Tag` aus dem Text, bleibt es bestehen, bis du es aus der Eigenschaft löschst). Ein Leerzeichen im Tag-Namen auf dem Server erscheint in Obsidian als `-`; ein `-` bleibt ein `-`, auch wenn du es in Obsidian neu tippst. Die Tags erscheinen in Collectives als Tags, nicht als Text. In der Dateiliste zeigt ein Ordner das Emoji seiner Seite, und die Seite des Ordners steht zuerst im Ordner (nur die Anzeige, abschaltbar).
+Report bugs and ideas as [GitHub issues](https://github.com/keineantwort/obsidian-nextcloud-collectives/issues). Attach the log, and check it first for anything you do not want to share.
 
-### Struktur: neue, umbenannte, verschobene und gelöschte Seiten
+## Contributing
 
-Das Plugin gleicht auch die Struktur ab, nicht nur den Text. Jedes Collective ist ein Ordner auf oberster Ebene des Vaults. Eine Seite mit Unterseiten ist ein Ordner mit einer gleichnamigen Notiz darin (`Handbuch/Prozesse/Prozesse.md`).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-| Du machst im Vault … | … das passiert auf dem Server |
-|---|---|
-| eine neue Notiz anlegen | Sie wird als neue Seite hochgeladen, ihre `nc_page_id` steht danach im Frontmatter. Die Seite hängt unter der Seite, der ihr Ordner gehört; liegt sie in einem Ordner ohne Notiz, legt das Plugin dafür eine Ordnerseite an. |
-| eine Notiz umbenennen oder in einen anderen Ordner verschieben | Die Seite wird umbenannt bzw. verschoben, auch in ein anderes Collective (ID und Emoji bleiben; die Tags der Notiz werden im neuen Collective neu zugewiesen). |
-| den Ordner einer Seite mit Unterseiten umbenennen, oder nur die Notiz darin | Die Seite heißt danach wie der Ordner bzw. die Notiz; Ordner und Notiz bekommen denselben Namen. |
-| einen neuen Ordner auf oberster Ebene mit Notizen anlegen | Ein neues Collective entsteht (einstellbar: „Neue Ordner auf oberster Ebene“). Die Notiz, die wie der Ordner heißt, wird die Startseite. |
-| den Ordner eines Collectives umbenennen | Das Collective wird umbenannt. Das dürfen nur Admins und Eigentümer; sonst wird der Ordner zurückbenannt. |
-| eine Notiz oder einen Ordner löschen | Das Plugin **fragt**, bevor eine Seite oder ein Collective auf dem Server in den Collectives-Papierkorb kommt (dort lässt sich beides wiederherstellen). Im Dialog ist nichts vorausgewählt: Was du anhakst, wird gelöscht; was du nicht anhakst, kommt in den Vault zurück. Schließt du den Dialog (Esc), passiert nichts, und beim nächsten Lauf wird erneut gefragt. Eine Seite mit Unterseiten wird samt Unterseiten gelöscht. |
+## License
 
-In der anderen Richtung gilt:
-
-- Eine auf dem Server umbenannte oder verschobene Seite wird im Vault umbenannt bzw. verschoben. Haben beide Seiten dieselbe Seite verschieden verschoben, gilt der Server.
-- Eine auf dem Server gelöschte Seite kommt im Vault in den Papierkorb (Einstellung „Auf dem Server gelöschte Seiten“; „Datei behalten“ lädt sie als neue Seite wieder hoch). Hast du die Datei seit der letzten Synchronisierung geändert, wird sie **nie** entfernt: Die Seite wird aus dem Papierkorb wiederhergestellt und deine Änderung hochgeladen.
-- Hat sich eine Seite auf dem Server geändert, während du sie im Vault gelöscht hast, kommt sie ohne Rückfrage zurück: die Änderung gewinnt.
-- Legst du eine gelöschte Datei (mit ihrer `nc_page_id`) wieder in den Vault, wird die Seite aus dem Collectives-Papierkorb wiederhergestellt.
-- Ein auf dem Server gelöschtes Collective (oder eins, das du verlassen hast) wird nur nach Rückfrage aus dem Vault entfernt.
-- **Schutz vor Massenlöschung:** Würdest du mindestens 3 Seiten und mehr als 20 % der Seiten eines Collectives auf einmal löschen, fragt das Plugin immer, auch mit der Einstellung „Ohne Rückfrage in den Collectives-Papierkorb“.
-- Markdown-Dateien direkt im Vault-Ordner (ohne Collective-Ordner) und Dateien in versteckten Ordnern werden nicht synchronisiert.
-
-### Konflikte
-
-Ein Konflikt entsteht, wenn eine Seite seit der letzten Synchronisierung sowohl im Vault als auch auf dem Server geändert wurde. Das Plugin überschreibt dann nichts:
-
-- Deine Datei bleibt unverändert.
-- Die Server-Fassung wird daneben als `Titel (Konflikt JJJJ-MM-TT HHmm).md` abgelegt. Diese Kopie wird nicht synchronisiert.
-- Die Seite wird erst wieder hochgeladen, wenn du den Konflikt aufgelöst hast.
-
-Eine **Kollision** ist ein Sonderfall beim ersten Abgleich: Am Zielpfad einer Server-Seite lag schon eine Datei aus deinem Vault. Auch hier bleibt deine Datei erhalten, und die Server-Seite landet als Konfliktkopie daneben.
-
-Offene Konflikte zeigt die Statusleiste als `NC ⚠︎ n` (nur Desktop). Der Befehl **„Konflikte anzeigen“** öffnet den Dialog, auf Mobile ist er der einzige Weg. Der Dialog zeigt pro Seite die Unterschiede zwischen deiner Datei und der Server-Fassung:
-
-| Auswahl | Wirkung |
-|---|---|
-| **Lokal behalten** | Deine Datei wird hochgeladen und ersetzt die Server-Fassung. Hat sich die Server-Fassung inzwischen erneut geändert, entsteht ein neuer Konflikt statt eines Überschreibens. Bei einer Kollision wird deine Datei dabei mit der Server-Seite verknüpft. |
-| **Remote übernehmen** | Der Inhalt deiner Datei wird durch die Server-Fassung ersetzt. Die Server-Fassung wird dafür neu geladen, die Konfliktkopie muss also nicht mehr vorhanden sein. |
-| **Später** | Alles bleibt, wie es ist. |
-
-Nach „Lokal behalten“ oder „Remote übernehmen“ wird die Konfliktkopie in den Papierkorb verschoben, wie in Obsidian eingestellt. Danach läuft sofort eine Synchronisierung.
-
-**Einstellung „Konflikte“** (Abschnitt „Verhalten“):
-
-- **Beide behalten (Konfliktkopie)**: Standard, wie oben beschrieben.
-- **Diesen Vault bevorzugen**: Bei beidseitiger Änderung wird die Server-Fassung ohne Rückfrage überschrieben.
-- **Server bevorzugen**: Bei beidseitiger Änderung wird deine Datei ohne Rückfrage überschrieben.
-
-Mit den beiden „bevorzugen“-Optionen gehen die Änderungen der jeweils anderen Seite verloren. Bereits bestehende Konflikte brauchen weiterhin deine Entscheidung.
-
-Gleichzeitige Bearbeitung im Browser: Lädt das Plugin eine Seite hoch, während sie im Browser offen ist, meldet der Editor „Die Bearbeitungssitzung ist abgelaufen“. Lade die Seite dann neu. Was du danach im Browser noch eingibst, wird nicht mehr gespeichert ([ADR 0012](docs/adr/0012-concurrent-editing-in-the-browser.md)).
-
-Lizenz: [MIT](LICENSE)
+[MIT](LICENSE)
