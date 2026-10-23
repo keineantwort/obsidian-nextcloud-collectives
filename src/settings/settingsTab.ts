@@ -1,5 +1,5 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
-import type { TextComponent } from 'obsidian';
+import type { ButtonComponent, TextComponent } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
@@ -12,6 +12,8 @@ export class NcSettingTab extends PluginSettingTab {
 	private passwordField: TextComponent | null = null;
 	/** Set while a browser login waits; hide() cancels it so no invisible flow keeps polling. */
 	private cancelLogin: (() => void) | null = null;
+	/** Re-evaluates whether the connection test can run; replaced on every display(). */
+	private updateTestAvailability: () => void = () => {};
 
 	hide(): void {
 		this.cancelLogin?.();
@@ -28,14 +30,17 @@ export class NcSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName(t('settings.heading.connection')).setHeading();
 
+		let urlInput!: HTMLInputElement;
+
 		new Setting(containerEl)
 			.setName(t('settings.serverUrl.name'))
 			.setDesc(t('settings.serverUrl.desc'))
 			.addText((text) => {
+				urlInput = text.inputEl;
 				text
 					.setPlaceholder('https://cloud.example.com')
 					.setValue(settings.serverUrl)
-					.onChange((value) => { updateUrlWarning(value); });
+					.onChange((value) => { updateUrlWarning(value); updateTestAvailability(); });
 				// Saved on commit (blur/Enter), not per keystroke: an automatic sync must never send the app password
 				// to a half-typed server address.
 				text.inputEl.addEventListener('change', () => { void (async () => {
@@ -43,7 +48,8 @@ export class NcSettingTab extends PluginSettingTab {
 					await plugin.saveSettings();
 				})(); });
 				applyPlainInputAttributes(text.inputEl);
-				text.inputEl.type = 'url';
+				// type="url" is not styled like the other text fields on mobile; inputmode still brings up the URL keyboard.
+				text.inputEl.inputMode = 'url';
 			});
 
 		const urlWarningEl = containerEl.createDiv({ cls: 'nc-url-warning', attr: { role: 'status', 'aria-live': 'polite' } });
@@ -67,10 +73,14 @@ export class NcSettingTab extends PluginSettingTab {
 					.setValue(settings.username)
 					.onChange(async (value) => {
 						settings.username = value.trim();
+						updateTestAvailability();
 						await plugin.saveSettings();
 					});
 				applyPlainInputAttributes(text.inputEl);
 			});
+
+		// Username first; then the two alternatives for the app password: browser sign-in or typing it in.
+		this.displayLogin(containerEl);
 
 		new Setting(containerEl)
 			.setName(t('settings.appPassword.name'))
@@ -95,8 +105,18 @@ export class NcSettingTab extends PluginSettingTab {
 					}
 					text.setValue('');
 					text.setPlaceholder(t('settings.appPassword.placeholderStored'));
+					updateTestAvailability();
 				})(); });
 			});
+
+		let testButton: ButtonComponent | null = null;
+		let running = false;
+		/** The test only makes sense once URL, username and app password are all set. */
+		function updateTestAvailability(): void {
+			const ready = urlInput.value.trim() !== '' && settings.username !== '' && plugin.hasStoredAppPassword();
+			testButton?.setDisabled(running || !ready);
+		}
+		this.updateTestAvailability = updateTestAvailability;
 
 		const testSetting = new Setting(containerEl)
 			.setName(t('settings.test.name'))
@@ -104,7 +124,9 @@ export class NcSettingTab extends PluginSettingTab {
 		const resultEl = containerEl.createDiv({ cls: 'nc-connection-result', attr: { role: 'status', 'aria-live': 'polite' } });
 
 		testSetting.addButton((btn) => {
+			testButton = btn;
 			btn.setButtonText(t('settings.test.button')).setCta().onClick(async () => {
+				running = true;
 				btn.setDisabled(true).setButtonText(t('settings.test.buttonRunning'));
 				resultEl.setText(t('settings.test.statusRunning'));
 				resultEl.removeClass('is-success', 'is-error');
@@ -116,12 +138,13 @@ export class NcSettingTab extends PluginSettingTab {
 					resultEl.setText(describeConnectionError(err, t));
 					resultEl.addClass('is-error');
 				} finally {
-					btn.setDisabled(false).setButtonText(t('settings.test.button'));
+					running = false;
+					btn.setButtonText(t('settings.test.button'));
+					updateTestAvailability();
 				}
 			});
 		});
-
-		this.displayLogin(containerEl);
+		updateTestAvailability();
 
 		new Setting(containerEl).setName(t('settings.heading.automation')).setHeading();
 
@@ -405,6 +428,7 @@ export class NcSettingTab extends PluginSettingTab {
 					if (outcome.kind === 'done') {
 						this.usernameField?.setValue(outcome.user);
 						this.passwordField?.setPlaceholder(t('settings.appPassword.placeholderStored'));
+						this.updateTestAvailability();
 						statusEl.setText(t('settings.login.success', { user: outcome.user }));
 						return;
 					}
