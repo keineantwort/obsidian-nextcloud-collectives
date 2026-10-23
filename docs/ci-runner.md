@@ -1,36 +1,36 @@
-# Runner für die Forgejo-Actions-Workflows
+# Runners for the Forgejo Actions workflows
 
-Für die Workflows in `.forgejo/workflows/` dieses Repos. Stand: Rückmeldung des HomeLab-Projekts (2026-10-20); die Anforderungen unten sind damit erfüllt.
+For the workflows in `.forgejo/workflows/` of this repo. Status: feedback from the HomeLab project (2026-10-20); the requirements below are thereby met.
 
-## Welcher Workflow läuft wo
+## Which workflow runs where
 
-| Workflow | Auslöser | `runs-on` | Braucht |
+| Workflow | Trigger | `runs-on` | Needs |
 |---|---|---|---|
-| `ci.yml` | jeder PR, Push auf `main` | `ubuntu-latest` | Job-Container `node:24-bookworm`, Cache-Server des Runners (siehe unten); ca. 1–2 Minuten |
-| `release.yml` | Tag `x.y.z` | `ubuntu-latest` | Job-Container `node:24-bookworm` (bringt `curl` und `git` mit), Cache-Server; Secret `RELEASE_TOKEN` |
-| `integration.yml` | Pull Request (bei Änderungen an `src/`, `tests/`, `scripts/dev-nextcloud/`, `vitest.*.config.ts`, `package*.json`), Push auf `main`, manuell | **`docker-host`** | Docker mit Compose, siehe unten |
-| `nightly.yml` | täglich 01:00 UTC, aber nur wenn `main` sich seit der Nacht davor geändert hat; die Nacht von Mittwoch auf Donnerstag immer; manuell | `ubuntu-latest` (Prüfung) und **`docker-host`** | wie `integration.yml` |
+| `ci.yml` | every PR, push to `main` | `ubuntu-latest` | job container `node:24-bookworm`, the runner's cache server (see below); about 1–2 minutes |
+| `release.yml` | tag `x.y.z` | `ubuntu-latest` | job container `node:24-bookworm` (ships `curl` and `git`), cache server; secret `RELEASE_TOKEN` |
+| `integration.yml` | pull request (on changes to `src/`, `tests/`, `scripts/dev-nextcloud/`, `vitest.*.config.ts`, `package*.json`), push to `main`, manual | **`docker-host`** | Docker with Compose, see below |
+| `nightly.yml` | daily 01:00 UTC, but only if `main` changed since the night before; the night from Wednesday to Thursday always; manual | `ubuntu-latest` (check) and **`docker-host`** | as `integration.yml` |
 
-## `ubuntu-latest` (Job-Container)
+## `ubuntu-latest` (job container)
 
-- `ci.yml` und `release.yml` laufen im Image `node:24-bookworm`; Node wird nicht pro Lauf heruntergeladen. `jq` fehlt im Image, JSON wird mit `node -p` gelesen.
-- `actions/cache` legt `~/.npm` ab (Schlüssel: Hash von `package-lock.json`). Dafür muss im act_runner der Cache-Server eingeschaltet sein (`cache.enabled`, `host` aus den Job-Containern erreichbar, nicht `localhost`). Ohne ihn warnt der Schritt nur und `npm ci` lädt alles neu.
-- `container.force_pull: false` im Runner, damit das Image nicht bei jedem Job neu gezogen wird.
-- Umgesetzt im HomeLab (2026-10-20, act_runner v13.2): `cicd-runner1` und `cicd-runner2` haben je einen eigenen Cache-Server auf `172.17.0.1:8088` (nur von der Docker-Bridge im LXC erreichbar), Daten unter `/srv/act-runner/actcache`. Je Runner gibt es pro neuem Hash von `package-lock.json` einen ersten Lauf ohne Treffer. Der Runner räumt selbst auf: unbenutzte Einträge nach 7 Tagen, alle nach spätestens 30 Tagen.
+- `ci.yml` and `release.yml` run in the image `node:24-bookworm`; Node is not downloaded on every run. `jq` is missing from the image; JSON is read with `node -p`.
+- `actions/cache` stores `~/.npm` (key: hash of `package-lock.json`). For this, the cache server must be enabled in act_runner (`cache.enabled`, `host` reachable from the job containers, not `localhost`). Without it the step only warns and `npm ci` downloads everything again.
+- `container.force_pull: false` in the runner, so that the image is not pulled again for every job.
+- Implemented in the HomeLab (2026-10-20, act_runner v13.2): `cicd-runner1` and `cicd-runner2` each have their own cache server on `172.17.0.1:8088` (reachable only from the Docker bridge in the LXC), data under `/srv/act-runner/actcache`. For each runner there is a first run without a hit for every new hash of `package-lock.json`. The runner cleans up by itself: unused entries after 7 days, all of them after 30 days at the latest.
 
-## `docker-host` (Host-Runner auf den Docker-LXCs)
+## `docker-host` (host runner on the Docker LXCs)
 
-- Der Runner hat **kein Job-Container-Image**; der Job nutzt, was auf dem LXC liegt: Node 24, `curl`, `jq`, `git`, Docker mit Compose v5.1.4. Daher kein `actions/setup-node` in `integration.yml` und `nightly.yml`. Weder `sudo` noch `apt-get` stehen dem Runner-User zur Verfügung: **Der Workflow darf nichts nachinstallieren**, nur `npm ci` im Arbeitsverzeichnis.
-- Der Job läuft im Netzwerk des Hosts, `http://localhost:<Port>` erreicht den veröffentlichten Port des Testservers.
-- Die Matrix-Jobs verteilt Forgejo auf beide LXCs: Integration gegen Nextcloud 35 und `latest` (`integration.yml`) sowie 33 und 34 (`nightly.yml`) mit Compose-Projekt `nc-test-<Version>` und Port 81xx (8133, 8134, 8135, 8199), Performance gegen 33, 34, 35 und `latest` (`nightly.yml`) mit `nc-perf-<Version>` und Port 82xx (8233, 8234, 8235, 8299). Sie kollidieren nicht, auch wenn mehrere Jobs auf demselben Host laufen, weil jeder Job eigenen Port und Projektnamen hat.
-- Der Testserver bindet nur an `127.0.0.1`; Zugangsdaten sind Wegwerf-Werte aus `scripts/dev-nextcloud/.env.example`; am Ende läuft `docker compose down -v` (auch bei Fehlern).
+- The runner has **no job container image**; the job uses what is on the LXC: Node 24, `curl`, `jq`, `git`, Docker with Compose v5.1.4. Hence no `actions/setup-node` in `integration.yml` and `nightly.yml`. Neither `sudo` nor `apt-get` is available to the runner user: **the workflow must not install anything**, only `npm ci` in the working directory.
+- The job runs in the host's network; `http://localhost:<port>` reaches the published port of the test server.
+- Forgejo distributes the matrix jobs across both LXCs: integration against Nextcloud 35 and `latest` (`integration.yml`) as well as 33 and 34 (`nightly.yml`) with Compose project `nc-test-<version>` and port 81xx (8133, 8134, 8135, 8199), performance against 33, 34, 35 and `latest` (`nightly.yml`) with `nc-perf-<version>` and port 82xx (8233, 8234, 8235, 8299). They do not collide, even when several jobs run on the same host, because each job has its own port and project name.
+- The test server binds only to `127.0.0.1`; credentials are throwaway values from `scripts/dev-nextcloud/.env.example`; at the end `docker compose down -v` runs (also on errors).
 
-## Bedarf je Nextcloud-Job
+## Requirements per Nextcloud job
 
-- ca. 1–2 CPU-Kerne, 2 GB RAM, Image ca. 1,2 GB je Version plus Datenvolume; mindestens 10 GB frei auf dem Docker-Host.
-- Laufzeit: Start ca. 2–5 Minuten, Integrationstests ca. 5–15 Minuten (Timeout 45 Minuten), Performance-Test bis zu 20 Minuten (Timeout 60 Minuten). Ein neuer Push auf denselben PR-Branch bricht den laufenden Lauf ab und startet neu (`concurrency`), damit nicht mehrere Läufe die LXCs belegen.
-- Ausgehend: Docker Hub (`nextcloud`, dazu `hub.docker.com/v2` für den Digest-Vergleich der `latest`-Jobs), `apps.nextcloud.com` (Collectives, Circles), npm-Registry.
+- about 1–2 CPU cores, 2 GB RAM, image about 1.2 GB per version plus data volume; at least 10 GB free on the Docker host.
+- Runtime: startup about 2–5 minutes, integration tests about 5–15 minutes (timeout 45 minutes), performance test up to 20 minutes (timeout 60 minutes). A new push to the same PR branch cancels the running run and restarts it (`concurrency`), so that several runs do not occupy the LXCs.
+- Outbound: Docker Hub (`nextcloud`, plus `hub.docker.com/v2` for the digest comparison of the `latest` jobs), `apps.nextcloud.com` (Collectives, Circles), npm registry.
 
-## Aufräumen
+## Cleanup
 
-Abgebrochene Jobs (Timeout, Runner-Neustart) können Container und Volumes `nc-test-*` bzw. `nc-perf-*` zurücklassen. Der nächste Lauf desselben Jobs und derselben Version räumt sie vor dem Start selbst weg (`docker compose down -v` im Schritt „Start Nextcloud“). Sonst würde er den alten Server mit allen Seiten des abgebrochenen Laufs weiterverwenden. Gezielt: `docker compose -p nc-test-<Version> down -v` (bzw. `nc-perf-<Version>`) auf dem betroffenen LXC, im Zweifel `docker system prune`.
+Aborted jobs (timeout, runner restart) can leave behind containers and volumes `nc-test-*` or `nc-perf-*`. The next run of the same job and the same version cleans them up itself before starting (`docker compose down -v` in the "Start Nextcloud" step). Otherwise it would keep using the old server with all pages of the aborted run. Targeted: `docker compose -p nc-test-<version> down -v` (or `nc-perf-<version>`) on the affected LXC; when in doubt, `docker system prune`.

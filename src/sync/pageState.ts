@@ -1,4 +1,4 @@
-// PageState builders shared by the executor modules (PLAN §6.3). Pure.
+// PageState builders shared by the executor modules (architecture §6.3). Pure.
 import type { CollectiveId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
 import { ncTitleFor } from '../mapping/paths';

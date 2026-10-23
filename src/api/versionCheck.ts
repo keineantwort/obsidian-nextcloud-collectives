@@ -3,7 +3,7 @@ import type { OcsClient } from './ocsClient';
 
 export const OCS_CAPABILITIES = '/ocs/v2.php/cloud/capabilities';
 
-/** Nextcloud major versions the plugin was tested against (PLAN §15 no. 6: Nextcloud 33, Collectives 4.7). */
+/** Nextcloud major versions the plugin was tested against (architecture §3). */
 export const TESTED_NEXTCLOUD_MAJORS: readonly number[] = [33, 34, 35];
 
 export interface ServerVersion { major: number; minor: number; micro: number; string: string; }

@@ -21,7 +21,7 @@ export interface HttpResponse {
 /** Performs one HTTP request. Must resolve for every HTTP status (incl. 4xx/5xx); rejects only if no response was received. */
 export type RequestFn = (req: HttpRequest) => Promise<HttpResponse>;
 
-/** Delays before retry 1, 2, 3 (PLAN §12: backoff 1/2/4 s, max. 3 retries). */
+/** Delays before retry 1, 2, 3 (architecture §12: backoff 1/2/4 s, max. 3 retries). */
 export const RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
 
 /** Methods that are retried. Only reading requests: a retried write could be applied twice or turn into a false 412. */

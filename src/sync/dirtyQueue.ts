@@ -1,4 +1,4 @@
-// Vault events for the sync run: which synced files the user changed since the last run (PLAN §7.2), and suppression
+// Vault events for the sync run: which synced files the user changed since the last run (architecture §7.2), and suppression
 // of the modify events that the plugin's own writes raise. No 'obsidian' import: events come in through the plugin.
 import { pathKey } from '../mapping/paths';
 import type { VaultWriter } from './executor';

@@ -1,4 +1,4 @@
-// Dependencies of the sync executor (PLAN §7.2). Types only.
+// Dependencies of the sync executor (architecture §7.2). Types only.
 import type { CollectivesApi } from '../api/collectivesApi';
 import type { WebdavClient } from '../api/webdavClient';
 import type { AttachmentOptions } from '../mapping/attachments';
@@ -37,7 +37,7 @@ export type StructureApi = Pick<
 	| 'setPageEmoji' | 'addPageTag' | 'removePageTag' | 'listTags' | 'createTag'
 >;
 
-/** What the attachment step needs (PLAN §9.4). Without it attachments are not synced. */
+/** What the attachment step needs (architecture §9.4). Without it attachments are not synced. */
 export interface AttachmentDeps {
 	options: AttachmentOptions;
 	/** Delete the server file of an attachment deleted in the vault and no longer embedded. */
@@ -54,16 +54,16 @@ export interface ExecutorDeps {
 	/** Needed by the structure operations only. */
 	api?: StructureApi;
 	state: SyncState;
-	/** Pages that links can point to (PLAN §9). Without it, links are neither converted nor hashed in local form. */
+	/** Pages that links can point to (architecture §9). Without it, links are neither converted nor hashed in local form. */
 	links?: LinkIndex;
-	/** Attachments of pages (PLAN §9.4); absent = not synced. */
+	/** Attachments of pages (architecture §9.4); absent = not synced. */
 	attachments?: AttachmentDeps;
 	/** Persist state after each op (StateStore.save). 'lazy' may be written later (throttled, flushed at the end of the run). */
 	persist: (state: SyncState, mode?: 'now' | 'lazy') => Promise<void>;
 	now: () => Date;
 	/** Translated label for conflict file names ('Konflikt' / 'Conflict'). */
 	conflictLabel: string;
-	/** Conflict decision for pages changed on both sides (PLAN §7.3). */
+	/** Conflict decision for pages changed on both sides (architecture §7.3). */
 	strategy: ConflictStrategy;
 	/** Waits before a second GET when an ETag is not confirmed yet. Injectable for tests. */
 	sleep: (ms: number) => Promise<void>;

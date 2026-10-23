@@ -1,4 +1,4 @@
-// Tag names between Collectives and a note's frontmatter (PLAN §6.2, §7.5). Pure: no Obsidian, no network.
+// Tag names between Collectives and a note's frontmatter (architecture §6.2, §7.5). Pure: no Obsidian, no network.
 
 /** Color of a tag the plugin creates: 6 hex digits without '#' (the Nextcloud blue). */
 export const DEFAULT_TAG_COLOR = '0082c9';

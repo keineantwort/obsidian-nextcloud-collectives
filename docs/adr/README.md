@@ -1,30 +1,31 @@
 # Architecture Decision Records
 
-Format und Ablauf: [0001](0001-adrs-als-markdown-im-repo.md). Neue ADRs mit [template.md](template.md) anlegen, fortlaufend nummerieren und im selben PR wie die Umsetzung einreichen.
+Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADRs from [template.md](template.md), number them consecutively and submit them in the same PR as the implementation.
 
-| Nr. | Entscheidung | Status |
+| No. | Decision | Status |
 |---|---|---|
-| [0001](0001-adrs-als-markdown-im-repo.md) | ADRs als Markdown im Repository | akzeptiert |
-| [0002](0002-eigenes-plugin-statt-fork.md) | Eigenes Plugin statt Fork von Nextcloud Sync | akzeptiert |
-| [0003](0003-ein-server-pro-vault.md) | Ein Server pro Vault, alle Collectives bilden den Vault | akzeptiert |
-| [0004](0004-folder-note-konvention.md) | Folder-Note-Konvention statt `Readme.md` | akzeptiert |
-| [0005](0005-identitaet-und-frontmatter.md) | Identität über `nc_page_id`, Nutzer-Frontmatter wird mit hochgeladen | akzeptiert |
-| [0006](0006-lokaler-docker-testserver.md) | Lokaler Docker-Testserver für Verifikation und Integrationstests | akzeptiert |
-| [0007](0007-inhalt-per-webdav-metadaten-per-ocs.md) | Inhalt per WebDAV, Metadaten per OCS, kein `touch` | akzeptiert |
-| [0008](0008-linkformat-beim-push.md) | Link-Format beim Push: relativ mit `?fileId=` | akzeptiert |
-| [0009](0009-anhaenge-per-webdav.md) | Anhänge per WebDAV-PUT statt OCS-Multipart | akzeptiert |
-| [0010](0010-collective-umbenennen-ueber-circles.md) | Collective umbenennen über die Circles-API | akzeptiert |
-| [0011](0011-mindestversion-und-secret-storage.md) | Obsidian ≥ 1.11.4, App-Passwort im Secret Storage | akzeptiert, Eingabe-UI abgelöst durch 0014 |
-| [0012](0012-gleichzeitige-bearbeitung-im-browser.md) | Gleichzeitige Bearbeitung im Browser: ETag-Schutz, kein Session-Handling | akzeptiert |
-| [0013](0013-lokalisierung-de-en.md) | Benutzer-Texte auf Deutsch und Englisch nach Obsidian-Sprache | akzeptiert |
-| [0014](0014-app-passwort-eingabe-ohne-secretcomponent.md) | App-Passwort über ein Passwortfeld, Secret-ID vergibt das Plugin | akzeptiert |
-| [0015](0015-http-fehlerabbildung-und-retry.md) | HTTP-Fehlerabbildung zentral, 403 ≠ `AuthError`, Retry nur für lesende Requests | akzeptiert |
-| [0016](0016-pull-frontmatter-textbasiert-und-sync-state.md) | Pull: Frontmatter textbasiert, Sync-State als eigene Datei, Konfliktkopie statt Überschreiben | akzeptiert |
-| [0017](0017-push-etag-bestaetigung-und-konfliktaufloesung.md) | Push: bestätigte ETags, Entscheidung als reine Funktion, Konfliktauflösung über den State | akzeptiert |
-| [0018](0018-struktur-mehrere-durchlaeufe-rueckfragen-und-platzierung.md) | Struktur: mehrere Durchläufe, Rückfragen als Vorschläge, Platzierung neuer Dateien | akzeptiert |
-| [0019](0019-tags-emoji-push-und-tags-eigenschaft.md) | Tags und Emoji: Push über den metaHash, Eigenschaft `tags` bleibt Seiteninhalt | akzeptiert |
-| [0020](0020-links-index-anker-und-hash.md) | Links: Seitenindex, Anker unverändert, Hash im Remote-Format | akzeptiert |
-| [0021](0021-anhaenge-einbettungen-index-und-abgleich.md) | Anhänge: Einbettungen über den Index, Abgleich über ETags, Schritt nach dem Inhalt | akzeptiert |
-| [0022](0022-automatik-mutex-login-flow-und-gedrosseltes-speichern.md) | Automatik: Mutex mit Re-Run-Flag, stille Auto-Läufe, Login Flow v2, gedrosseltes Speichern | akzeptiert |
-| [0023](0023-release-versions-check-protokoll-und-ci.md) | Release: Versions-Check, Protokoll-Ansicht, Release-CI | akzeptiert, Integrationstest-Auslöser abgelöst durch 0024 |
-| [0024](0024-integrationstests-aufgeteilt-pr-und-nightly.md) | Integrationstests aufgeteilt: aktuelle Version und latest pro PR, ältere und Performance nachts | akzeptiert |
+| [0001](0001-adrs-as-markdown-in-the-repo.md) | ADRs as Markdown in the repository | accepted, language superseded by 0025 |
+| [0002](0002-own-plugin-instead-of-fork.md) | Own plugin instead of a fork of Nextcloud Sync | accepted |
+| [0003](0003-one-server-per-vault.md) | One server per vault, all collectives make up the vault | accepted |
+| [0004](0004-folder-note-convention.md) | Folder-note convention instead of `Readme.md` | accepted |
+| [0005](0005-identity-and-frontmatter.md) | Identity via `nc_page_id`, user frontmatter is uploaded too | accepted |
+| [0006](0006-local-docker-test-server.md) | Local Docker test server for verification and integration tests | accepted |
+| [0007](0007-content-via-webdav-metadata-via-ocs.md) | Content via WebDAV, metadata via OCS, no `touch` | accepted |
+| [0008](0008-link-format-on-push.md) | Link format on push: relative with `?fileId=` | accepted |
+| [0009](0009-attachments-via-webdav.md) | Attachments via WebDAV PUT instead of OCS multipart | accepted |
+| [0010](0010-rename-collective-via-circles.md) | Rename a collective via the Circles API | accepted |
+| [0011](0011-minimum-version-and-secret-storage.md) | Obsidian ≥ 1.11.4, app password in secret storage | accepted, input UI superseded by 0014 |
+| [0012](0012-concurrent-editing-in-the-browser.md) | Concurrent editing in the browser: ETag protection, no session handling | accepted |
+| [0013](0013-localisation-de-en.md) | User-facing texts in German and English following the Obsidian language | accepted |
+| [0014](0014-app-password-input-without-secretcomponent.md) | App password via a password field, the plugin assigns the secret ID | accepted |
+| [0015](0015-http-error-mapping-and-retry.md) | Central HTTP error mapping, 403 ≠ `AuthError`, retry only for read requests | accepted |
+| [0016](0016-pull-text-based-frontmatter-and-sync-state.md) | Pull: text-based frontmatter, sync state as a separate file, conflict copy instead of overwriting | accepted |
+| [0017](0017-push-etag-confirmation-and-conflict-resolution.md) | Push: confirmed ETags, decision as a pure function, conflict resolution via the state | accepted |
+| [0018](0018-structure-multiple-passes-confirmations-and-placement.md) | Structure: multiple passes, confirmations as proposals, placement of new files | accepted |
+| [0019](0019-tags-emoji-push-and-tags-property.md) | Tags and emoji: push via the metaHash, the `tags` property stays page content | accepted |
+| [0020](0020-links-index-anchors-and-hash.md) | Links: page index, anchors unchanged, hash in the remote format | accepted |
+| [0021](0021-attachments-embeds-index-and-reconciliation.md) | Attachments: embeds via the index, reconciliation via ETags, step after the content | accepted |
+| [0022](0022-automation-mutex-login-flow-and-throttled-saving.md) | Automation: mutex with re-run flag, silent auto runs, Login Flow v2, throttled saving | accepted |
+| [0023](0023-release-version-check-log-and-ci.md) | Release: version check, log view, release CI | accepted, integration test trigger superseded by 0024 |
+| [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted |
+| [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |

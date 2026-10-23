@@ -5,7 +5,7 @@ import { linksToLocal, linksToRemote } from './links';
 import type { LinkContext } from './links';
 import { inlineTags, toObsidianTag } from './tags';
 
-/** Plugin fields stored as flat top-level keys in the frontmatter of a local file (PLAN §6.2). */
+/** Plugin fields stored as flat top-level keys in the frontmatter of a local file (architecture §6.2). */
 export interface NcMeta {
 	pageId: PageId;
 	collectiveId: CollectiveId;
@@ -112,7 +112,7 @@ function stripTrailingNewlines(text: string): string {
 	return text.replace(/(?:\r?\n)+$/, '');
 }
 
-/** Remote text → local file content. With `links`, page links become wikilinks (PLAN §9.2). */
+/** Remote text → local file content. With `links`, page links become wikilinks (architecture §9.2). */
 export function toLocal(remote: string, meta: NcMeta, links?: LinkContext): string {
 	return withNcFields(linksToLocal(remote, links), meta);
 }
@@ -267,7 +267,7 @@ export function readLocalFields(local: string): LocalFields | null {
 }
 
 /**
- * Reads the nc_* fields written by the plugin (PLAN §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
+ * Reads the nc_* fields written by the plugin (architecture §6.2), or null if the text has no valid nc_page_id and nc_collective_id.
  * Unknown or malformed optional fields count as absent.
  */
 export function readNcMeta(local: string): NcMeta | null {

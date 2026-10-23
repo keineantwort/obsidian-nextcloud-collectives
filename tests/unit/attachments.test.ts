@@ -1,4 +1,4 @@
-// M8 (PLAN §9.4, ADR 0021): attachment paths, embeds in note text and their conversion.
+// M8 (architecture §9.4, ADR 0021): attachment paths, embeds in note text and their conversion.
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId } from '../../src/api/types';
 import {

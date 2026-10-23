@@ -1,54 +1,54 @@
-# AGENTS.md – Hinweise für Coding-Agents
+# AGENTS.md – Notes for coding agents
 
-Projekt: Obsidian-Plugin, das Nextcloud Collectives bidirektional mit einem Vault-Ordner synchronisiert.
-**Verbindliche Spezifikation: `PLAN.md`.** Vor jeder Arbeit lesen. Bei Widerspruch zwischen Code und Plan gilt der Plan; Abweichungen nur nach Rückfrage und dann im Plan dokumentieren.
+Project: Obsidian plugin that syncs Nextcloud Collectives bidirectionally with a vault.
+**Authoritative description: [`docs/architecture.md`](docs/architecture.md).** Read it before any work. If code and architecture disagree, the architecture wins; deviate only after asking, and then update the document in the same PR.
 
-## Arbeitsweise
+## Way of working
 
-- Immer genau einen Meilenstein (M0–M10 aus `PLAN.md` §14) pro Branch/PR bearbeiten. Branch-Name: `m<nr>-<kurzname>`, z. B. `m3-pull`.
-- Mit M0 beginnen. Keine Implementierung auf Annahmen, die in `PLAN.md` mit [VERIFIZIEREN] markiert und noch nicht bestätigt sind.
-- Unklare Anforderungen: nachfragen statt raten.
-- Architekturentscheidungen stehen in `docs/adr/`. Vor einer Abweichung den passenden ADR lesen; neue oder geänderte Entscheidungen als neuen ADR im selben PR festhalten (Vorlage `docs/adr/template.md`).
-- Vor eigenen Lösungen für Auth, WebDAV-Konflikte oder Mobile-Trigger die Referenzprojekte in `PLAN.md` §18 ansehen. Übernommener Code nur mit passender Lizenz und Quellenangabe.
-- Nach Abschluss: Status-Tabelle in `PLAN.md` §17 aktualisieren, Abweichungen und Erkenntnisse in `docs/api-notes.md` bzw. im Plan festhalten.
+- One issue (Forgejo, prefix `ONC-`) or one coherent topic per branch and PR. Branch name: short kebab-case, e.g. `onc-12-conflict-copy-update` or `docs-install-brat`.
+- Split the work into meaningful commits; one PR, several commits.
+- Unclear requirements: ask instead of guessing.
+- Architecture decisions live in `docs/adr/`. Read the relevant ADR before deviating; record new or changed decisions as a new ADR in the same PR (template `docs/adr/template.md`).
+- Before building your own solution for auth, WebDAV conflicts or mobile triggers, look at the reference projects in architecture §15. Code taken over only with a compatible licence and attribution.
+- When done: update `docs/architecture.md` if behaviour or structure changed, record API findings in `docs/api-notes.md`, and update the README and the user manual (`docs/user/en/`, `docs/user/de/`) for user-visible changes (ADR 0025).
 
-## Befehle
+## Commands
 
 ```bash
 npm install
-npm run dev          # esbuild watch, schreibt main.js
-npm run build        # Typecheck + Produktions-Build
-npm run lint         # ESLint inkl. eslint-plugin-obsidianmd
-npm test             # Vitest (Unit)
-npm run test:int     # Integrationstests, benötigt laufenden Testserver
-npm run test:perf    # Performance-Test (500 Seiten, mehrere Minuten), benötigt laufenden Testserver
-npm run nc:up        # Docker-Testserver starten (scripts/dev-nextcloud)
+npm run dev          # esbuild watch, writes main.js (and copies it into dev-vault/ if present)
+npm run build        # type check + production build
+npm run lint         # ESLint incl. eslint-plugin-obsidianmd
+npm test             # Vitest (unit)
+npm run test:int     # integration tests, needs the running test server
+npm run test:perf    # performance test (500 pages, several minutes), needs the running test server
+npm run nc:up        # start the Docker test server (scripts/dev-nextcloud)
 npm run nc:down
 ```
 
+## Hard rules
 
-## Harte Regeln
+1. The plugin must run on mobile: no Node modules (`fs`, `path`, `crypto` from Node, `http`), no Electron, no `fetch`. HTTP only through `requestUrl` from `obsidian`, hashing through `crypto.subtle`, XML through `DOMParser`.
+2. File access only through the vault API (`app.vault.process`, `app.fileManager.processFrontMatter`, `app.fileManager.renameFile`). No direct adapter access to notes.
+3. `src/sync/planner.ts` and everything in `src/mapping/` stay free of Obsidian and network imports and are fully unit-tested.
+4. Never overwrite or delete user data without asking. When in doubt, create a conflict file.
+5. No credentials in logs, fixtures, tests or commits. Anonymize fixtures.
+6. Integration tests only against the local Docker test server, never against production servers.
+7. TypeScript `strict`; no `any` without a comment giving the reason.
+8. New dependencies only if they run without Node and are small; justify them in the PR.
 
-1. Das Plugin muss auf Mobile laufen: keine Node-Module (`fs`, `path`, `crypto` aus Node, `http`), kein Electron, kein `fetch`. HTTP nur über `requestUrl` aus `obsidian`, Hashing über `crypto.subtle`, XML über `DOMParser`.
-2. Dateizugriff nur über die Vault-API (`app.vault.process`, `app.fileManager.processFrontMatter`, `app.fileManager.renameFile`). Kein direkter Adapter-Zugriff auf Notizen.
-3. `src/sync/planner.ts` und alles in `src/mapping/` bleiben frei von Obsidian- und Netzwerk-Imports und werden vollständig unit-getestet.
-4. Niemals Nutzerdaten ohne Rückfrage überschreiben oder löschen. Im Zweifel Konfliktdatei anlegen.
-5. Keine Credentials in Logs, Fixtures, Tests oder Commits. Fixtures anonymisieren.
-6. Integrationstests nur gegen den lokalen Docker-Testserver, nie gegen produktive Server.
-7. TypeScript `strict`; kein `any` ohne Begründungskommentar.
-8. Neue Abhängigkeiten nur, wenn sie ohne Node laufen und klein sind; im PR begründen.
+## Definition of done
 
-## Definition of Done (pro Meilenstein)
+- The issue's acceptance criteria are met.
+- `npm run build`, `npm run lint`, `npm test` and `npm run test:int` are green.
+- New logic has tests; planner cases are tested individually.
+- Docs updated: architecture, ADR, API notes as needed; README and user manual in English **and** German for user-visible changes, settings reference (`docs/user/*/settings.md`) for every added or changed setting.
+- PR description: what was implemented, what was tested manually (desktop/mobile), open points.
 
-- Akzeptanzkriterien aus `PLAN.md` §14 erfüllt.
-- `npm run build`, `npm run lint`, `npm test` grün (ab M4 auch `npm run test:int`).
-- Neue Logik hat Tests; Planner-Fälle sind einzeln getestet.
-- PR-Beschreibung: was umgesetzt wurde, was manuell getestet wurde (Desktop/Mobile), offene Punkte.
-- `PLAN.md` §17 aktualisiert.
+## Code style
 
-## Code-Stil
-
-- Dateien und Module wie in `PLAN.md` §5.
-- Kleine, reine Funktionen; Seiteneffekte im `executor` und in `main.ts` bündeln.
-- Benutzer-Texte (Notices, Settings, Modals) nur über `src/i18n/` in Englisch (`en.ts`) und Deutsch (`de.ts`), siehe ADR 0013. Code und Kommentare auf Englisch.
-- Fehler über die Klassen in `src/util/errors.ts`, nicht über rohe Strings.
+- Files and modules as in architecture §5.
+- Small, pure functions; side effects bundled in the `executor` and in `main.ts`.
+- User texts (notices, settings, modals) only through `src/i18n/` in English (`en.ts`) and German (`de.ts`), see ADR 0013.
+- Code, comments, test names and documentation in English (ADR 0025).
+- Errors through the classes in `src/util/errors.ts`, not raw strings.

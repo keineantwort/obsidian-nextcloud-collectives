@@ -100,7 +100,7 @@ interface Walk {
 }
 
 /**
- * Derives ideal local paths from the remote structure (PLAN §6.1, ADR 0004). Pure, deterministic.
+ * Derives ideal local paths from the remote structure (architecture §6.1, ADR 0004). Pure, deterministic.
  * `knownFolders`: collective id → folder already used locally (from state); kept unchanged and reserved first.
  */
 export function planLocalPaths(trees: CollectiveTree[], knownFolders: ReadonlyMap<CollectiveId, string>): PathPlan {
@@ -168,7 +168,7 @@ function safeName(name: string): string {
 }
 
 /**
- * Sync scope (PLAN §6.1): false for files directly in the vault root, paths below configDir, any segment starting with '.',
+ * Sync scope (architecture §6.1): false for files directly in the vault root, paths below configDir, any segment starting with '.',
  * conflict files (isConflictFileName), and non-'.md' files.
  */
 export function isSyncedPath(path: string, configDir: string): boolean {

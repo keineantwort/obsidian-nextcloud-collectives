@@ -1,18 +1,18 @@
-# Lokaler Nextcloud-Testserver
+# Local Nextcloud test server
 
-Nextcloud + Collectives + Circles in einem Container (SQLite), nur auf `127.0.0.1` erreichbar. Ausschließlich für Entwicklung und Integrationstests, nie mit echten Daten.
+Nextcloud + Collectives + Circles in one container (SQLite), reachable only on `127.0.0.1`. Strictly for development and integration tests, never with real data.
 
 ```bash
-./up.sh              # startet und wartet auf "healthy"; legt .env aus .env.example an
-./down.sh            # stoppt, Daten bleiben erhalten
-./down.sh --reset    # stoppt und löscht alle Daten (nächster Start = frische Installation)
+./up.sh              # starts and waits for "healthy"; creates .env from .env.example
+./down.sh            # stops, data is kept
+./down.sh --reset    # stops and deletes all data (next start = fresh installation)
 ```
 
-- Weboberfläche: http://localhost:8080 (Admin bzw. Testnutzer `alice`, Passwörter in `.env`)
-- Version über `NC_VERSION` in `.env` wählbar (Default 33; getestet 33–35, siehe `docs/release.md`)
-- `./versions.sh [Projektname]` zeigt Nextcloud-, Collectives-, Circles- und Text-Version des laufenden Servers
-- `npm run test:int` nimmt `NC_PORT`, `NC_TEST_USER`, `NC_TEST_PASSWORD` auch aus der Umgebung (hat Vorrang vor `.env`)
-- `hooks/10-collectives.sh` läuft einmalig nach der Installation: Apps aktivieren, Testnutzer anlegen
-- App-Passwörter erzeugen Skripte bei Bedarf selbst per `occ user:auth-tokens:add`
+- Web interface: http://localhost:8080 (admin or test user `alice`, passwords in `.env`)
+- Version selectable via `NC_VERSION` in `.env` (default 33; tested 33–35, see `docs/release.md`)
+- `./versions.sh [project name]` shows the Nextcloud, Collectives, Circles and Text versions of the running server
+- `npm run test:int` also takes `NC_PORT`, `NC_TEST_USER`, `NC_TEST_PASSWORD` from the environment (takes precedence over `.env`)
+- `hooks/10-collectives.sh` runs once after the installation: enables the apps, creates the test user
+- Scripts create app passwords themselves when needed, via `occ user:auth-tokens:add`
 
-Ab M1 als `npm run nc:up` / `npm run nc:down` verfügbar.
+Also available as `npm run nc:up` / `npm run nc:down`.

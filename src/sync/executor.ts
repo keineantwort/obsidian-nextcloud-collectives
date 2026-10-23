@@ -1,4 +1,4 @@
-// Sync executor (PLAN §6.3, §7.2): applies the planner's operations to the vault and the sync state.
+// Sync executor (architecture §6.3, §7.2): applies the planner's operations to the vault and the sync state.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import { pathKey } from '../mapping/paths';
 import { isRunFatal } from '../util/errors';

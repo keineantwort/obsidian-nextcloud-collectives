@@ -1,4 +1,4 @@
-// M6 (PLAN §7.5): emoji and tags from the vault to the server, against a fake Collectives API, a fake WebDAV and an in-memory vault.
+// M6 (architecture §7.5): emoji and tags from the vault to the server, against a fake Collectives API, a fake WebDAV and an in-memory vault.
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { PageInfo } from '../../src/api/types';
@@ -303,7 +303,7 @@ describe('emoji as the user types it in the properties view', () => {
 	});
 });
 
-describe('emoji changed on both sides: the same strategies as for the content (PLAN §7.3)', () => {
+describe('emoji changed on both sides: the same strategies as for the content (architecture §7.3)', () => {
 	/** Note says 🚀, the server says 🎯, the state still knows no emoji. Returns the op the planner would plan. */
 	async function bothChanged(h: H): Promise<{ s: Synced; op: SyncOp; remoteHash: string }> {
 		const s = await synced(h);

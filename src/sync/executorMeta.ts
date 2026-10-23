@@ -1,4 +1,4 @@
-// Emoji and tags from the vault to the server (PLAN §7.5, M6). Imports nothing from 'obsidian'.
+// Emoji and tags from the vault to the server (architecture §7.5, M6). Imports nothing from 'obsidian'.
 // The other direction (server → note) is the nc fields the content operations write from the planner's metadata.
 import type { CollectiveId, PageInfo, Tag, TagId } from '../api/types';
 import { readLocalFields } from '../mapping/frontmatter';
@@ -64,7 +64,7 @@ async function localMetaOf(text: string, collectiveId: CollectiveId, deps: Execu
 }
 
 /**
- * What to do with the metadata of a page whose text is `text`: the same decision as for the content (PLAN §7.3, decideContent)
+ * What to do with the metadata of a page whose text is `text`: the same decision as for the content (architecture §7.3, decideContent)
  * on the hashes of emoji and tags: base = the state's metaHash, local = the note's fields, remote = `op.metaHash`.
  * 'adoptBase' counts as 'pull' (the nc fields are written in the server's spelling). An unknown base ('') and a note without
  * frontmatter or a tags property that is not read take the server's values. `local` is null for those; `invalidEmoji` tells

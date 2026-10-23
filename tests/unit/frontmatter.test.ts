@@ -316,7 +316,7 @@ describe('readNcMeta and stripNcMeta', () => {
 	});
 });
 
-describe('emoji and tags in the frontmatter (M6, PLAN §6.2, §7.5)', () => {
+describe('emoji and tags in the frontmatter (M6, architecture §6.2, §7.5)', () => {
 	const meta = (over: Partial<NcMeta> = {}): NcMeta => ({ pageId: asPageId(7), collectiveId: asCollectiveId(1), title: null, emoji: null, tags: [], ...over });
 
 	describe('readLocalFields', () => {

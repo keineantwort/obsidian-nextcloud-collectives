@@ -1,4 +1,4 @@
-// Log view (PLAN §12): the ring buffer of the session as selectable text with a copy button. All texts from the translator.
+// Log view (architecture §12): the ring buffer of the session as selectable text with a copy button. All texts from the translator.
 import { Modal, Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import type { Translator } from '../i18n';

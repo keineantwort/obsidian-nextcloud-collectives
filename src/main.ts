@@ -3,7 +3,7 @@ import type { Menu, TAbstractFile } from 'obsidian';
 import { normalizeServerUrl, testConnection, type ConnectionResult } from './api/connection';
 import { awaitLoginFlow, startLoginFlow, type LoginFlowStart } from './api/loginFlow';
 import { obsidianRequest } from './api/obsidianRequest';
-import { createTranslator, resolveLocale, type Translator } from './i18n';
+import { createTranslator, resolveLocale, type Locale, type Translator } from './i18n';
 import {
 	DEFAULT_SETTINGS, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour, isSyncDebounceSec, isSyncIntervalMinutes, NcSettings,
 } from './settings/types';
@@ -24,11 +24,12 @@ import { isRecord } from './util/isRecord';
 
 export default class NextcloudCollectivesPlugin extends Plugin {
 	settings: NcSettings = { ...DEFAULT_SETTINGS };
+	locale: Locale = 'en';
 	t: Translator = createTranslator('en');
-	/** In-memory log of this session; shown by the log modal (PLAN §12). Never logs credentials. */
+	/** In-memory log of this session; shown by the log modal (architecture §12). Never logs credentials. */
 	readonly log = new Logger();
 	private statusBar: StatusBar | null = null;
-	/** Sync runs, conflicts and the run status (PLAN §7.1); created in onload, after the language is known. */
+	/** Sync runs, conflicts and the run status (architecture §7.1); created in onload, after the language is known. */
 	private sync: SyncController | null = null;
 	/** Password storage; all reads and writes of the app password go through it. */
 	private readonly credentials = new CredentialsStore(
@@ -47,7 +48,8 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		// Obsidian requires a restart after a language change, so the language is resolved once here.
-		this.t = createTranslator(resolveLocale(getLanguage()));
+		this.locale = resolveLocale(getLanguage());
+		this.t = createTranslator(this.locale);
 		await this.loadSettings();
 		const sync = new SyncController({
 			app: this.app,
@@ -103,7 +105,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			void sync.loadInitialState();
 			sync.startAutomation();
 		});
-		// Mobile apps are suspended in the background: the first moment back in the foreground is the sync time (PLAN §7.1).
+		// Mobile apps are suspended in the background: the first moment back in the foreground is the sync time (architecture §7.1).
 		this.registerDomEvent(activeDocument, 'visibilitychange', () => {
 			if (activeDocument.visibilityState === 'visible') sync.noteForeground();
 		});
@@ -140,6 +142,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			if (isSyncDebounceSec(data['syncOnSaveDebounceSec'])) loaded.syncOnSaveDebounceSec = data['syncOnSaveDebounceSec'];
 			if (typeof data['syncOnStartup'] === 'boolean') loaded.syncOnStartup = data['syncOnStartup'];
 			if (typeof data['syncOnSave'] === 'boolean') loaded.syncOnSave = data['syncOnSave'];
+			if (typeof data['syncOnForeground'] === 'boolean') loaded.syncOnForeground = data['syncOnForeground'];
 			if (typeof data['showEmojiInTitles'] === 'boolean') loaded.showEmojiInTitles = data['showEmojiInTitles'];
 			if (typeof data['hidePluginProperties'] === 'boolean') loaded.hidePluginProperties = data['hidePluginProperties'];
 			if (typeof data['folderNoteFirst'] === 'boolean') loaded.folderNoteFirst = data['folderNoteFirst'];
@@ -183,7 +186,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 	}
 
 	/**
-	 * Login Flow v2 (PLAN §10.1): asks the server for a login page, hands it to `onStart` (the caller opens it), polls until
+	 * Login Flow v2 (architecture §10.1): asks the server for a login page, hands it to `onStart` (the caller opens it), polls until
 	 * the user has confirmed, then stores the user name and the app password. The password never leaves this method
 	 * except into secret storage.
 	 */
@@ -249,7 +252,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 		}
 	}
 
-	/** Renames a page: its note, and for a page with sub-pages its folder too, so both keep the same name (PLAN §7.4). */
+	/** Renames a page: its note, and for a page with sub-pages its folder too, so both keep the same name (architecture §7.4). */
 	private async renamePage(note: TFile): Promise<void> {
 		const { vault, fileManager } = this.app;
 		const taken = new Set(vault.getAllLoadedFiles().map((file) => pathKey(file.path)));

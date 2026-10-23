@@ -1,4 +1,4 @@
-// Throttled state writes (PLAN §14 M9): the executor reports every changed operation; serializing and writing the whole
+// Throttled state writes (ADR 0022): the executor reports every changed operation; serializing and writing the whole
 // state each time is O(N²) for a first sync with N pages. Lazy saves are written at most once per interval; saves that
 // protect against duplicates (new IDs on the server, conflict copies) and the end of a run are written at once.
 import type { SyncState } from './state';

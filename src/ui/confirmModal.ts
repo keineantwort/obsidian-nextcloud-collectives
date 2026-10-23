@@ -1,4 +1,4 @@
-// Confirmation dialog for destructive and surprising changes (PLAN §7.4). Resolves with an answer per question.
+// Confirmation dialog for destructive and surprising changes (architecture §7.4). Resolves with an answer per question.
 // The only confirmation UI that imports 'obsidian'; texts and answers come from confirmView.ts.
 import { ButtonComponent, Modal } from 'obsidian';
 import type { App } from 'obsidian';

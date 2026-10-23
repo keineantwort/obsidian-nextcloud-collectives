@@ -1,4 +1,4 @@
-// Local scan (PLAN §5): synced Markdown files with their nc_page_id, plus all vault paths for collision checks.
+// Local scan (architecture §5): synced Markdown files with their nc_page_id, plus all vault paths for collision checks.
 import type { PageId } from '../api/types';
 import { isAttachmentFile } from '../mapping/attachments';
 import type { AttachmentFile } from '../mapping/attachments';
@@ -23,7 +23,7 @@ export interface LocalSnapshot {
 	nonEmpty: boolean;
 	/** Every folder path (spelling on disk) outside configDir, root excluded. */
 	folders: string[];
-	/** Markdown files directly in the vault root: not synced (PLAN §6.1), reported in the log. */
+	/** Markdown files directly in the vault root: not synced (architecture §6.1), reported in the log. */
 	rootFiles: string[];
 	/** Files that notes can embed as attachments (no notes), outside the config folder and hidden folders, with their size. */
 	attachmentFiles: AttachmentFile[];

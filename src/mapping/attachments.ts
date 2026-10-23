@@ -1,4 +1,4 @@
-// Attachments of pages (PLAN §9.4, ADR 0021). Pure: no Obsidian, no network imports.
+// Attachments of pages (architecture §9.4, ADR 0021). Pure: no Obsidian, no network imports.
 import type { PageId } from '../api/types';
 import { pathKey, sanitizeName } from './paths';
 

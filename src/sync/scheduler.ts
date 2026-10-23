@@ -1,4 +1,4 @@
-// Automatic sync triggers (PLAN §7.1): start, interval, debounce after saving, foreground. Obsidian-free; timers are injected.
+// Automatic sync triggers (architecture §7.1): start, interval, debounce after saving, foreground. Obsidian-free; timers are injected.
 // The scheduler only decides when to ask for a run; the controller serializes the runs (mutex with re-run flag).
 
 export type AutoTrigger = 'startup' | 'interval' | 'save' | 'foreground';
@@ -8,6 +8,7 @@ export interface SchedulerConfig {
 	intervalMinutes: number;
 	syncOnStartup: boolean;
 	syncOnSave: boolean;
+	syncOnForeground: boolean;
 	/** Seconds after the last change before a run starts. */
 	debounceSec: number;
 }
@@ -75,7 +76,7 @@ export class SyncScheduler {
 
 	/** The app came to the foreground again. */
 	noteForeground(): void {
-		if (!this.started || this.config === null) return;
+		if (!this.started || this.config === null || !this.config.syncOnForeground) return;
 		if (this.now() - this.lastRequestAt < FOREGROUND_MIN_GAP_MS) return;
 		this.fire('foreground');
 	}

@@ -1,4 +1,4 @@
-// Facts the executor learns while it runs (PLAN §7.2): pages whose location changed, pages created from local files.
+// Facts the executor learns while it runs (architecture §7.2): pages whose location changed, pages created from local files.
 import type { PageId, PageInfo } from '../api/types';
 import { pathKey } from '../mapping/paths';
 import type { ExecutorDeps } from './executorDeps';

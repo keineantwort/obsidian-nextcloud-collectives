@@ -1,4 +1,4 @@
-// Nextcloud Login Flow v2 (PLAN §10.1): the user signs in in the browser, the plugin polls for the app password.
+// Nextcloud Login Flow v2 (architecture §10.1): the user signs in in the browser, the plugin polls for the app password.
 // Uses RequestFn directly: the poll endpoint is an absolute URL and no Basic auth exists yet.
 import { ApiChangedError, NetworkError, ServerError } from '../util/errors';
 import { errorForStatus } from './http';

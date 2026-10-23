@@ -1,5 +1,8 @@
 /** English UI texts. Source of truth for the available keys. Placeholders: {name}. */
 export const en = {
+	'settings.help.name': 'Help',
+	'settings.help.desc': 'Every setting is explained in detail in the manual.',
+	'settings.help.link': 'Open the manual',
 	'settings.heading.connection': 'Connection',
 	'settings.serverUrl.name': 'Server URL',
 	'settings.serverUrl.desc': 'Address of your Nextcloud server. A vault is bound to one server – to use a different server, create a new vault.',
@@ -78,7 +81,7 @@ export const en = {
 	'rename.failed': 'The page could not be renamed.',
 	'rename.noPage': 'This is not a note of a synced page, or it is the start page of a collective (rename its folder instead).',
 	'settings.hideProperties.name': 'Hide the plugin’s properties',
-	'settings.hideProperties.desc': 'Hides page ID, collective ID, emoji and tags (nc_…) in the properties of a note. Set the emoji with the command or the context menu; tags are in the property “tags”.',
+	'settings.hideProperties.desc': 'Hides the plugin’s own properties (nc_…: page ID, collective ID, emoji) in the properties of a note. Tags stay visible in the property “tags”. Set the emoji with the command or the context menu.',
 	'emoji.title': 'Page emoji',
 	'emoji.input.label': 'Emoji (exactly one)',
 	'emoji.invalid': 'Please enter exactly one emoji, no text.',
@@ -230,6 +233,8 @@ export const en = {
 	'settings.syncInterval.invalid': 'Not saved: enter a whole number from 0 to 1440.',
 	'settings.syncOnStartup.name': 'Sync on startup',
 	'settings.syncOnStartup.desc': 'Syncs once when Obsidian has loaded the vault.',
+	'settings.syncOnForeground.name': 'Sync when returning to Obsidian',
+	'settings.syncOnForeground.desc': 'Syncs when Obsidian becomes visible again, for example when you switch back to the app on your phone. At most once within 30 seconds of the last automatic sync.',
 	'settings.syncOnSave.name': 'Sync after changes',
 	'settings.syncOnSave.desc': 'Syncs a few seconds after you stopped editing a synced note. Obsidian saves automatically while you type, so there is no separate save action.',
 	'settings.syncDebounce.name': 'Wait after the last change (seconds)',

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, isAttachmentFolderPattern, isMaxAttachmentSizeMb, isSyncDebounceSec, isSyncIntervalMinutes } from '../../src/settings/types';
 
 describe('attachment settings', () => {
-	it('has the defaults of PLAN §10.2', () => {
+	it('has the defaults of architecture §10.2', () => {
 		expect(DEFAULT_SETTINGS.attachmentFolderPattern).toBe('_attachments/{title}');
 		expect(DEFAULT_SETTINGS.maxAttachmentSizeMb).toBe(20);
 		expect(DEFAULT_SETTINGS.deleteRemoteAttachments).toBe(true);
@@ -26,7 +26,7 @@ describe('attachment settings', () => {
 });
 
 describe('automatic sync settings', () => {
-	it('has the defaults of PLAN §10.2', () => {
+	it('has the defaults of architecture §10.2', () => {
 		expect(DEFAULT_SETTINGS.syncIntervalMinutes).toBe(5);
 		expect(DEFAULT_SETTINGS.syncOnStartup).toBe(true);
 		expect(DEFAULT_SETTINGS.syncOnSave).toBe(true);

@@ -7,7 +7,7 @@ export async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
- * Hash of emoji and tag names (sorted) – PLAN §6.3 metaHash. Deterministic: sha256Hex(JSON.stringify([emoji, [...tags].sort()])).
+ * Hash of emoji and tag names (sorted) – architecture §6.3 metaHash. Deterministic: sha256Hex(JSON.stringify([emoji, [...tags].sort()])).
  * The title is not part of it: only the fields the user can edit in the note are compared (M6, ADR 0019); a renamed
  * page is a structure change.
  */

@@ -1,4 +1,4 @@
-// Sync planner (PLAN §6, §7). Pure: no Obsidian, no network. Decides which operations the executor runs.
+// Sync planner (architecture §6, §7). Pure: no Obsidian, no network. Decides which operations the executor runs.
 import type { CollectiveId, PageInfo } from '../api/types';
 import type { NcMeta } from '../mapping/frontmatter';
 import { canonicalPath, pathKey } from '../mapping/paths';
@@ -19,7 +19,7 @@ export { DEFAULT_BEHAVIOUR, MASS_DELETE_MIN, MASS_DELETE_SHARE } from './planner
 
 type TagEntry = PlannerInput['state']['tags'][string][number];
 
-/** Order of the operation groups (PLAN §7.2): folders, collectives, tags, local renames, structure on the server, content, deletions. */
+/** Order of the operation groups (architecture §7.2): folders, collectives, tags, local renames, structure on the server, content, deletions. */
 const RANK: Record<SyncOp['kind'], number> = {
 	ensureFolder: 0,
 	saveCollective: 1,

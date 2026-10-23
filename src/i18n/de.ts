@@ -2,6 +2,9 @@ import type { MessageKey } from './en';
 
 /** German UI texts. Must contain every key of en.ts (enforced by the type). */
 export const de: Record<MessageKey, string> = {
+	'settings.help.name': 'Hilfe',
+	'settings.help.desc': 'Das Handbuch erklärt jede Einstellung ausführlich.',
+	'settings.help.link': 'Handbuch öffnen',
 	'settings.heading.connection': 'Verbindung',
 	'settings.serverUrl.name': 'Server-URL',
 	'settings.serverUrl.desc': 'Adresse deines Nextcloud-Servers. Ein Vault ist fest an einen Server gebunden – für einen anderen Server bitte einen neuen Vault anlegen.',
@@ -80,7 +83,7 @@ export const de: Record<MessageKey, string> = {
 	'rename.failed': 'Die Seite konnte nicht umbenannt werden.',
 	'rename.noPage': 'Das ist keine Notiz einer synchronisierten Seite, oder es ist die Startseite eines Collectives (benenne stattdessen den Ordner um).',
 	'settings.hideProperties.name': 'Eigenschaften des Plugins ausblenden',
-	'settings.hideProperties.desc': 'Blendet Seiten-ID, Collective-ID, Emoji und Tags (nc_…) in den Eigenschaften einer Notiz aus. Das Emoji setzt du mit dem Befehl oder dem Kontextmenü; Tags stehen in der Eigenschaft „tags“.',
+	'settings.hideProperties.desc': 'Blendet die eigenen Eigenschaften des Plugins (nc_…: Seiten-ID, Collective-ID, Emoji) in den Eigenschaften einer Notiz aus. Tags bleiben in der Eigenschaft „tags“ sichtbar. Das Emoji setzt du mit dem Befehl oder dem Kontextmenü.',
 	'emoji.title': 'Emoji der Seite',
 	'emoji.input.label': 'Emoji (genau eins)',
 	'emoji.invalid': 'Bitte genau ein Emoji eingeben, keinen Text.',
@@ -232,6 +235,8 @@ export const de: Record<MessageKey, string> = {
 	'settings.syncInterval.invalid': 'Nicht gespeichert: Bitte eine ganze Zahl von 0 bis 1440 eingeben.',
 	'settings.syncOnStartup.name': 'Beim Start synchronisieren',
 	'settings.syncOnStartup.desc': 'Synchronisiert einmal, sobald Obsidian den Vault geladen hat.',
+	'settings.syncOnForeground.name': 'Bei Rückkehr zu Obsidian synchronisieren',
+	'settings.syncOnForeground.desc': 'Synchronisiert, wenn Obsidian wieder sichtbar wird, zum Beispiel wenn du auf dem Handy zur App zurückwechselst. Höchstens einmal innerhalb von 30 Sekunden nach der letzten automatischen Synchronisierung.',
 	'settings.syncOnSave.name': 'Nach Änderungen synchronisieren',
 	'settings.syncOnSave.desc': 'Synchronisiert einige Sekunden, nachdem du eine synchronisierte Notiz nicht mehr bearbeitest. Obsidian speichert beim Tippen automatisch, eine eigene Speichern-Aktion gibt es nicht.',
 	'settings.syncDebounce.name': 'Wartezeit nach der letzten Änderung (Sekunden)',

@@ -1,4 +1,4 @@
-// Orchestrates sync runs and conflict resolutions in the plugin: lock, dirty queue, run status, last state (PLAN §7.1, §8).
+// Orchestrates sync runs and conflict resolutions in the plugin: lock, dirty queue, run status, last state (architecture §7.1, §8).
 // Obsidian-facing: shows notices and dialogs. The sync itself lives in src/sync/.
 import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
@@ -75,13 +75,13 @@ class SerialQueue {
 export class SyncController {
 	/** Sync runs and conflict resolutions take turns here, so a resolution never changes the state during a run. */
 	private readonly lock = new SerialQueue();
-	/** Vault changes by the user since the last sync run; the input for pushing local changes (PLAN §7.2). */
+	/** Vault changes by the user since the last sync run; the input for pushing local changes (architecture §7.2). */
 	readonly dirtyQueue = new DirtyQueue();
-	/** True from a sync request until its run has finished. Requests in that time only set `rerun` (mutex, PLAN §7.1). */
+	/** True from a sync request until its run has finished. Requests in that time only set `rerun` (mutex, architecture §7.1). */
 	private syncRequested = false;
 	/** A trigger came in during a run: one more run follows. A manual request wins over automatic ones. */
 	private rerun: RunKind | null = null;
-	/** After a login failure automatic runs stop until the user runs a sync or changes the settings (PLAN §12). */
+	/** After a login failure automatic runs stop until the user runs a sync or changes the settings (architecture §12). */
 	private paused = false;
 	/** Server versions already warned about in this session. */
 	private readonly warnedVersions = new Set<string>();
@@ -92,11 +92,11 @@ export class SyncController {
 	private readonly scheduler = new SyncScheduler((trigger) => { void this.request(trigger); }, windowTimers);
 	private running = false;
 	private lastRun: LastRun = null;
-	/** Pages with an open conflict (PLAN §4); the status bar shows this number. */
+	/** Pages with an open conflict (architecture §4); the status bar shows this number. */
 	private openConflicts = 0;
 	/** State as last loaded or written; the conflict list is built from it. */
 	private lastState: SyncState | null = null;
-	/** Page index of the last sync pass: conflict texts and hashes convert links like the sync (PLAN §9). */
+	/** Page index of the last sync pass: conflict texts and hashes convert links like the sync (architecture §9). */
 	private lastLinks: LinkIndex | null = null;
 
 	constructor(private readonly host: ControllerHost) {}
@@ -154,8 +154,8 @@ export class SyncController {
 	}
 
 	private applySettings(): void {
-		const { syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnSaveDebounceSec } = this.host.settings();
-		this.scheduler.configure({ intervalMinutes: syncIntervalMinutes, syncOnStartup, syncOnSave, debounceSec: syncOnSaveDebounceSec });
+		const { syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnForeground, syncOnSaveDebounceSec } = this.host.settings();
+		this.scheduler.configure({ intervalMinutes: syncIntervalMinutes, syncOnStartup, syncOnSave, syncOnForeground, debounceSec: syncOnSaveDebounceSec });
 	}
 
 	/** A synced note was changed, created, renamed or deleted by the user. */
@@ -258,7 +258,7 @@ export class SyncController {
 		}
 	}
 
-	/** Version check (PLAN §12): logged every run, shown at most once per session and version. */
+	/** Version check (architecture §12): logged every run, shown at most once per session and version. */
 	private noteServerVersion(version: ServerVersion): void {
 		const status = versionStatus(version);
 		this.host.log.info('Nextcloud version', { version: version.string, tested: status === 'tested' });
@@ -289,7 +289,7 @@ export class SyncController {
 		this.showAutoNotice(describeSyncError(err, this.host.t));
 	}
 
-	/** Last run after a run. A cancelled run changes nothing (PLAN §2.1). The conflict count comes from the state. */
+	/** Last run after a run. A cancelled run changes nothing (architecture §7.2). The conflict count comes from the state. */
 	private recordOutcome(outcome: SyncRunOutcome): void {
 		if (outcome.kind === 'cancelled') return;
 		if (outcome.kind === 'done') {
