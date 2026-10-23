@@ -9,7 +9,7 @@ Open "Settings › Nextcloud Collectives Sync". At the top, **Help** has a link 
 Contents:
 
 - [Connection](#connection): [Server URL](#server-url), [Username](#username), [Sign in with the browser](#sign-in-with-the-browser), [App password](#app-password), [Test connection](#test-connection)
-- [Automatic sync](#automatic-sync): [Sync interval (minutes)](#sync-interval-minutes), [Sync on startup](#sync-on-startup), [Sync after changes](#sync-after-changes), [Wait after the last change (seconds)](#wait-after-the-last-change-seconds)
+- [Automatic sync](#automatic-sync): [Sync interval (minutes)](#sync-interval-minutes), [Sync on startup](#sync-on-startup), [Sync when returning to Obsidian](#sync-when-returning-to-obsidian), [Sync after changes](#sync-after-changes), [Wait after the last change (seconds)](#wait-after-the-last-change-seconds)
 - [Behaviour](#behaviour): [Conflicts](#conflicts), [New top-level folders](#new-top-level-folders), [Deleting notes in this vault](#deleting-notes-in-this-vault), [Pages deleted on the server](#pages-deleted-on-the-server), [Attachment folder](#attachment-folder), [Largest attachment (MB)](#largest-attachment-mb), [Delete attachments on the server](#delete-attachments-on-the-server), [Hide the plugin’s properties](#hide-the-plugins-properties), [Show the page of a folder first](#show-the-page-of-a-folder-first), [Show page emoji in titles](#show-page-emoji-in-titles)
 - [Diagnostics](#diagnostics): [Log](#log), [Detailed log](#detailed-log)
 
@@ -71,6 +71,14 @@ How often the plugin syncs by itself while Obsidian is open.
 Syncs once when Obsidian has loaded the vault (about 2 seconds later).
 
 - Default: on.
+
+### Sync when returning to Obsidian
+
+Syncs when Obsidian becomes visible again, for example when you switch back to the app on your phone or to the Obsidian window on the desktop. At most once within 30 seconds of the last automatic sync.
+
+- Default: on.
+- On a phone this is what keeps the vault up to date, because the operating system suspends Obsidian in the background and the interval does not run there. Turn it off if you want to sync on your phone only by hand.
+- With this off, "Sync interval (minutes)" set to 0 and "Sync on startup" and "Sync after changes" off, the plugin never syncs on its own; **Sync now** still works.
 
 ### Sync after changes
 

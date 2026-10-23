@@ -9,7 +9,7 @@
 Inhalt:
 
 - [Verbindung](#verbindung): [Server-URL](#server-url), [Benutzername](#benutzername), [Mit dem Browser anmelden](#mit-dem-browser-anmelden), [App-Passwort](#app-passwort), [Verbindung testen](#verbindung-testen)
-- [Automatische Synchronisierung](#automatische-synchronisierung): [Sync-Intervall (Minuten)](#sync-intervall-minuten), [Beim Start synchronisieren](#beim-start-synchronisieren), [Nach Änderungen synchronisieren](#nach-änderungen-synchronisieren), [Wartezeit nach der letzten Änderung (Sekunden)](#wartezeit-nach-der-letzten-änderung-sekunden)
+- [Automatische Synchronisierung](#automatische-synchronisierung): [Sync-Intervall (Minuten)](#sync-intervall-minuten), [Beim Start synchronisieren](#beim-start-synchronisieren), [Bei Rückkehr zu Obsidian synchronisieren](#bei-rückkehr-zu-obsidian-synchronisieren), [Nach Änderungen synchronisieren](#nach-änderungen-synchronisieren), [Wartezeit nach der letzten Änderung (Sekunden)](#wartezeit-nach-der-letzten-änderung-sekunden)
 - [Verhalten](#verhalten): [Konflikte](#konflikte), [Neue Ordner auf oberster Ebene](#neue-ordner-auf-oberster-ebene), [Notizen in diesem Vault löschen](#notizen-in-diesem-vault-löschen), [Auf dem Server gelöschte Seiten](#auf-dem-server-gelöschte-seiten), [Anhang-Ordner](#anhang-ordner), [Größter Anhang (MB)](#größter-anhang-mb), [Anhänge auf dem Server löschen](#anhänge-auf-dem-server-löschen), [Eigenschaften des Plugins ausblenden](#eigenschaften-des-plugins-ausblenden), [Seite des Ordners zuerst anzeigen](#seite-des-ordners-zuerst-anzeigen), [Seiten-Emoji in Titeln anzeigen](#seiten-emoji-in-titeln-anzeigen)
 - [Diagnose](#diagnose): [Protokoll](#protokoll), [Ausführliches Protokoll](#ausführliches-protokoll)
 
@@ -71,6 +71,14 @@ Wie oft das Plugin von selbst synchronisiert, solange Obsidian offen ist.
 Synchronisiert einmal, sobald Obsidian den Vault geladen hat (etwa 2 Sekunden danach).
 
 - Standard: an.
+
+### Bei Rückkehr zu Obsidian synchronisieren
+
+Synchronisiert, wenn Obsidian wieder sichtbar wird, zum Beispiel wenn du auf dem Handy zur App oder am Desktop zum Obsidian-Fenster zurückwechselst. Höchstens einmal innerhalb von 30 Sekunden nach der letzten automatischen Synchronisierung.
+
+- Standard: an.
+- Auf dem Handy hält vor allem das den Vault aktuell, denn das Betriebssystem hält Obsidian im Hintergrund an, und das Intervall läuft dort nicht. Schalte es aus, wenn du auf dem Handy nur von Hand synchronisieren willst.
+- Ist das aus, steht „Sync-Intervall (Minuten)“ auf 0 und sind „Beim Start synchronisieren“ und „Nach Änderungen synchronisieren“ aus, synchronisiert das Plugin nie von selbst; **Jetzt synchronisieren** funktioniert weiter.
 
 ### Nach Änderungen synchronisieren
 

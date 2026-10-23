@@ -306,7 +306,7 @@ Important: `baseHash` is computed on the converted remote format. Otherwise link
 | Plugin start | 2 s after `workspace.onLayoutReady`, default on |
 | Interval | default 5 min, 0 = off |
 | After changes | debounce of 10 s after the last `modify`/`create`/`rename`/`delete` of a synced note (Obsidian has no save event, [ADR 0022](adr/0022-automation-mutex-login-flow-and-throttled-saving.md)). A full run follows, not only this page |
-| Mobile foreground | sync when the app becomes visible again (`visibilitychange`), at most every 30 s |
+| Mobile foreground | sync when the app becomes visible again (`visibilitychange`), at most every 30 s; setting `syncOnForeground` |
 | Manual | command "Sync now", ribbon icon, click on the status bar |
 
 A mutex prevents parallel runs; a trigger during a run sets a re-run flag, and one more run follows (a manual request takes precedence over an automatic one). Automatic runs are silent: no dialog, a notice only for warnings and errors, questions are deferred until the next manual run ("Some changes need your decision. Run “Sync now” to answer."). Automatic runs do not start the first sync of a vault. `AuthError` and `ApiChanged` pause automatic runs until a manual run succeeds or the settings change. Dirty keys of an unfinished or failed run are queued again.
@@ -457,6 +457,7 @@ The conversion is pure (`src/mapping/links.ts`) and uses a `LinkIndex` built per
 | `newFolderBehaviour` | `createCollective` | `createCollective`/`ask`/`ignore` |
 | `syncIntervalMinutes` | 5 | 0 = off, at most 1440 |
 | `syncOnStartup` | true | |
+| `syncOnForeground` | true | sync when Obsidian becomes visible again |
 | `syncOnSave`, `syncOnSaveDebounceSec` | true, 10 | debounce 2–600 s |
 | `conflictStrategy` | `conflictFile` | `conflictFile`/`preferLocal`/`preferRemote` |
 | `localDeleteBehaviour` | `ask` | `ask` (confirmation, then remote trash) / `trashRemote` (no question). Collectives and mass deletions are always confirmed |

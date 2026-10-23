@@ -13,7 +13,7 @@ Jede Synchronisierung ist ein voller Lauf: Das Plugin vergleicht alle Collective
 | Start | Etwa 2 Sekunden, nachdem Obsidian den Vault geladen hat. | [Beim Start synchronisieren](settings.md#beim-start-synchronisieren) (Standard: an) |
 | Intervall | Alle paar Minuten, solange Obsidian offen ist. | [Sync-Intervall (Minuten)](settings.md#sync-intervall-minuten) (Standard: 5, 0 = aus) |
 | Nach Änderungen | Einige Sekunden, nachdem du eine synchronisierte Notiz zuletzt geändert, angelegt, umbenannt oder gelöscht hast. Jede weitere Änderung startet die Wartezeit neu. | [Nach Änderungen synchronisieren](settings.md#nach-änderungen-synchronisieren) (Standard: an) und [Wartezeit nach der letzten Änderung (Sekunden)](settings.md#wartezeit-nach-der-letzten-änderung-sekunden) (Standard: 10) |
-| Zurück im Vordergrund | Wenn Obsidian wieder sichtbar wird, zum Beispiel wenn du auf dem Handy zur App zurückkehrst. Höchstens einmal innerhalb von 30 Sekunden nach der letzten automatischen Anforderung. | keine, immer an |
+| Zurück im Vordergrund | Wenn Obsidian wieder sichtbar wird, zum Beispiel wenn du auf dem Handy zur App zurückkehrst. Höchstens einmal innerhalb von 30 Sekunden nach der letzten automatischen Anforderung. | [Bei Rückkehr zu Obsidian synchronisieren](settings.md#bei-rückkehr-zu-obsidian-synchronisieren) (Standard: an) |
 | Von Hand | Befehl **Jetzt synchronisieren**, das Symbol **Mit Nextcloud Collectives synchronisieren** in der Seitenleiste oder ein Klick auf die Statusleiste. | – |
 
 Obsidian speichert beim Tippen automatisch, eine eigene Speichern-Aktion gibt es nicht. „Nach Änderungen“ wartet deshalb, bis du die eingestellte Zahl an Sekunden nicht mehr getippt hast.

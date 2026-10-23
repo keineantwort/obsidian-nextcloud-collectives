@@ -13,7 +13,7 @@ Every sync is a full run: the plugin compares all collectives on the server with
 | Startup | About 2 seconds after Obsidian has loaded the vault. | [Sync on startup](settings.md#sync-on-startup) (default: on) |
 | Interval | Every few minutes while Obsidian is open. | [Sync interval (minutes)](settings.md#sync-interval-minutes) (default: 5, 0 = off) |
 | After changes | A few seconds after you last changed, created, renamed or deleted a synced note. Every further change restarts the wait. | [Sync after changes](settings.md#sync-after-changes) (default: on) and [Wait after the last change (seconds)](settings.md#wait-after-the-last-change-seconds) (default: 10) |
-| Back in the foreground | When Obsidian becomes visible again, for example when you switch back to the app on your phone. At most once within 30 seconds of the last automatic sync request. | none, always on |
+| Back in the foreground | When Obsidian becomes visible again, for example when you switch back to the app on your phone. At most once within 30 seconds of the last automatic sync request. | [Sync when returning to Obsidian](settings.md#sync-when-returning-to-obsidian) (default: on) |
 | Manual | Command **Sync now**, the ribbon icon **Sync with Nextcloud Collectives**, or a click on the status bar. | – |
 
 Obsidian saves while you type, so there is no separate save action. "After changes" therefore waits until you have stopped typing for the set number of seconds.

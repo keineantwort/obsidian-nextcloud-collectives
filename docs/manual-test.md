@@ -30,7 +30,7 @@ The plugin is not in the community store (open decision on store publication). T
 - [ ] Edit a note, stop typing: about 10 s later the change is in Nextcloud (setting "Sync after changes")
 - [ ] Change something in Nextcloud, move Obsidian to the background and back to the foreground: the change appears without triggering anything manually
 - [ ] Set the interval to 1 minute: a change in Nextcloud arrives within about 1 minute while Obsidian is in the foreground
-- [ ] Interval 0, "Sync on startup" and "Sync after changes" off: nothing happens on its own; "Sync now" still works
+- [ ] Interval 0, "Sync on startup", "Sync when returning to Obsidian" and "Sync after changes" off: nothing happens on its own, also not when switching back to the app; "Sync now" still works
 - [ ] Several quick changes in a row trigger only one sync; changes made during a sync run once more afterwards (no parallel run, no error message)
 
 ## 3. Quiet runs and errors
