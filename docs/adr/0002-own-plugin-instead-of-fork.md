@@ -1,23 +1,23 @@
-# 0002 – Eigenes Plugin statt Fork von Nextcloud Sync
+# 0002 – Own plugin instead of a fork of Nextcloud Sync
 
-- Status: akzeptiert
-- Datum: 2026-10-15
-- Bezug: PLAN.md §15 #7, §18
+- Status: accepted
+- Date: 2026-10-15
+- Related: architecture §15
 
-## Kontext
+## Context
 
-Es gibt kein Obsidian-Plugin für Nextcloud Collectives. Das Plugin „Nextcloud Sync“ (siosig/obsidian-nextcloudsync, MIT) synchronisiert beliebige Nextcloud-Ordner per WebDAV und ist ausgereift.
+There is no Obsidian plugin for Nextcloud Collectives. The plugin "Nextcloud Sync" (siosig/obsidian-nextcloudsync, MIT) synchronises arbitrary Nextcloud folders via WebDAV and is mature.
 
-## Entscheidung
+## Decision
 
-Wir schreiben ein eigenes Plugin. Bestehende Plugins dienen nur als Referenz; einzelne Muster oder Codeteile werden mit Lizenz- und Quellenangabe übernommen (gesichtete Commits: `docs/api-notes.md` §11).
+We write our own plugin. Existing plugins serve only as a reference; individual patterns or pieces of code are adopted with licence and source attribution (commits reviewed: `docs/api-notes.md` §11).
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Nextcloud Sync direkt auf `.Collectives/` richten** – keine Emojis, Tags, Link-Umwandlung, Collective-Anlage; `Readme.md`-Struktur bleibt sichtbar.
-- **Nextcloud Sync forken** – große fremde Codebasis (Diff3-Merge, Chunked Upload, Config-Sync …), Upstream nimmt kaum PRs an, dauerhafte Fork-Pflege. Außerdem schreibt es über den `DataAdapter` statt über die Vault-API (widerspricht AGENTS Regel 2).
+- **Point Nextcloud Sync directly at `.Collectives/`** – no emojis, tags, link conversion or collective creation; the `Readme.md` structure stays visible.
+- **Fork Nextcloud Sync** – large foreign codebase (diff3 merge, chunked upload, config sync …), upstream hardly accepts PRs, permanent fork maintenance. It also writes through the `DataAdapter` instead of the vault API (contradicts AGENTS rule 2).
 
-## Konsequenzen
+## Consequences
 
-- Volle Kontrolle über das Collectives-spezifische Mapping.
-- Bewährte Lösungen (Login Flow v2 mit Resume-Wake, Massenlösch-Schutz, PROPFIND-Parser) müssen bewusst nachgebaut werden.
+- Full control over the Collectives-specific mapping.
+- Proven solutions (Login Flow v2 with resume wake, mass-delete protection, PROPFIND parser) have to be rebuilt deliberately.

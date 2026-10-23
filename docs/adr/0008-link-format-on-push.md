@@ -1,34 +1,34 @@
-# 0008 – Link-Format beim Push: relativ mit `?fileId=`
+# 0008 – Link format on push: relative with `?fileId=`
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §9.1, §9.3, `docs/api-notes.md` §7, ONC-1
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §9.1, §9.3, `docs/api-notes.md` §7, ONC-1
 
-## Kontext
+## Context
 
-Collectives erkennt drei Link-Formen (relativ mit `?fileId=`, absolut, root-relativ). Der Link-Picker der Weboberfläche schreibt absolute URLs mit `/index.php/`. Lokal sollen Wikilinks stehen.
+Collectives recognises three link forms (relative with `?fileId=`, absolute, root-relative). The link picker of the web UI writes absolute URLs with `/index.php/`. Locally, wikilinks are wanted.
 
-Manuelle Prüfung im Text-Editor (2026-10-16, Pretty-URLs aktiv):
+Manual check in the text editor (2026-10-16, pretty URLs active):
 
-| Form | Klick führt zur Seite |
+| Form | Click leads to the page |
 |---|---|
-| `Ziel.md?fileId=138` | ✔ |
-| `http://host/index.php/apps/collectives/Admins-Wiki-3/Ziel-138` | ✘ neuer Tab, „Collective nicht gefunden“ |
-| `/index.php/apps/collectives/Admins-Wiki-3/Ziel-138` | ✘ neuer Tab, „Collective nicht gefunden“ |
-| `/apps/collectives/Admins-Wiki-3/Ziel-138` | ✔ |
-| `Ziel.md` | ✔ |
-| `Ziel.md?fileId=138#abschnitt-zwei` | ✔ (Anker nicht prüfbar) |
+| `Target.md?fileId=138` | ✔ |
+| `http://host/index.php/apps/collectives/Admins-Wiki-3/Target-138` | ✘ new tab, "Collective not found" |
+| `/index.php/apps/collectives/Admins-Wiki-3/Target-138` | ✘ new tab, "Collective not found" |
+| `/apps/collectives/Admins-Wiki-3/Target-138` | ✔ |
+| `Target.md` | ✔ |
+| `Target.md?fileId=138#section-two` | ✔ (anchor not verifiable) |
 
-## Entscheidung
+## Decision
 
-Push schreibt Seitenlinks als **relativen Pfad zur Quelldatei mit `?fileId={id}`** (Anker als `#slug` dahinter). Pull löst alle bekannten Formen auf (relativ, absolut, root-relativ, mit/ohne `index.php`, Collective als `{slug}-{id}` oder Name).
+Push writes page links as a **path relative to the source file with `?fileId={id}`** (anchor as `#slug` after it). Pull resolves all known forms (relative, absolute, root-relative, with/without `index.php`, collective as `{slug}-{id}` or name).
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Absolutes Picker-Format** – im Test nicht klickbar (Ursache offen: vermutlich `/index.php/` bei aktiven Pretty-URLs), außerdem serverabhängig.
-- **Relativ ohne `fileId`** – klickbar, wird aber vom Server nicht als Seitenlink erkannt (keine Backlinks) und bricht bei Umbenennungen.
+- **Absolute picker format** – not clickable in the test (cause open: presumably `/index.php/` with active pretty URLs), and also server-dependent.
+- **Relative without `fileId`** – clickable, but not recognised by the server as a page link (no backlinks) and breaks on renames.
 
-## Konsequenzen
+## Consequences
 
-- Links bleiben bei Umbenennen über die File-ID auflösbar; Backlinks in Collectives funktionieren.
-- Rundlauf-Tests in M7 verwenden diese Form als kanonisches Remote-Format.
+- Links stay resolvable across renames via the file ID; backlinks in Collectives work.
+- Round-trip tests in milestone M7 use this form as the canonical remote format.

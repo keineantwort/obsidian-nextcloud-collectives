@@ -1,23 +1,23 @@
-# 0001 – ADRs als Markdown im Repository
+# 0001 – ADRs as Markdown in the repository
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: ONC-1
+- Status: accepted; language superseded by [0025](0025-english-documentation-user-manual-and-architecture.md)
+- Date: 2026-10-16
+- Related: ONC-1
 
-## Kontext
+## Context
 
-Architekturentscheidungen standen bisher verstreut in `PLAN.md` §15 und in Chat-Verläufen. Coding-Agents und Menschen brauchen eine feste, versionierte Stelle, an der sie Begründungen nachlesen können, bevor sie von einer Entscheidung abweichen.
+Architecture decisions used to be scattered across `PLAN.md` §15 and chat histories. Coding agents and humans need a fixed, versioned place where they can read the reasoning before deviating from a decision.
 
-## Entscheidung
+## Decision
 
-Entscheidungen werden als Markdown-Dateien im Format [MADR](https://adr.github.io/madr/) (vereinfacht, deutsch) unter `docs/adr/NNNN-kurzname.md` abgelegt. Vorlage: `template.md`, Übersicht: `README.md`. Neue ADRs entstehen im selben PR wie die Umsetzung. Akzeptierte ADRs werden nicht umgeschrieben, sondern durch neue abgelöst.
+Decisions are stored as Markdown files in the [MADR](https://adr.github.io/madr/) format (simplified) under `docs/adr/NNNN-shortname.md`. Template: `template.md`, overview: `README.md`. New ADRs are submitted in the same PR as the implementation. Accepted ADRs are not rewritten but superseded by new ones.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Docusaurus-Site** – eigene npm-Toolchain, Build und Hosting für ein Plugin-Repo; Docusaurus kann dieselben Markdown-Dateien später trotzdem rendern.
-- **Nur `PLAN.md` §15** – keine Begründungen und Alternativen, wird unübersichtlich.
+- **Docusaurus site** – its own npm toolchain, build and hosting for a plugin repo; Docusaurus could still render the same Markdown files later.
+- **Only `PLAN.md` §15** – no reasoning or alternatives, becomes hard to follow.
 
-## Konsequenzen
+## Consequences
 
-- ADRs durchlaufen denselben Review wie der Code und sind für Agents direkt lesbar (`AGENTS.md` verweist darauf).
-- Eine spätere Doku-Site bleibt möglich, ohne Dateien umzuziehen.
+- ADRs go through the same review as the code and are directly readable for agents (`AGENTS.md` points to them).
+- A later documentation site remains possible without moving files.

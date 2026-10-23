@@ -1,25 +1,25 @@
-# 0006 – Lokaler Docker-Testserver für Verifikation und Integrationstests
+# 0006 – Local Docker test server for verification and integration tests
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §13, §15 #8, AGENTS Regel 6, ONC-1
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §13, AGENTS rule 6, ONC-1
 
-## Kontext
+## Context
 
-M0 muss echtes Server-Verhalten klären (Link-Format, 412, File-IDs), und ab M4 sind Integrationstests Pflicht. Tests gegen produktive Server sind ausgeschlossen.
+M0 has to clarify real server behaviour (link format, 412, file IDs), and from M4 on integration tests are mandatory. Tests against production servers are ruled out.
 
-## Entscheidung
+## Decision
 
-`scripts/dev-nextcloud/`: ein einzelner Container `nextcloud:<NC_VERSION>-apache` mit SQLite, Post-Install-Hook installiert Collectives und Circles und legt den Testnutzer an. Nur auf `127.0.0.1` gebunden, Wegwerf-Credentials in `.env` (gitignored). Unit-Tests laufen ohne Server gegen die M0-Fixtures.
+`scripts/dev-nextcloud/`: a single container `nextcloud:<NC_VERSION>-apache` with SQLite; a post-install hook installs Collectives and Circles and creates the test user. Bound to `127.0.0.1` only, throwaway credentials in `.env` (gitignored). Unit tests run without a server against the M0 fixtures.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Mocks/Fake-Server** – würden nur unsere Annahmen wiederholen.
-- **Nicht-produktive Nextcloud im HomeLab** – keine lokale Last, aber nicht reproduzierbar zurücksetzbar; offen als Option für CI.
-- **Voller Stack (Postgres, Redis, TLS)** wie bei Nextcloud Sync – für den Anfang unnötig.
+- **Mocks/fake server** – would only repeat our own assumptions.
+- **Non-production Nextcloud in the HomeLab** – no local load, but cannot be reset reproducibly; left open as an option for CI.
+- **Full stack (Postgres, Redis, TLS)** as with Nextcloud Sync – unnecessary to begin with.
 
-## Konsequenzen
+## Consequences
 
-- ca. 1,2 GB Image, Container nur bei Bedarf aktiv; `down.sh --reset` liefert frischen Zustand.
-- SQLite verhält sich bei String-Vergleichen anders als MySQL (z. B. case-sensitive Tag-Namen) – Code darf sich darauf nicht verlassen.
-- Offen (PLAN §15 #8): Remote-Testserver, damit Forgejo Actions `test:int` ausführen können; Entscheidung vor M4.
+- About 1.2 GB image, container active only when needed; `down.sh --reset` gives a fresh state.
+- SQLite behaves differently from MySQL in string comparisons (e.g. case-sensitive tag names) – code must not rely on it.
+- Open (milestone M4 decision, formerly open decision #8): remote test server so that Forgejo Actions can run `test:int`; decision before M4.

@@ -1,22 +1,22 @@
-# 0009 – Anhänge per WebDAV-PUT statt OCS-Multipart
+# 0009 – Attachments via WebDAV PUT instead of OCS multipart
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §9.4, ONC-1
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §9.4, ONC-1
 
-## Kontext
+## Context
 
-Collectives listet Anhänge aus dem Ordner `.attachments.{pageId}/` neben der Seitendatei. Upload ist per OCS-Multipart oder per WebDAV möglich (beides in M0 bestätigt).
+Collectives lists attachments from the folder `.attachments.{pageId}/` next to the page file. Upload is possible via OCS multipart or via WebDAV (both confirmed in M0).
 
-## Entscheidung
+## Decision
 
-Upload per WebDAV: `MKCOL .attachments.{pageId}/` falls nötig, dann `PUT` der Datei. ETags per `PROPFIND`. Löschen per OCS `DELETE …/attachments/{attId}` (landet im Papierkorb).
+Upload via WebDAV: `MKCOL .attachments.{pageId}/` if needed, then `PUT` of the file. ETags via `PROPFIND`. Deletion via OCS `DELETE …/attachments/{attId}` (ends up in the trash).
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **OCS-Multipart** – Body muss für `requestUrl` manuell gebaut werden, und der Server benennt bei Namenskollision eigenmächtig um (`name (1).ext`), wodurch lokale Einbettungen nicht mehr passen.
+- **OCS multipart** – the body would have to be built manually for `requestUrl`, and on a name collision the server renames on its own (`name (1).ext`), so local embeds no longer match.
 
-## Konsequenzen
+## Consequences
 
-- Gleicher Codepfad wie für Seiteninhalte, deterministische Dateinamen.
-- Die OCS-Anhangliste enthält keine ETags – Abgleich über PROPFIND.
+- Same code path as for page contents, deterministic file names.
+- The OCS attachment list contains no ETags – reconciliation via PROPFIND.

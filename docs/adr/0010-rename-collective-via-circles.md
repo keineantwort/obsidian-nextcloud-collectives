@@ -1,22 +1,22 @@
-# 0010 – Collective umbenennen über die Circles-API
+# 0010 – Rename a collective via the Circles API
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §4.2, §7.4, ONC-1
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §4.2, §7.4, ONC-1
 
-## Kontext
+## Context
 
-`PUT /collectives/{id}` akzeptiert nur `emoji`. Der Name eines Collectives ist der Name seines Teams (Circle).
+`PUT /collectives/{id}` accepts only `emoji`. The name of a collective is the name of its team (circle).
 
-## Entscheidung
+## Decision
 
-Ein lokal umbenannter Collective-Ordner wird über `PUT /ocs/v2.php/apps/circles/circles/{circleId}/name` (`value`) umbenannt. ID bleibt, Name, Slug und WebDAV-Pfad ziehen nach (M0 bestätigt). Fehlen die Rechte, wird der Ordner lokal zurückbenannt.
+A locally renamed collective folder is renamed via `PUT /ocs/v2.php/apps/circles/circles/{circleId}/name` (`value`). The ID stays; name, slug and WebDAV path follow (confirmed in M0). If the permissions are missing, the folder is renamed back locally.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Umbenennen nicht unterstützen** – lokales Umbenennen würde immer zurückgedreht, schlechte UX.
+- **Not supporting renames** – a local rename would always be reverted, poor UX.
 
-## Konsequenzen
+## Consequences
 
-- Abhängigkeit von einer zweiten App-API (Circles/Teams); Fehler dort sind als `ApiChanged` zu behandeln.
-- Collective-Löschen bleibt Circle-Admins/Ownern vorbehalten (Mitglieder: 403); das Plugin prüft `level` vorab.
+- Dependency on a second app API (Circles/Teams); errors there are to be treated as `ApiChanged`.
+- Deleting a collective remains reserved for circle admins/owners (members: 403); the plugin checks `level` beforehand.

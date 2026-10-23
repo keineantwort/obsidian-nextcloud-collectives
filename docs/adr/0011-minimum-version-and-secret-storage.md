@@ -1,22 +1,22 @@
-# 0011 – Obsidian ≥ 1.11.4, App-Passwort im Secret Storage
+# 0011 – Obsidian ≥ 1.11.4, app password in secret storage
 
-- Status: akzeptiert; Eingabe-UI abgelöst durch [0014](0014-app-password-input-without-secretcomponent.md)
-- Datum: 2026-10-16
-- Bezug: PLAN.md §3, §10.1, ONC-1
+- Status: accepted; input UI superseded by [0014](0014-app-password-input-without-secretcomponent.md)
+- Date: 2026-10-16
+- Related: architecture §3, §10.1, ONC-1
 
-## Kontext
+## Context
 
-Das App-Passwort darf nicht im Klartext in `data.json` liegen. Obsidian bietet `app.secretStorage` (`@since 1.11.4`) und `SecretComponent` (`@since 1.11.1`); die deklarative Settings-API kommt erst mit 1.13.0 und kennt keinen Secret-Typ.
+The app password must not be stored in plain text in `data.json`. Obsidian offers `app.secretStorage` (`@since 1.11.4`) and `SecretComponent` (`@since 1.11.1`); the declarative settings API only arrives with 1.13.0 and has no secret type.
 
-## Entscheidung
+## Decision
 
-`minAppVersion` = 1.11.4. Das App-Passwort wird über `app.secretStorage` gespeichert, in `data.json` steht nur die Secret-ID. Der Settings-Tab ist ein klassischer `PluginSettingTab` mit `SecretComponent`.
+`minAppVersion` = 1.11.4. The app password is stored via `app.secretStorage`; `data.json` contains only the secret ID. The settings tab is a classic `PluginSettingTab` with `SecretComponent`.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Minimum 1.13.0 wie Nextcloud Sync** – kein Nutzen, solange wir die deklarative API nicht brauchen.
-- **Eigene Verschlüsselung mit Schlüssel im `localStorage`** (wie NextDeck) – faktisch Klartext.
+- **Minimum 1.13.0 like Nextcloud Sync** – no benefit as long as we do not need the declarative API.
+- **Own encryption with a key in `localStorage`** (like NextDeck) – effectively plain text.
 
-## Konsequenzen
+## Consequences
 
-- Ältere Obsidian-Versionen werden nicht unterstützt.
+- Older Obsidian versions are not supported.

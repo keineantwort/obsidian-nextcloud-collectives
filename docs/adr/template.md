@@ -1,24 +1,24 @@
-# NNNN – Titel der Entscheidung
+# NNNN – Title of the decision
 
-- Status: vorgeschlagen | akzeptiert | abgelöst durch [NNNN](NNNN-….md) | verworfen
-- Datum: JJJJ-MM-TT
-- Bezug: PLAN.md §…, Issue ONC-…
+- Status: proposed | accepted | superseded by [NNNN](NNNN-….md) | rejected
+- Date: YYYY-MM-DD
+- Related: architecture §…, issue ONC-…
 
-## Kontext
+## Context
 
-Welches Problem, welche Rahmenbedingungen, welche Kräfte wirken?
+What problem, what constraints, what forces are at work?
 
-## Entscheidung
+## Decision
 
-Was wird gemacht? Kurz und eindeutig.
+What will be done? Short and unambiguous.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Alternative A** – warum nicht
-- **Alternative B** – warum nicht
+- **Alternative A** – why not
+- **Alternative B** – why not
 
-## Konsequenzen
+## Consequences
 
-- positiv: …
-- negativ / Kosten: …
-- Folgearbeiten: …
+- positive: …
+- negative / cost: …
+- follow-up work: …

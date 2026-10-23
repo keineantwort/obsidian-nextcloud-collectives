@@ -1,25 +1,25 @@
-# 0003 – Ein Server pro Vault, alle Collectives bilden den Vault
+# 0003 – One server per vault, all collectives make up the vault
 
-- Status: akzeptiert
-- Datum: 2026-10-15
-- Bezug: PLAN.md §2, §6.1, §15 #4
+- Status: accepted
+- Date: 2026-10-15
+- Related: architecture §2, §6.1
 
-## Kontext
+## Context
 
-Ein Nutzer kann Mitglied vieler Collectives sein, ggf. auf mehreren Servern. Teilauswahl und Mehrserverbetrieb vervielfachen die Zustände (Pfadpräfixe, Credentials, Kollisionen).
+A user can be a member of many collectives, possibly on several servers. Partial selection and multi-server operation multiply the states (path prefixes, credentials, collisions).
 
-## Entscheidung
+## Decision
 
-Ein Vault ist an genau einen Nextcloud-Server gebunden. Der Vault-Root ist der Sync-Root; jedes Collective, auf das der Nutzer Zugriff hat, ist ein Ordner auf oberster Ebene. Keine Teilauswahl. Ein Serverwechsel ist nicht vorgesehen (Hinweis: neuen Vault anlegen).
+A vault is bound to exactly one Nextcloud server. The vault root is the sync root; every collective the user has access to is a top-level folder. No partial selection. Switching servers is not supported (hint: create a new vault).
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Unterordner als Sync-Root** – mischt gesyncte und lokale Notizen, mehr Sonderfälle bei Links.
-- **Mehrere Server** – eigene Credentials und Namensräume je Server, deutlich mehr Komplexität.
-- **Teilauswahl von Collectives** – Lösch- vs. Abwahl-Semantik wäre mehrdeutig.
+- **Subfolder as sync root** – mixes synced and local notes, more special cases for links.
+- **Multiple servers** – separate credentials and namespaces per server, considerably more complexity.
+- **Partial selection of collectives** – the semantics of deleting vs. deselecting would be ambiguous.
 
-## Konsequenzen
+## Consequences
 
-- Einfaches, eindeutiges Pfad-Mapping.
-- Dateien direkt im Vault-Root werden ignoriert (Hinweis im Log).
-- Neue lokale Ordner auf oberster Ebene werden zu Collectives (Setting `newFolderBehaviour`).
+- Simple, unambiguous path mapping.
+- Files directly in the vault root are ignored (hint in the log).
+- New local top-level folders become collectives (setting `newFolderBehaviour`).

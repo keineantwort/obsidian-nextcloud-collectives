@@ -1,23 +1,23 @@
-# 0004 – Folder-Note-Konvention statt `Readme.md`
+# 0004 – Folder-note convention instead of `Readme.md`
 
-- Status: akzeptiert
-- Datum: 2026-10-15
-- Bezug: PLAN.md §6.1
+- Status: accepted
+- Date: 2026-10-15
+- Related: architecture §6.1
 
-## Kontext
+## Context
 
-Collectives speichert Startseiten und Elternseiten als `Readme.md`. In Obsidian sind viele gleichnamige `Readme.md` im Quick Switcher, in Wikilinks und in Tabs unbrauchbar.
+Collectives stores landing pages and parent pages as `Readme.md`. In Obsidian, many identically named `Readme.md` files are unusable in the quick switcher, in wikilinks and in tabs.
 
-## Entscheidung
+## Decision
 
-Lokal heißt die Datei einer Elternseite wie ihr Ordner (`Prozesse/Prozesse.md`), die Startseite wie das Collective (`Handbuch/Handbuch.md`). Das Mapping in `src/mapping/paths.ts` übersetzt in beide Richtungen.
+Locally, the file of a parent page is named like its folder (`Processes/Processes.md`), the landing page like the collective (`Handbook/Handbook.md`). The mapping in `src/mapping/paths.ts` translates in both directions.
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **`Readme.md` beibehalten** – 1:1-Abbild, aber in Obsidian schlecht bedienbar.
-- **Elternseite als Datei neben dem Ordner** (`Prozesse.md` + `Prozesse/`) – verbreitet, aber Verschieben in Obsidian trennt Datei und Ordner leicht.
+- **Keep `Readme.md`** – 1:1 mirror, but poorly usable in Obsidian.
+- **Parent page as a file next to the folder** (`Processes.md` + `Processes/`) – common, but moving things in Obsidian easily separates file and folder.
 
-## Konsequenzen
+## Consequences
 
-- M0: Elternseiten bleiben auf dem Server Ordner, auch ohne Unterseiten; lokal ist das eine Folder-Note ohne Geschwister.
-- Wird lokal eine Unterseite unter einer Blattseite angelegt, muss die Blattseite in den neuen Ordner wandern (Collectives macht `Titel.md` → `Titel/Readme.md`, File-ID bleibt).
+- M0: parent pages remain folders on the server, even without subpages; locally this is a folder note without siblings.
+- If a subpage is created locally under a leaf page, the leaf page has to move into the new folder (Collectives turns `Title.md` into `Title/Readme.md`, the file ID stays).

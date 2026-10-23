@@ -1,25 +1,25 @@
-# 0007 – Inhalt per WebDAV, Metadaten per OCS, kein `touch`
+# 0007 – Content via WebDAV, metadata via OCS, no `touch`
 
-- Status: akzeptiert
-- Datum: 2026-10-16
-- Bezug: PLAN.md §4, `docs/api-notes.md` §3–5, ONC-1
+- Status: accepted
+- Date: 2026-10-16
+- Related: architecture §4, `docs/api-notes.md` §3–5, ONC-1
 
-## Kontext
+## Context
 
-Die Collectives-OCS-API liefert keine Seiteninhalte. Inhalt liegt als Datei im (pro Nutzer konfigurierbaren) Collectives-Ordner.
+The Collectives OCS API does not deliver page contents. Content lives as a file in the Collectives folder (configurable per user).
 
-## Entscheidung
+## Decision
 
-- Inhalt lesen/schreiben per WebDAV (`GET`, `PUT` mit `If-Match`, neue Dateien mit `If-None-Match: *`), Pfade immer aus `collectivePath`/`filePath`/`fileName` der API.
-- Struktur und Metadaten (Anlegen, Umbenennen, Verschieben, Emoji, Tags, Papierkorb) per OCS.
-- Kein `touch` nach dem `PUT`: Collectives' `NodeWrittenListener` setzt beim WebDAV-Schreiben selbst den letzten Bearbeiter, verschickt Benachrichtigungen und aktualisiert `linkedPageIds` (M0 bestätigt).
+- Read/write content via WebDAV (`GET`, `PUT` with `If-Match`, new files with `If-None-Match: *`), always taking paths from `collectivePath`/`filePath`/`fileName` of the API.
+- Structure and metadata (create, rename, move, emoji, tags, trash) via OCS.
+- No `touch` after the `PUT`: Collectives' `NodeWrittenListener` itself sets the last editor on WebDAV writes, sends notifications and updates `linkedPageIds` (confirmed in M0).
 
-## Betrachtete Alternativen
+## Alternatives considered
 
-- **Alles per WebDAV** (Collectives erkennt rohe PUT/MOVE/DELETE, M0) – Titel-Bereinigung, Emoji und Tags wären so nicht steuerbar; Seitenanlage über OCS liefert sofort die ID.
-- **`touch` nach jedem PUT** – zusätzlicher Request ohne Nutzen, doppelte Benachrichtigungen.
+- **Everything via WebDAV** (Collectives detects raw PUT/MOVE/DELETE, M0) – title sanitising, emoji and tags would not be controllable that way; creating pages via OCS returns the ID immediately.
+- **`touch` after every PUT** – an additional request with no benefit, duplicate notifications.
 
-## Konsequenzen
+## Consequences
 
-- Konflikterkennung über ETag/412 (M0 bestätigt).
-- ETags pflanzen sich bis `.Collectives/` fort; ein Depth-0-PROPFIND erkennt Inhaltsänderungen günstig. Emoji/Tags ändern keinen ETag – die Seitenliste muss trotzdem geladen werden.
+- Conflict detection via ETag/412 (confirmed in M0).
+- ETags propagate up to `.Collectives/`; a depth-0 PROPFIND detects content changes cheaply. Emoji/tags do not change an ETag – the page list has to be loaded anyway.
