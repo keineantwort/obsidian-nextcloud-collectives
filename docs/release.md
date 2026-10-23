@@ -12,11 +12,19 @@ Ein Release ist ein Git-Tag `x.y.z` (ohne `v`), das genau der `version` in `mani
 
 ## Integrationstests über mehrere Nextcloud-Versionen
 
-`.forgejo/workflows/integration.yml` startet je Version aus `TESTED_NEXTCLOUD_MAJORS` einen frischen Testserver und führt `npm run test:int` aus. Anforderungen an den Runner: [ci-runner.md](ci-runner.md). Er läuft bei jedem Pull Request (wenn Quellcode, Tests oder Testserver-Skripte betroffen sind), bei jedem Push auf `main`, bei Release-Tags, wöchentlich und per „Run workflow“; ein Lauf dauert je Version einige Minuten. Der Merge ist damit durch die volle Suite abgesichert, wenn du `Integration / Nextcloud 33–35` als grün abwartest (der Job `latest` darf rot sein).
+Jeder Job startet einen frischen Testserver der jeweiligen Version (ADR 0024). Anforderungen an den Runner: [ci-runner.md](ci-runner.md).
+
+| Workflow | Was | Versionen | Wann |
+|---|---|---|---|
+| `integration.yml` | `npm run test:int` | die neueste aus `TESTED_NEXTCLOUD_MAJORS` (derzeit 35) und `latest` | jeder Pull Request (wenn Quellcode, Tests oder Testserver-Skripte betroffen sind), jeder Push auf `main`, „Run workflow“ |
+| `nightly.yml` | `npm run test:int` | die beiden davor (derzeit 33, 34) | nachts auf `main`, wenn es seit der Nacht davor einen Merge gab; die Nacht von Mittwoch auf Donnerstag immer; „Run workflow“ |
+| `nightly.yml` | `npm run test:perf` (500 Seiten) | alle aus `TESTED_NEXTCLOUD_MAJORS` und `latest` | wie oben |
+
+Ein Release-Tag startet keine Integrationstests: Der getaggte Stand auf `main` hat sie beim Pull Request und beim Merge bestanden. Vor einem Release lohnt der Blick auf den letzten Lauf von `nightly.yml`; im Zweifel dort „Run workflow“. Die Jobs `latest` dürfen rot sein, sie blockieren keinen Merge. Solange `nextcloud:apache` dasselbe Image wie die aktuelle Version ist, überspringen sie ihre Schritte (`scripts/dev-nextcloud/latest-is-current.sh`).
 
 - Die Nextcloud- und App-Versionen (Collectives, Circles, Text) stehen im Schritt „Versions under test“ und in der Job-Zusammenfassung.
-- Neue Hauptversion: Zeigt der Lauf `latest` eine neue Nextcloud-Version grün, die Nummer in `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **und** in der Matrix von `integration.yml` ergänzen; `tests/unit/testedVersions.test.ts` schlägt sonst fehl.
-- Lokal gegen eine zweite Version: `NC_VERSION=35 NC_PORT=8135 docker compose -p nc-test-35 up -d --wait` im Ordner `scripts/dev-nextcloud`, dann `NC_PORT=8135 NC_VERSION=35 npm run test:int`; Versionen zeigt `sh scripts/dev-nextcloud/versions.sh nc-test-35`.
+- Neue Hauptversion: Zeigt der Lauf `latest` eine neue Nextcloud-Version grün, die Nummer in `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **und** in den Matrizen ergänzen: in `integration.yml` die neue Version statt der bisherigen, die bisherige wandert in den Job `integration` von `nightly.yml` (die älteste fällt dort heraus, wenn sie nicht mehr getestet wird), und in den Job `performance` von `nightly.yml`. `tests/unit/testedVersions.test.ts` schlägt sonst fehl.
+- Lokal gegen eine zweite Version: `NC_VERSION=35 NC_PORT=8135 docker compose -p nc-test-35 up -d --wait` im Ordner `scripts/dev-nextcloud`, dann `NC_PORT=8135 NC_VERSION=35 npm run test:int` (Performance: `npm run test:perf`); Versionen zeigt `sh scripts/dev-nextcloud/versions.sh nc-test-35`.
 
 ## Noch offen (außerhalb des Repos, vom Maintainer zu erledigen)
 

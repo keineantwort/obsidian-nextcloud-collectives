@@ -48,7 +48,7 @@ Das Plugin ist nicht im Community-Store (PLAN §15 Nr. 3). Zwei Wege:
 
 ## 5. Performance (Desktop, Testserver im LAN)
 
-- [ ] Collective mit ≥ 500 Seiten: Leerlauf-Sync (nichts geändert) dauert < 5 s. Der Integrationstest `tests/integration/performance.test.ts` prüft das automatisiert gegen den Docker-Testserver.
+- [ ] Collective mit ≥ 500 Seiten: Leerlauf-Sync (nichts geändert) dauert < 5 s. Der Performance-Test `tests/integration/performance.test.ts` (`npm run test:perf`, nachts in `nightly.yml`) prüft das automatisiert gegen den Docker-Testserver.
 
 ## 6. Diagnose (M10)
 

@@ -14,6 +14,7 @@
     "release:check": "node scripts/check-release.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:int": "vitest run --config vitest.integration.config.ts",
+    "test:perf": "vitest run --config vitest.performance.config.ts",
     "nc:up": "sh scripts/dev-nextcloud/up.sh",
     "nc:down": "sh scripts/dev-nextcloud/down.sh"
   },

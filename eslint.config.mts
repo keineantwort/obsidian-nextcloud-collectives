@@ -14,7 +14,7 @@ export default defineConfig(
 			globals: { ...globals.browser },
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'vitest.config.ts', 'vitest.integration.config.ts'],
+					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'vitest.config.ts', 'vitest.integration.config.ts', 'vitest.performance.config.ts'],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -59,7 +59,7 @@ export default defineConfig(
 	},
 	// Tests run in Node (vitest), not inside Obsidian: Node modules, fetch and globalThis are allowed there.
 	{
-		files: ['tests/**/*.ts', 'vitest.config.ts', 'vitest.integration.config.ts'],
+		files: ['tests/**/*.ts', 'vitest.config.ts', 'vitest.integration.config.ts', 'vitest.performance.config.ts'],
 		languageOptions: { globals: { ...globals.node } },
 		rules: {
 			'obsidianmd/no-nodejs-modules': 'off',
