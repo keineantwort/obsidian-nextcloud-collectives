@@ -2,7 +2,7 @@
 
 Obsidian-Plugin, das alle Collectives eines Nextcloud-Servers bidirektional mit einem Vault synchronisiert.
 
-**Status:** Vorab-Version 0.2.0, noch nicht im Community-Store. Funktionsumfang und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
+**Status:** Vorab-Version 0.2.1, noch nicht im Community-Store. Funktionsumfang und Meilensteine: [PLAN.md](PLAN.md). Hinweise für Coding-Agents: [AGENTS.md](AGENTS.md).
 
 ## Voraussetzungen
 
