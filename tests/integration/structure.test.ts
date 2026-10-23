@@ -1,4 +1,4 @@
-// M5 (PLAN §7.4): every structure and lifecycle case against the local Docker Nextcloud, with an in-memory vault.
+// M5 (architecture §7.4): every structure and lifecycle case against the local Docker Nextcloud, with an in-memory vault.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { readPageId, toRemote } from '../../src/mapping/frontmatter';
@@ -40,7 +40,7 @@ async function remoteText(h: Harness, page: PageInfo): Promise<string> {
 	return (await h.clients.webdav.get(remotePagePath(page))).content;
 }
 
-describe('new local file (PLAN §7.4: neue lokale Datei)', () => {
+describe('new local file (architecture §7.4: new local file)', () => {
 	let ctx: Awaited<ReturnType<typeof setup>>;
 	beforeAll(async () => {
 		ctx = await setup('ONC M5 new');
@@ -80,7 +80,7 @@ describe('new local file (PLAN §7.4: neue lokale Datei)', () => {
 	}, 60_000);
 });
 
-describe('new local files in folders (PLAN §7.4: Elternseite aus Ordner bestimmen)', () => {
+describe('new local files in folders (architecture §7.4: Elternseite aus Ordner bestimmen)', () => {
 	let ctx: Awaited<ReturnType<typeof setup>>;
 	beforeAll(async () => {
 		ctx = await setup('ONC M5 tree');
@@ -131,7 +131,7 @@ describe('new local files in folders (PLAN §7.4: Elternseite aus Ordner bestimm
 	}, 90_000);
 });
 
-describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder verschoben)', () => {
+describe('renamed and moved pages (architecture §7.4: local / remote renamed/moved)', () => {
 	let ctx: Awaited<ReturnType<typeof setup>>;
 	let alpha: PageInfo;
 	let folder: PageInfo;
@@ -302,7 +302,7 @@ describe('renamed and moved pages (PLAN §7.4: lokal / remote umbenannt oder ver
 	}, 90_000);
 });
 
-describe('pages deleted on the server (PLAN §7.4: Remote gelöscht, Gelöscht + gegenüber geändert)', () => {
+describe('pages deleted on the server (architecture §7.4: remote deleted, deleted + changed on the other side)', () => {
 	let ctx: Awaited<ReturnType<typeof setup>>;
 	let a: PageInfo;
 	let b: PageInfo;
@@ -362,7 +362,7 @@ describe('pages deleted on the server (PLAN §7.4: Remote gelöscht, Gelöscht +
 	}, 90_000);
 });
 
-describe('pages deleted in the vault (PLAN §7.4: Lokal gelöscht, Lokal wiederhergestellt)', () => {
+describe('pages deleted in the vault (architecture §7.4: local deleted, restored locally)', () => {
 	let ctx: Awaited<ReturnType<typeof setup>>;
 	let pages: PageInfo[];
 	beforeAll(async () => {
@@ -502,7 +502,7 @@ describe('pages deleted in the vault (PLAN §7.4: Lokal gelöscht, Lokal wiederh
 	}, 60_000);
 });
 
-describe('collectives (PLAN §7.4: neues Collective, Ordner umbenannt oder gelöscht)', () => {
+describe('collectives (architecture §7.4: new collective, folder renamed or deleted)', () => {
 	let h: Harness;
 	let fx: CollectiveFixture;
 	// A fresh vault and state per test, and only the collectives of that test on the server: every run scans them all.
@@ -686,7 +686,7 @@ describe('collectives (PLAN §7.4: neues Collective, Ordner umbenannt oder gelö
 	}, 90_000);
 });
 
-describe('pages between collectives (PLAN §7.4: Collective-übergreifendes Verschieben)', () => {
+describe('pages between collectives (architecture §7.4: moving across collectives)', () => {
 	let h: Harness;
 	let fx: CollectiveFixture;
 	let one: Awaited<ReturnType<CollectiveFixture['collective']>>;

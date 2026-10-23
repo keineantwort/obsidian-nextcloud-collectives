@@ -1,4 +1,4 @@
-// M5 (PLAN §7.4): the planner's decisions for structure and lifecycle cases. One group per row of the table.
+// M5 (architecture §7.4): the planner's decisions for structure and lifecycle cases. One group per row of the table.
 import { describe, expect, it } from 'vitest';
 import {
 	asCollectiveId, asPageId, baseFiles, baseState, collective, localFile, opsOf, page, pageState, planFor, remote, remoteCollective,
@@ -45,7 +45,7 @@ function decided(entries: [string, Decision][]): Map<string, Decision> {
 	return new Map(entries);
 }
 
-describe('planSync: neue lokale Datei', () => {
+describe('planSync: new local file', () => {
 	it('uploads a note without nc_page_id as a page below the landing page', () => {
 		const plan = planFor({ files: [...baseFiles(), localFile('Coll/Neu.md', null)] });
 
@@ -135,7 +135,7 @@ describe('planSync: neue lokale Datei', () => {
 	});
 });
 
-describe('planSync: lokal umbenannt oder verschoben', () => {
+describe('planSync: local renamed/moved', () => {
 	it('renames the page when only the file name changed', () => {
 		const plan = tree({ files: treeFiles().map((f) => (f.path === 'Coll/Seite.md' ? { ...f, path: 'Coll/Anders.md' } : f)) });
 
@@ -260,7 +260,7 @@ describe('planSync: lokal umbenannt oder verschoben', () => {
 	});
 });
 
-describe('planSync: remote verschoben (Collective-übergreifend, Blatt zu Elternseite)', () => {
+describe('planSync: remote moved (across collectives, leaf to parent page)', () => {
 	it('moves the file into the folder of the other collective when the page moved there on the server', () => {
 		const state = treeState();
 		state.collectives['2'] = { collectiveId: asCollectiveId(2), name: 'Zwei', localFolder: 'Zwei' };
@@ -317,7 +317,7 @@ describe('planSync: remote verschoben (Collective-übergreifend, Blatt zu Eltern
 	});
 });
 
-describe('planSync: Remote gelöscht', () => {
+describe('planSync: remote deleted', () => {
 	it('moves an unchanged file to the trash by default', () => {
 		const plan = planFor({ remote: remote([remoteCollective(1, 'Coll', [startPage()])]) });
 
@@ -356,7 +356,7 @@ describe('planSync: Remote gelöscht', () => {
 	});
 });
 
-describe('planSync: Lokal gelöscht', () => {
+describe('planSync: local deleted', () => {
 	const withoutSeite = (): ReturnType<typeof baseFiles> => baseFiles().filter((f) => f.path !== 'Coll/Seite.md');
 
 	it('asks before it deletes the page', () => {
@@ -466,7 +466,7 @@ describe('planSync: Lokal gelöscht', () => {
 	});
 });
 
-describe('planSync: Lokal wiederhergestellt', () => {
+describe('planSync: restored locally', () => {
 	it('restores the page from the Collectives trash when a file with its id reappears', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage()])]),
@@ -491,7 +491,7 @@ describe('planSync: Lokal wiederhergestellt', () => {
 	});
 });
 
-describe('planSync: Gelöscht + gegenüber geändert', () => {
+describe('planSync: deleted + changed on the other side', () => {
 	it('keeps a page the user changed although the server deleted it (the executor revives it)', () => {
 		const plan = planFor({
 			remote: remote([remoteCollective(1, 'Coll', [startPage()])]),
@@ -559,7 +559,7 @@ describe('planSync: neuer lokaler Ordner auf oberster Ebene', () => {
 	});
 });
 
-describe('planSync: Collective remote gelöscht', () => {
+describe('planSync: collective deleted remotely', () => {
 	function vanished(over: Partial<Parameters<typeof planFor>[0]> = {}): ReturnType<typeof planFor> {
 		const state = baseState();
 		const alt = page(50, { title: 'Alt', fileName: 'Readme.md' });
@@ -595,7 +595,7 @@ describe('planSync: Collective remote gelöscht', () => {
 	});
 });
 
-describe('planSync: lokaler Collective-Ordner gelöscht', () => {
+describe('planSync: local collective folder deleted', () => {
 	const noFolder = (): ReturnType<typeof baseFiles> => [];
 
 	it('asks before the collective is deleted', () => {
