@@ -4,7 +4,7 @@ Format und Ablauf: [0001](0001-adrs-as-markdown-in-the-repo.md). Neue ADRs mit [
 
 | Nr. | Entscheidung | Status |
 |---|---|---|
-| [0001](0001-adrs-as-markdown-in-the-repo.md) | ADRs als Markdown im Repository | akzeptiert |
+| [0001](0001-adrs-as-markdown-in-the-repo.md) | ADRs als Markdown im Repository | akzeptiert, Sprache abgelöst durch 0025 |
 | [0002](0002-own-plugin-instead-of-fork.md) | Eigenes Plugin statt Fork von Nextcloud Sync | akzeptiert |
 | [0003](0003-one-server-per-vault.md) | Ein Server pro Vault, alle Collectives bilden den Vault | akzeptiert |
 | [0004](0004-folder-note-convention.md) | Folder-Note-Konvention statt `Readme.md` | akzeptiert |
@@ -28,3 +28,4 @@ Format und Ablauf: [0001](0001-adrs-as-markdown-in-the-repo.md). Neue ADRs mit [
 | [0022](0022-automation-mutex-login-flow-and-throttled-saving.md) | Automatik: Mutex mit Re-Run-Flag, stille Auto-Läufe, Login Flow v2, gedrosseltes Speichern | akzeptiert |
 | [0023](0023-release-version-check-log-and-ci.md) | Release: Versions-Check, Protokoll-Ansicht, Release-CI | akzeptiert, Integrationstest-Auslöser abgelöst durch 0024 |
 | [0024](0024-integration-tests-split-pr-and-nightly.md) | Integrationstests aufgeteilt: aktuelle Version und latest pro PR, ältere und Performance nachts | akzeptiert |
+| [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |
