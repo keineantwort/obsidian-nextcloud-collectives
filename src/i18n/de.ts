@@ -83,7 +83,7 @@ export const de: Record<MessageKey, string> = {
 	'rename.failed': 'Die Seite konnte nicht umbenannt werden.',
 	'rename.noPage': 'Das ist keine Notiz einer synchronisierten Seite, oder es ist die Startseite eines Collectives (benenne stattdessen den Ordner um).',
 	'settings.hideProperties.name': 'Eigenschaften des Plugins ausblenden',
-	'settings.hideProperties.desc': 'Blendet Seiten-ID, Collective-ID, Emoji und Tags (nc_…) in den Eigenschaften einer Notiz aus. Das Emoji setzt du mit dem Befehl oder dem Kontextmenü; Tags stehen in der Eigenschaft „tags“.',
+	'settings.hideProperties.desc': 'Blendet die eigenen Eigenschaften des Plugins (nc_…: Seiten-ID, Collective-ID, Emoji) in den Eigenschaften einer Notiz aus. Tags bleiben in der Eigenschaft „tags“ sichtbar. Das Emoji setzt du mit dem Befehl oder dem Kontextmenü.',
 	'emoji.title': 'Emoji der Seite',
 	'emoji.input.label': 'Emoji (genau eins)',
 	'emoji.invalid': 'Bitte genau ein Emoji eingeben, keinen Text.',

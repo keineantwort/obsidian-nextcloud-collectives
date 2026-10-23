@@ -81,7 +81,7 @@ export const en = {
 	'rename.failed': 'The page could not be renamed.',
 	'rename.noPage': 'This is not a note of a synced page, or it is the start page of a collective (rename its folder instead).',
 	'settings.hideProperties.name': 'Hide the plugin’s properties',
-	'settings.hideProperties.desc': 'Hides page ID, collective ID, emoji and tags (nc_…) in the properties of a note. Set the emoji with the command or the context menu; tags are in the property “tags”.',
+	'settings.hideProperties.desc': 'Hides the plugin’s own properties (nc_…: page ID, collective ID, emoji) in the properties of a note. Tags stay visible in the property “tags”. Set the emoji with the command or the context menu.',
 	'emoji.title': 'Page emoji',
 	'emoji.input.label': 'Emoji (exactly one)',
 	'emoji.invalid': 'Please enter exactly one emoji, no text.',
