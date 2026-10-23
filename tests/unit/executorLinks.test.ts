@@ -16,7 +16,6 @@ import { MemoryVault } from '../fakes/memoryVault';
 
 const META_HASH = '97294f05c3603881a6466e787eb8726dde04588d242bea02914b0f0a8e12bdb2';
 const SRC_PATH = 'Coll/Start.md';
-const DST_PATH = 'Coll/Ziel.md';
 
 function page(id: number, title: string): PageInfo {
 	return {

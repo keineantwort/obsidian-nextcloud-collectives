@@ -65,6 +65,8 @@ export default defineConfig(
 			'obsidianmd/no-nodejs-modules': 'off',
 			'no-restricted-globals': 'off',
 			'obsidianmd/no-global-this': 'off',
+			// Fixtures model the default config folder on purpose; src/ still gets the rule.
+			'obsidianmd/hardcoded-config-path': 'off',
 		},
 	},
 );
