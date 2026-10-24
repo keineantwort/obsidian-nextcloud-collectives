@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { asCollectiveId, asPageId, asTagId } from '../../src/api/types';
 import type { Collective, PageInfo } from '../../src/api/types';
-import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote } from '../../src/mapping/frontmatter';
+import { canonicalRemote, readPageId, replaceNcMeta, toLocal, toRemote, withMetaOnly } from '../../src/mapping/frontmatter';
 import type { NcMeta } from '../../src/mapping/frontmatter';
 import { pathKey, remotePagePath } from '../../src/mapping/paths';
 import { executeSync } from '../../src/sync/executor';
@@ -1216,5 +1216,139 @@ describe('executeSync: pages in status conflict are never pushed', () => {
 		expect(h.dav.requests).toEqual([]);
 		expect(result.pushed).toBe(0);
 		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT });
+	});
+});
+
+describe('executeSync: a page already in conflict whose remote changes again', () => {
+	const REMOTE_V3 = '# Notiz\n\nDritte Fassung\n';
+	const NOTE_CONFLICT_2 = `Coll/Notiz${CONFLICT_SUFFIX} (2).md`;
+	const USER_TEXT = '# Eigene Notiz\n\nVon mir\n';
+
+	/** Run 1: the local file has an edit on top of REMOTE_V1, the remote moved on to REMOTE_V2. Leaves a conflict at NOTE_CONFLICT. */
+	async function firstConflict(h: Harness, meta: NcMeta): Promise<string> {
+		const localText = `${toLocal(REMOTE_V1, meta)}Mein Zusatz\n`;
+		h.vault.seed(NOTE_PATH, localText);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		const newer = page(10, { timestamp: 2000, size: 30 });
+		h.dav.serve(newer, REMOTE_V2, '"e2"');
+		await executeSync(plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]), h.deps);
+		return localText;
+	}
+
+	/** Run 2: the remote moved on again to REMOTE_V3; the local file is unchanged since run 1. */
+	async function remoteMovesToV3(h: Harness, meta: NcMeta) {
+		const newest = page(10, { timestamp: 3000, size: 30 });
+		h.dav.serve(newest, REMOTE_V3, '"e3"');
+		return executeSync(plan([{ kind: 'update', page: newest, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]), h.deps);
+	}
+
+	/** Paths of all conflict copies in the vault. */
+	function conflictCopies(h: Harness): string[] {
+		return h.vault
+			.listFiles()
+			.map((file) => file.path)
+			.filter((path) => path.includes('(Konflikt'));
+	}
+
+	it('updates the existing conflict copy in place and creates no second copy', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = await firstConflict(h, meta);
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V3));
+		expect(conflictCopies(h)).toEqual([NOTE_CONFLICT]);
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({
+			status: 'conflict',
+			conflictPath: NOTE_CONFLICT,
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V3)),
+			remoteEtag: '"e3"',
+		});
+	});
+
+	it('keeps a conflict copy the user edited and writes the new remote text to a new copy', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = await firstConflict(h, meta);
+		const edited = `${canonicalRemote(REMOTE_V2)}Von mir ergänzt\n`;
+		h.vault.userEdit(NOTE_CONFLICT, edited);
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(edited);
+		expect(await h.vault.read(NOTE_CONFLICT_2)).toBe(canonicalRemote(REMOTE_V3));
+		expect(conflictCopies(h)).toEqual([NOTE_CONFLICT, NOTE_CONFLICT_2]);
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
+	});
+
+	it('creates a new conflict copy when the user deleted the old copy', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = await firstConflict(h, meta);
+		await h.vault.remove(NOTE_CONFLICT);
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT_2)).toBe(canonicalRemote(REMOTE_V3));
+		expect(conflictCopies(h)).toEqual([NOTE_CONFLICT_2]);
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
+	});
+
+	it('updates the conflict copy of a collision page in place and keeps the unlinked user file', async () => {
+		const h = harness();
+		h.vault.seed(NOTE_PATH, USER_TEXT);
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		h.vault.seed(NOTE_CONFLICT, canonicalRemote(REMOTE_V1));
+		h.state.pages['10'] = {
+			...stateOf(h, NOTE),
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V1)),
+			status: 'collision',
+			conflictPath: NOTE_CONFLICT,
+		};
+		const newer = page(10, { timestamp: 2000, size: 30 });
+		h.dav.serve(newer, REMOTE_V2, '"e2"');
+
+		const result = await executeSync(
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta: metaOf(10), metaHash: META_HASH_2, metaChanged: true }]),
+			h.deps,
+		);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V2));
+		expect(conflictCopies(h)).toEqual([NOTE_CONFLICT]);
+		expect(await h.vault.read(NOTE_PATH)).toBe(USER_TEXT);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'collision', conflictPath: NOTE_CONFLICT });
+	});
+
+	it('never overwrites a conflict copy whose metadata the user changed and writes a new copy instead', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = `${toLocal(REMOTE_V1, meta)}Mein Zusatz\n`;
+		h.vault.seed(NOTE_PATH, localText);
+		const metaCopy = withMetaOnly(canonicalRemote(REMOTE_V2), { emoji: null, tags: ['x'] });
+		h.vault.seed(NOTE_CONFLICT, metaCopy);
+		h.deps.occupied.add(pathKey(NOTE_CONFLICT));
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		h.state.pages['10'] = {
+			...stateOf(h, NOTE),
+			status: 'conflict',
+			conflictPath: NOTE_CONFLICT,
+			baseHash: await sha256Hex(canonicalRemote(REMOTE_V2)),
+		};
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(metaCopy);
+		expect(await h.vault.read(NOTE_CONFLICT_2)).toBe(canonicalRemote(REMOTE_V3));
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
 	});
 });

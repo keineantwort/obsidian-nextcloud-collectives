@@ -530,3 +530,45 @@ describe('applyResolution keepLocal on a state written before M4', () => {
 		expect(vault.trashed).toEqual([NOTE_CONFLICT]);
 	});
 });
+
+describe('applyResolution with expectedBaseHash', () => {
+	it('refuses a choice made on a conflict copy that was updated since, and changes neither state nor files', async () => {
+		const vault = new RecordingVault();
+		vault.seedFolder('Coll');
+		vault.seed(NOTE_PATH, LOCAL_TEXT);
+		vault.seed(NOTE_CONFLICT, REMOTE_TEXT);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: NOTE_PATH, conflictPath: NOTE_CONFLICT, baseHash: 'base-new' })), vault);
+		const before = structuredClone(ctx.state);
+
+		const applied = await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', {
+			localPath: NOTE_PATH,
+			expectedConflictPath: NOTE_CONFLICT,
+			expectedBaseHash: 'base-old',
+		});
+
+		expect(applied).toBe(false);
+		expect(ctx.state).toEqual(before);
+		expect(await vault.read(NOTE_PATH)).toBe(LOCAL_TEXT);
+		expect(await vault.read(NOTE_CONFLICT)).toBe(REMOTE_TEXT);
+		expect(vault.trashed).toEqual([]);
+	});
+
+	it('resolves as before when the expected base hash equals the page base hash', async () => {
+		const vault = new RecordingVault();
+		vault.seedFolder('Coll');
+		vault.seed(NOTE_PATH, LOCAL_TEXT);
+		vault.seed(NOTE_CONFLICT, REMOTE_TEXT);
+		const ctx = setup(stateWith(pageState(10, { status: 'conflict', localPath: NOTE_PATH, conflictPath: NOTE_CONFLICT, baseHash: 'base-now' })), vault);
+
+		const applied = await applyResolution(ctx.deps, PAGE_ID, 'keepLocal', {
+			localPath: NOTE_PATH,
+			expectedConflictPath: NOTE_CONFLICT,
+			expectedBaseHash: 'base-now',
+		});
+
+		expect(applied).toBe(true);
+		expect(ctx.state.pages['10']).toMatchObject({ status: 'synced', conflictPath: null });
+		expect(await vault.read(NOTE_PATH)).toBe(LOCAL_TEXT);
+		expect(vault.trashed).toEqual([NOTE_CONFLICT]);
+	});
+});
