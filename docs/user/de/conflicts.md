@@ -13,7 +13,7 @@ Mit der Standardeinstellung („Beide behalten (Konfliktkopie)“) überschreibt
 - Deine Datei bleibt unverändert.
 - Die Server-Fassung wird daneben als `Titel (Konflikt JJJJ-MM-TT HHmm).md` abgelegt. Diese Kopie wird nicht synchronisiert. Läuft Obsidian auf Englisch, heißt die Kopie `Title (Conflict …).md`.
 - Die Seite wird erst wieder hochgeladen, wenn du den Konflikt aufgelöst hast.
-- Ändert sich die Server-Fassung erneut, bevor du den Konflikt aufgelöst hast, aktualisiert das Plugin die Konfliktkopie damit; der Name behält die Uhrzeit des ersten Konflikts. Hast du die Konfliktkopie selbst bearbeitet, bleibt sie unverändert, und eine weitere Kopie wird angelegt.
+- Ändert sich die Server-Fassung erneut, bevor du den Konflikt aufgelöst hast, aktualisiert das Plugin die Konfliktkopie damit; der Name behält die Uhrzeit des ersten Konflikts. Hast du die Konfliktkopie bearbeitet, verschoben oder gelöscht, lässt das Plugin sie in Ruhe und legt eine weitere Kopie an. Beim Auflösen kommt nur die neueste Kopie in den Papierkorb; eine ältere, selbst bearbeitete Kopie löschst du, wenn du sie nicht mehr brauchst.
 
 Die Zusammenfassung der Synchronisierung sagt das: „1 Konflikt: Deine Datei bleibt erhalten, die Server-Fassung liegt daneben mit „Konflikt“ im Namen. Mit dem Befehl „Konflikte anzeigen“ entscheidest du, welche Fassung bleibt.“
 

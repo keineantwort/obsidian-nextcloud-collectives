@@ -8,7 +8,7 @@
 
 While a page is in status `conflict` or `collision`, it is not pushed, and every further change on the server meets "both sides changed" again. Until now each such run created one more conflict copy (`Title (Conflict …).md`). A page edited often in the browser collected one copy per sync, and only the latest one was moved to the trash on resolution.
 
-Two things must hold: the user's data is never overwritten without asking (AGENTS rule 4), and a choice in the conflict dialog only applies to the server version the dialog showed (ADR 0017).
+Two things must hold: the user's data is never overwritten without asking (AGENTS rule 4), and a choice in the conflict dialog only applies to the server version the dialog showed (ADR 0017). ADR 0017 checks this by the path of the copy only (its consequence "A resolution only applies to the conflict copy that the dialog showed").
 
 ## Decision
 
@@ -16,7 +16,7 @@ Two things must hold: the user's data is never overwritten without asking (AGENT
 - The copy is only overwritten if it is unchanged: it must be byte-identical to the text the plugin writes for the server version it holds, that version must hash to the page's `baseHash`, and the file must not change between reading and writing (`writeIfUnchanged`). Otherwise, or if the copy is gone, a new copy is created as before. A hash of `toRemote(copy)` alone is not enough: `toRemote` drops the `nc_*` and `tags` lines, so a metadata conflict copy or a tag edit in the copy would count as unchanged. The rule covers copies the user edited, metadata conflict copies and states from before M4 (`baseHash: ''`).
 - The conflict dialog guards against a stale view by the hash as well: `ConflictEntry` carries the `baseHash` from the time the list was taken, and `applyResolution` refuses the choice if it differs from the current one (`expectedBaseHash`), in addition to the existing check of the path (`expectedConflictPath`). The dialog then reloads the list ("stale" message).
 - The run still counts the page as a conflict (`result.conflicts`), so the summary tells that the server changed again. The log says "Conflict copy updated" instead of "Conflict copy created".
-- Attachment conflict copies (`name (Conflict …).png`) are not affected: an attachment has no conflict status, a copy is only created once per collision.
+- Attachment conflict copies (`name (Conflict …).png`) are out of scope: an attachment changed locally still gets a new copy for each further server change, because its state has no conflict path (`executorAttachments.ts`). Follow-up issue: see below.
 
 ## Alternatives considered
 
@@ -28,5 +28,5 @@ Two things must hold: the user's data is never overwritten without asking (AGENT
 ## Consequences
 
 - positive: one conflict copy per page, however often the server changes; the copy always shows the current server version.
-- negative / cost: one extra read and hash of the copy per conflict run. The timestamp in the name is the time of the first conflict, not of the server version in it. An open dialog that shows a copy updated in the background refuses the choice once and reloads.
-- follow-up work: none.
+- negative / cost: one extra read and hash of the copy per conflict run. The timestamp in the name is the time of the first conflict, not of the server version in it. An open dialog that shows a copy updated in the background refuses the choice once and reloads. A copy the user edited stays when a new one is created; resolving the conflict only moves the latest copy (`conflictPath`) to the trash, so the older one has to be deleted by hand.
+- follow-up work: update attachment conflict copies the same way (needs a conflict path per attachment in the state).

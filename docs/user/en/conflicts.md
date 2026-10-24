@@ -13,7 +13,7 @@ With the default setting ("Keep both (conflict copy)"), the plugin overwrites no
 - Your file stays unchanged.
 - The server version is saved next to it as `Title (Conflict YYYY-MM-DD HHmm).md`. This copy is not synced. With Obsidian in German, the copy is called `Titel (Konflikt …).md`.
 - The page is not uploaded again until you have resolved the conflict.
-- If the server version changes again before you have resolved the conflict, the plugin updates the conflict copy with it; the name keeps the time of the first conflict. If you edited the conflict copy yourself, it stays as it is and a further copy is created.
+- If the server version changes again before you have resolved the conflict, the plugin updates the conflict copy with it; the name keeps the time of the first conflict. If you edited, moved or deleted the conflict copy, the plugin leaves it alone and creates a further copy. When you resolve the conflict, only the newest copy goes to the trash; delete an older copy you edited yourself when you no longer need it.
 
 The sync summary says so: "1 conflict: your file was kept, and the server version was saved next to it with “Conflict” in its name. Use the command “Show conflicts” to decide which version to keep."
 

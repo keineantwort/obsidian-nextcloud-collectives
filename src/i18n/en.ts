@@ -149,7 +149,7 @@ export const en = {
 	'conflicts.remaining.other': '{count} conflicts left.',
 	'conflicts.reappeared': 'The server version of “{name}” changed again in the meantime, so there is a new conflict.',
 	'conflicts.allResolved': 'All conflicts are resolved.',
-	'conflicts.stale': 'This conflict was already resolved. The list has been updated.',
+	'conflicts.stale': 'This conflict was resolved or changed in the meantime. The list has been updated.',
 	'conflicts.resolveFailed': 'Your choice could not be applied. Please try again.',
 	'conflicts.none': 'There are no open conflicts.',
 	'settings.newFolder.name': 'New top-level folders',

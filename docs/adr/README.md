@@ -20,7 +20,7 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0014](0014-app-password-input-without-secretcomponent.md) | App password via a password field, the plugin assigns the secret ID | accepted |
 | [0015](0015-http-error-mapping-and-retry.md) | Central HTTP error mapping, 403 ≠ `AuthError`, retry only for read requests | accepted |
 | [0016](0016-pull-text-based-frontmatter-and-sync-state.md) | Pull: text-based frontmatter, sync state as a separate file, conflict copy instead of overwriting | accepted |
-| [0017](0017-push-etag-confirmation-and-conflict-resolution.md) | Push: confirmed ETags, decision as a pure function, conflict resolution via the state | accepted, further copies per conflict superseded by 0027 |
+| [0017](0017-push-etag-confirmation-and-conflict-resolution.md) | Push: confirmed ETags, decision as a pure function, conflict resolution via the state | accepted, stale-choice check extended by 0027 |
 | [0018](0018-structure-multiple-passes-confirmations-and-placement.md) | Structure: multiple passes, confirmations as proposals, placement of new files | accepted |
 | [0019](0019-tags-emoji-push-and-tags-property.md) | Tags and emoji: push via the metaHash, the `tags` property stays page content | accepted |
 | [0020](0020-links-index-anchors-and-hash.md) | Links: page index, anchors unchanged, hash in the remote format | accepted |
