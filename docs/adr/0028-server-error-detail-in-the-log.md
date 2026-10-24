@@ -17,6 +17,7 @@ The log must not contain credentials (AGENTS.md, rule 5), and it must not contai
 - `extractErrorDetail` (`src/api/errorDetail.ts`, pure) reads only two known shapes, never the raw body: `ocs.meta.message` from a JSON body, and `<s:exception>: <s:message>` from an XML body whose root is `{DAV:}error`. Anything else gives no detail.
 - The detail is cleaned before it is stored: whitespace collapsed, the secrets of the request replaced by `***` (app password and username in `HttpClient`, the poll token in the Login Flow; only values of at least 3 characters, so a very short username does not mangle the text), cut to 200 characters.
 - The log sites use `errorLogFields(err)` (`src/util/errors.ts`): the error class plus the detail. The error message itself is still never logged.
+- The production build keeps class names (esbuild `keepNames`, `esbuild.options.mjs`). Without it the minifier renamed the error classes and the log read `error=Q` (found in the manual test; present since the first release). `tests/unit/bundle.test.ts` bundles `errors.ts` with these options and checks the names. Cost: about 11 KB more in `main.js` (≈ 5 %).
 
 ## Alternatives considered
 

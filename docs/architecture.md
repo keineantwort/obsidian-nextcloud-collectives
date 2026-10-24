@@ -41,7 +41,7 @@ The plugin is an independent implementation; existing plugins serve only as refe
 | Topic | Rule |
 |---|---|
 | Language | TypeScript, `strict: true` |
-| Build | esbuild, based on the official `obsidian-sample-plugin` |
+| Build | esbuild, based on the official `obsidian-sample-plugin`; options in `esbuild.options.mjs`, minified with `keepNames` so error class names survive for the log (ADR 0028) |
 | HTTP | only `requestUrl` from `obsidian` (avoids CORS, works on mobile). No `fetch`, no Node modules |
 | Hashing | Web Crypto `crypto.subtle.digest('SHA-256', …)` |
 | File access | only the Obsidian vault API (`app.vault`, `app.fileManager`), no `fs` |
