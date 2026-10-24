@@ -6,6 +6,8 @@ An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud
 
 **Status:** pre-release, version 0.2.1. The plugin is not in the Obsidian community store yet; install it with BRAT or by hand (see [Installation](#installation)).
 
+![File list in Obsidian with the collectives as folders and page emoji in front of the note titles](docs/images/en/file-list.png)
+
 ## Features
 
 - All collectives of your account, each as a top-level folder of the vault.
@@ -18,6 +20,24 @@ An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud
 - Automatic sync: on startup, at an interval, after you stop editing, and when you return to the app on your phone.
 - Sign-in with the browser (Nextcloud Login Flow) or with an app password. Your main password is never needed.
 - User interface in English and German.
+
+## Screenshots
+
+Conflict dialog: choose which version to keep.
+
+![The dialog "Sync conflicts" with the differences between the file in the vault and the page on the server](docs/images/en/conflict.png)
+
+Deleting on the server needs your tick first.
+
+![The dialog "Confirm changes" asking before a page deleted in the vault is deleted on the server](docs/images/en/delete-confirm.png)
+
+Settings: server, sign-in and app password.
+
+![The settings of the plugin with server URL, username, sign-in with the browser and app password](docs/images/en/settings.png)
+
+The log for reporting problems; credentials are never logged.
+
+![The log of the session with the Nextcloud version and a created conflict copy](docs/images/en/log.png)
 
 ## Requirements
 

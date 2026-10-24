@@ -6,6 +6,8 @@ Ein Obsidian-Plugin, das alle [Nextcloud Collectives](https://apps.nextcloud.com
 
 **Status:** Vorab-Version 0.2.1. Das Plugin ist noch nicht im Community-Store von Obsidian; installiere es mit BRAT oder von Hand (siehe [Installation](#installation)).
 
+![Dateiliste in Obsidian mit den Collectives als Ordner und dem Seiten-Emoji vor den Notiztiteln](docs/images/de/file-list.png)
+
 ## Funktionen
 
 - Alle Collectives deines Kontos, jedes als Ordner auf oberster Ebene des Vaults.
@@ -18,6 +20,24 @@ Ein Obsidian-Plugin, das alle [Nextcloud Collectives](https://apps.nextcloud.com
 - Automatische Synchronisierung: beim Start, im Intervall, nachdem du aufgehört hast zu schreiben, und wenn du auf dem Handy zur App zurückkehrst.
 - Anmeldung im Browser (Nextcloud Login Flow) oder mit App-Passwort. Dein Hauptpasswort wird nie gebraucht.
 - Oberfläche auf Deutsch und Englisch.
+
+## Screenshots
+
+Konflikt-Dialog: Du wählst, welche Fassung bleibt.
+
+![Der Dialog „Synchronisierungskonflikte“ mit den Unterschieden zwischen der Datei im Vault und der Seite auf dem Server](docs/images/de/conflict.png)
+
+Löschen auf dem Server erst nach deinem Haken.
+
+![Der Dialog „Änderungen bestätigen“ fragt, bevor eine im Vault gelöschte Seite auf dem Server gelöscht wird](docs/images/de/delete-confirm.png)
+
+Einstellungen: Server, Anmeldung und App-Passwort.
+
+![Die Einstellungen des Plugins mit Server-URL, Benutzername, Anmeldung im Browser und App-Passwort](docs/images/de/settings.png)
+
+Das Protokoll zum Melden von Fehlern; Zugangsdaten werden nie protokolliert.
+
+![Das Protokoll der Sitzung mit der Nextcloud-Version und einer angelegten Konfliktkopie](docs/images/de/log.png)
 
 ## Voraussetzungen
 
