@@ -387,7 +387,7 @@ Vault events triggered by the plugin itself must not trigger a new sync: paths a
 - Conflict dialog ("Show conflicts"): list of all conflicts; per page a diff (line-based, own LCS implementation `src/util/diff.ts`) and the buttons "Keep local" (→ push with the ETag from the time of the conflict), "Take remote", "Later". The choice only changes the state; a normal sync follows, and the conflict copy goes to Obsidian's trash ([ADR 0017](adr/0017-push-etag-confirmation-and-conflict-resolution.md)). "Keep local" on a collision links the user file to the page (minimal `nc_*` fields).
 - Further strategies as a setting: `preferLocal`, `preferRemote` (they overwrite the other side without asking; pages already in conflict still need a decision).
 - The status bar shows the number of open conflicts.
-- If the server version changes again while a page is in `conflict`, a further conflict copy is created.
+- If the server version changes again while a page is in `conflict`/`collision`, the existing conflict copy is updated with it (same file name); a copy the user edited or deleted is kept, and a new copy is created then. The conflict dialog refuses a choice made against an older server version (`expectedBaseHash`) ([ADR 0027](adr/0027-update-existing-conflict-copy.md)).
 
 ## 9. Links and attachments
 
