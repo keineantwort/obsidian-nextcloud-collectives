@@ -11,6 +11,7 @@ The command **Show log** (also the button **Show log** in the settings under "Di
 ![The log of the session with the Nextcloud version and a created conflict copy](../../images/en/log.png)
 
 - Credentials are never logged.
+- When the server refuses an operation, the entry contains the server's reason as `detail` (for example `Tag already exists for collective: Projekt`). It can contain names of collectives, pages or tags, never passwords or page contents.
 - The log is kept in memory only (the last 500 entries) and is gone after a restart of Obsidian. Copy it right after the problem happened.
 - With the setting [Detailed log](settings.md#detailed-log), every request to the server is listed too (method, path, status, duration; never passwords or contents). The paths contain your username and the names of collectives and pages.
 

@@ -30,3 +30,4 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted, paths filter superseded by 0026 |
 | [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |
 | [0026](0026-required-checks-and-retried-app-install.md) | Required checks for main, in-job change detection, retried app installation | accepted |
+| [0028](0028-server-error-detail-in-the-log.md) | Server error detail (OCS message, Sabre exception) in `ServerError` and the log | accepted |

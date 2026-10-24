@@ -11,6 +11,7 @@ Der Befehl **Protokoll anzeigen** (auch der Knopf **Protokoll anzeigen** in den 
 ![Das Protokoll der Sitzung mit der Nextcloud-Version und einer angelegten Konfliktkopie](../../images/de/log.png)
 
 - Zugangsdaten werden nie protokolliert.
+- Lehnt der Server einen Vorgang ab, enthält der Eintrag seine Begründung als `detail` (zum Beispiel `Tag already exists for collective: Projekt`; der Server antwortet auf Englisch). Sie kann Namen von Collectives, Seiten oder Tags enthalten, nie Passwörter oder Seiteninhalte.
 - Das Protokoll liegt nur im Speicher (die letzten 500 Einträge) und ist nach einem Neustart von Obsidian weg. Kopiere es gleich, nachdem das Problem aufgetreten ist.
 - Mit der Einstellung [Ausführliches Protokoll](settings.md#ausführliches-protokoll) steht zusätzlich jede Anfrage an den Server darin (Methode, Pfad, Status, Dauer; nie Passwörter oder Inhalte). Die Pfade enthalten deinen Benutzernamen und die Namen von Collectives und Seiten.
 
