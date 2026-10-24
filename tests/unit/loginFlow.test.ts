@@ -57,6 +57,15 @@ describe('startLoginFlow', () => {
 	it('wraps a transport failure in NetworkError', async () => {
 		await expect(startLoginFlow(SERVER, async () => { throw new Error('offline'); })).rejects.toBeInstanceOf(NetworkError);
 	});
+
+	it('rejects a 503 with a ServerError carrying the OCS message of the body as detail', async () => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'failure', statuscode: 503, message: 'Maintenance mode is active' } } });
+
+		const err = await startLoginFlow(SERVER, async () => res(503, body)).catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('Maintenance mode is active');
+	});
 });
 
 const START: LoginFlowStart = { loginUrl: `${SERVER}/login`, pollEndpoint: `${SERVER}/poll`, pollToken: 'a b&c' };
@@ -94,6 +103,17 @@ describe('pollLoginFlow', () => {
 	it('maps 401 to AuthError and 5xx to ServerError', async () => {
 		await expect(pollLoginFlow(START, async () => res(401))).rejects.toBeInstanceOf(AuthError);
 		await expect(pollLoginFlow(START, async () => res(503))).rejects.toBeInstanceOf(ServerError);
+	});
+
+	it('rejects a 500 with a ServerError whose detail masks the poll token', async () => {
+		const body = JSON.stringify({ ocs: { meta: { message: `Token ${START.pollToken} is broken` } } });
+
+		const err = await pollLoginFlow(START, async () => res(500, body)).catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ServerError);
+		const detail = (err as ServerError).detail;
+		expect(detail).not.toContain(START.pollToken);
+		expect(detail).toContain('***');
 	});
 
 	it('keeps the app password out of error messages', async () => {

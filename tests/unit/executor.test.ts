@@ -673,7 +673,7 @@ describe('executeSync: errors', () => {
 		h.vault.seed(NOTE_PATH, toLocal(REMOTE_V1, meta));
 		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
 		const newer = page(10, { timestamp: 2000 });
-		h.dav.fail(newer, new ServerError(500, 'm', 'Disk full'));
+		h.dav.fail(newer, new ServerError(500, 'm', { detail: 'Disk full' }));
 
 		await executeSync(
 			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
