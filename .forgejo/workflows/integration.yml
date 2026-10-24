@@ -8,18 +8,12 @@ name: Integration (Nextcloud versions)
 # tests the newest image as an early warning for the next major version; it may fail without failing the workflow, and it
 # skips its steps while the newest image is the current version (scripts/dev-nextcloud/latest-is-current.sh).
 # A release tag does not run the tests again: the tagged commit on main has passed them on its pull request and its merge.
+# "Nextcloud 35" is a required status check for merging into main (docs/release.md), so the workflow has no paths filter:
+# without a run, a pull request that changes only documentation could never be merged. Instead the job skips its steps
+# when the pull request touches nothing the tests depend on.
 # Runs on the runner label docker-host (requirements: docs/ci-runner.md).
 on:
   pull_request:
-    # Only changes that can affect the tests; a push to main always runs them.
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "scripts/dev-nextcloud/**"
-      - ".forgejo/workflows/integration.yml"
-      - "vitest.*.config.ts"
-      - "package.json"
-      - "package-lock.json"
   push:
     branches: [main]
   workflow_dispatch:
@@ -49,20 +43,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The checkout of a pull request is the merge with its base, so the diff against the base holds exactly its changes.
+      # If git cannot tell, the tests run.
+      - name: Skip if the pull request does not affect the tests
+        if: github.event_name == 'pull_request'
+        run: |
+          RELEVANT='^(src/|tests/|scripts/dev-nextcloud/|\.forgejo/workflows/integration\.yml$|vitest\..*\.config\.ts$|package(-lock)?\.json$)'
+          if git fetch -q --depth=1 origin "${{ github.base_ref }}" && CHANGED=$(git diff --name-only FETCH_HEAD HEAD) \
+            && ! printf '%s\n' "$CHANGED" | grep -qE "$RELEVANT"; then
+            echo "SKIP_TESTS=true" >> "$GITHUB_ENV"
+            echo "The pull request changes nothing the integration tests depend on, nothing to test." | tee "$GITHUB_STEP_SUMMARY"
+          fi
+
       # "latest" is often the same image as the current version; then its job would only repeat that one and is skipped.
       - name: Skip latest if it is the current version
-        if: matrix.nc == 'latest'
+        if: matrix.nc == 'latest' && env.SKIP_TESTS != 'true'
         run: |
-          SAME=$(sh scripts/dev-nextcloud/latest-is-current.sh)
-          echo "SAME_AS_CURRENT=${SAME}" >> "$GITHUB_ENV"
-          if [ "$SAME" = "true" ]; then echo "nextcloud:apache is the current version, nothing to test." | tee "$GITHUB_STEP_SUMMARY"; fi
+          if [ "$(sh scripts/dev-nextcloud/latest-is-current.sh)" = "true" ]; then
+            echo "SKIP_TESTS=true" >> "$GITHUB_ENV"
+            echo "nextcloud:apache is the current version, nothing to test." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install dependencies
-        if: env.SAME_AS_CURRENT != 'true'
+        if: env.SKIP_TESTS != 'true'
         run: npm ci
 
       - name: Configure the test server
-        if: env.SAME_AS_CURRENT != 'true'
+        if: env.SKIP_TESTS != 'true'
         working-directory: scripts/dev-nextcloud
         run: |
           cp .env.example .env
@@ -74,28 +81,28 @@ jobs:
       # always run then). "up" would reuse it with all pages of that run, which makes every later test slow (see
       # tests/integration/performance.test.ts), so each run first deletes what is left.
       - name: Start Nextcloud with Collectives
-        if: env.SAME_AS_CURRENT != 'true'
+        if: env.SKIP_TESTS != 'true'
         working-directory: scripts/dev-nextcloud
         run: |
           docker compose down -v --remove-orphans
           docker compose up -d --wait --wait-timeout 600
 
       - name: Versions under test
-        if: env.SAME_AS_CURRENT != 'true'
+        if: env.SKIP_TESTS != 'true'
         run: |
           sh scripts/dev-nextcloud/versions.sh | tee "$GITHUB_STEP_SUMMARY"
 
       # Without a TTY the default reporter prints only whole files; verbose shows every test, so a hang is visible.
       - name: Integration tests
-        if: env.SAME_AS_CURRENT != 'true'
+        if: env.SKIP_TESTS != 'true'
         run: npm run test:int -- --reporter=verbose
 
       - name: Server log on failure
-        if: failure() && env.SAME_AS_CURRENT != 'true'
+        if: failure() && env.SKIP_TESTS != 'true'
         working-directory: scripts/dev-nextcloud
         run: docker compose logs --tail 200 nextcloud
 
       - name: Stop and delete the test server
-        if: always() && env.SAME_AS_CURRENT != 'true'
+        if: always() && env.SKIP_TESTS != 'true'
         working-directory: scripts/dev-nextcloud
         run: docker compose down -v

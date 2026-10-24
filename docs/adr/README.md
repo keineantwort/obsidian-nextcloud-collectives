@@ -27,5 +27,6 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0021](0021-attachments-embeds-index-and-reconciliation.md) | Attachments: embeds via the index, reconciliation via ETags, step after the content | accepted |
 | [0022](0022-automation-mutex-login-flow-and-throttled-saving.md) | Automation: mutex with re-run flag, silent auto runs, Login Flow v2, throttled saving | accepted |
 | [0023](0023-release-version-check-log-and-ci.md) | Release: version check, log view, release CI | accepted, integration test trigger superseded by 0024 |
-| [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted |
+| [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted, paths filter superseded by 0026 |
 | [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |
+| [0026](0026-required-checks-and-retried-app-install.md) | Required checks for main, in-job change detection, retried app installation | accepted |
