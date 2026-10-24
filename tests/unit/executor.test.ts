@@ -1351,4 +1351,40 @@ describe('executeSync: a page already in conflict whose remote changes again', (
 		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
 		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
 	});
+
+	it('creates a new copy for a conflict state written before M4 (baseHash empty)', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = await firstConflict(h, meta);
+		h.state.pages[String(NOTE.id)] = { ...stateOf(h, NOTE), baseHash: '' };
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(canonicalRemote(REMOTE_V2));
+		expect(await h.vault.read(NOTE_CONFLICT_2)).toBe(canonicalRemote(REMOTE_V3));
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
+	});
+
+	it('creates a new copy and overwrites nothing when the copy changes between read and write', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		const localText = await firstConflict(h, meta);
+		const edited = `${canonicalRemote(REMOTE_V2)}Von mir nach dem Lesen\n`;
+		// The user edits the copy after the plugin read it and before vault.process runs (one-shot).
+		h.vault.beforeProcess = (path) => {
+			if (path !== NOTE_CONFLICT) return;
+			h.vault.beforeProcess = null;
+			h.vault.userEdit(NOTE_CONFLICT, edited);
+		};
+
+		const result = await remoteMovesToV3(h, meta);
+
+		expect(await h.vault.read(NOTE_CONFLICT)).toBe(edited);
+		expect(await h.vault.read(NOTE_CONFLICT_2)).toBe(canonicalRemote(REMOTE_V3));
+		expect(await h.vault.read(NOTE_PATH)).toBe(localText);
+		expect(result).toEqual({ ...ZERO_RESULT, conflicts: 1 });
+		expect(stateOf(h, NOTE)).toMatchObject({ status: 'conflict', conflictPath: NOTE_CONFLICT_2 });
+	});
 });
