@@ -97,6 +97,7 @@ describe('listConflicts', () => {
 				status: 'collision',
 				localPath: 'Coll/Alpha.md',
 				conflictPath: null,
+				baseHash: '',
 			},
 			{
 				pageId: asPageId(1),
@@ -104,6 +105,7 @@ describe('listConflicts', () => {
 				status: 'conflict',
 				localPath: 'Coll/Zeta.md',
 				conflictPath: 'Coll/Zeta (Konflikt 2026-10-16 1430).md',
+				baseHash: 'base-1',
 			},
 		]);
 	});
