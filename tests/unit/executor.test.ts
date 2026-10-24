@@ -13,7 +13,7 @@ import type { RemoteSnapshot } from '../../src/sync/remoteScanner';
 import { UNCONFIRMED_REMOTE_MTIME, emptyState } from '../../src/sync/state';
 import type { PageState, SyncState } from '../../src/sync/state';
 import { sha256Hex } from '../../src/util/hash';
-import { ApiChangedError, AuthError, NetworkError, NotFoundError } from '../../src/util/errors';
+import { ApiChangedError, AuthError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
 import { emptyResult } from '../../src/sync/types';
 import { Logger } from '../../src/util/logger';
 import { CONFIRMED, FakeDav } from '../fakes/fakeDav';
@@ -665,6 +665,28 @@ describe('executeSync: errors', () => {
 		expect(await h.vault.read('Coll/Zweite.md')).toBe(toLocal(REMOTE_V2, metaOf(30)));
 		expect(await h.vault.read(NOTE_PATH)).toBe(toLocal(REMOTE_V1, meta));
 		expect(stateOf(h, NOTE).remoteMtime).toBe(1000);
+	});
+
+	it('logs a failed operation with the detail of the ServerError', async () => {
+		const h = harness();
+		const meta = metaOf(10);
+		h.vault.seed(NOTE_PATH, toLocal(REMOTE_V1, meta));
+		await remember(h, NOTE, NOTE_PATH, REMOTE_V1);
+		const newer = page(10, { timestamp: 2000 });
+		h.dav.fail(newer, new ServerError(500, 'm', 'Disk full'));
+
+		await executeSync(
+			plan([{ kind: 'update', page: newer, path: NOTE_PATH, meta, metaHash: META_HASH, metaChanged: false }]),
+			h.deps,
+		);
+
+		expect(h.deps.log.entries()).toContainEqual(
+			expect.objectContaining({
+				level: 'warn',
+				message: 'Sync operation failed',
+				data: expect.objectContaining({ error: 'ServerError', detail: 'Disk full' }),
+			}),
+		);
 	});
 
 	it.each([

@@ -8,6 +8,7 @@ import {
 	NetworkError,
 	NotFoundError,
 	ServerError,
+	errorLogFields,
 	isRunFatal,
 } from '../../src/util/errors';
 
@@ -26,5 +27,45 @@ describe('isRunFatal', () => {
 		{ name: 'is false for undefined', error: undefined, expected: false },
 	])('$name', ({ error, expected }) => {
 		expect(isRunFatal(error)).toBe(expected);
+	});
+});
+
+describe('ServerError detail', () => {
+	it('stores the detail given by the caller', () => {
+		const err = new ServerError(500, 'Server error (HTTP 500)', 'Disk full');
+
+		expect(err.detail).toBe('Disk full');
+		expect(err.status).toBe(500);
+	});
+
+	it('leaves detail undefined when it is omitted', () => {
+		expect(new ServerError(503).detail).toBeUndefined();
+	});
+});
+
+describe('errorLogFields', () => {
+	it('returns the class name and the detail for a ServerError with detail', () => {
+		expect(errorLogFields(new ServerError(500, 'm', 'Disk full'))).toEqual({ error: 'ServerError', detail: 'Disk full' });
+	});
+
+	it('returns only the class name for a ServerError without detail, without a detail key', () => {
+		const result = errorLogFields(new ServerError(503));
+
+		expect(result).toEqual({ error: 'ServerError' });
+		expect('detail' in result).toBe(false);
+	});
+
+	it('returns only the class name for another NcError subclass', () => {
+		const result = errorLogFields(new NetworkError('offline'));
+
+		expect(result).toEqual({ error: 'NetworkError' });
+		expect('detail' in result).toBe(false);
+	});
+
+	it('returns "unknown" for a value that is not an Error', () => {
+		const result = errorLogFields('boom');
+
+		expect(result).toEqual({ error: 'unknown' });
+		expect('detail' in result).toBe(false);
 	});
 });
