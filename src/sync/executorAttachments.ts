@@ -7,7 +7,7 @@ import { baseName, isInCollectiveFolder, isSafeAttachmentName, isUploadable, mim
 import { toRemote } from '../mapping/frontmatter';
 import { attachmentRefs, embeddedFiles } from '../mapping/links';
 import { conflictPath, pathKey } from '../mapping/paths';
-import { ConflictError, NotFoundError, isRunFatal } from '../util/errors';
+import { ConflictError, NotFoundError, errorLogFields, isRunFatal } from '../util/errors';
 import { sha256HexBytes } from '../util/hash';
 import { linkContext } from './executorContent';
 import type { AttachmentDeps, ExecutorDeps } from './executorDeps';
@@ -91,7 +91,7 @@ export async function syncAttachments(op: AttachmentOp, deps: ExecutorDeps, resu
 		} catch (err) {
 			if (isRunFatal(err)) throw err;
 			result.failed++;
-			deps.log.warn('Attachment failed', { pageId: page.id, error: err instanceof Error ? err.name : 'unknown' });
+			deps.log.warn('Attachment failed', { pageId: page.id, ...errorLogFields(err) });
 			if (rec !== undefined) next.set(name, rec);
 			else next.set(name, pending(name, path));
 		}

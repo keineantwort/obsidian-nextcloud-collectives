@@ -21,6 +21,7 @@ import { clearProperties, decorateProperties, propertyLabels } from './ui/proper
 import { openLogModal } from './ui/logModal';
 import { Logger } from './util/logger';
 import { isRecord } from './util/isRecord';
+import { errorLogFields } from './util/errors';
 
 export default class NextcloudCollectivesPlugin extends Plugin {
 	settings: NcSettings = { ...DEFAULT_SETTINGS };
@@ -274,7 +275,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			}
 			new Notice(this.t('rename.done'));
 		} catch (err) {
-			this.log.warn('Page rename failed', { error: err instanceof Error ? err.name : 'unknown' });
+			this.log.warn('Page rename failed', { ...errorLogFields(err) });
 			new Notice(this.t('rename.failed'));
 		}
 	}

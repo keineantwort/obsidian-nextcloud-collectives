@@ -2,6 +2,7 @@
 // Uses RequestFn directly: the poll endpoint is an absolute URL and no Basic auth exists yet.
 import { ApiChangedError, NetworkError, ServerError } from '../util/errors';
 import { errorForStatus } from './http';
+import { extractErrorDetail } from './errorDetail';
 import type { RequestFn } from './http';
 import { isRecord } from '../util/isRecord';
 
@@ -57,7 +58,7 @@ function sameOrigin(a: string, b: string): boolean {
  */
 export async function startLoginFlow(serverUrl: string, request: RequestFn): Promise<LoginFlowStart> {
 	const res = await send(request, { url: `${serverUrl}/index.php/login/v2`, method: 'POST', headers: { 'User-Agent': USER_AGENT } }, 'POST /index.php/login/v2');
-	const failure = errorForStatus(res.status, 'POST /index.php/login/v2');
+	const failure = errorForStatus(res.status, 'POST /index.php/login/v2', extractErrorDetail(res.text, []));
 	if (failure) throw failure;
 	let body: unknown;
 	try {
@@ -87,7 +88,7 @@ export async function pollLoginFlow(start: LoginFlowStart, request: RequestFn): 
 		body: `token=${encodeURIComponent(start.pollToken)}`,
 	}, 'POST login flow poll');
 	if (res.status === 404) return null;
-	const failure = errorForStatus(res.status, 'POST login flow poll');
+	const failure = errorForStatus(res.status, 'POST login flow poll', extractErrorDetail(res.text, []));
 	if (failure) throw failure;
 	let body: unknown;
 	try {

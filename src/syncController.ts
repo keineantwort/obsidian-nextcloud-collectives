@@ -27,7 +27,7 @@ import { showSyncNotice } from './ui/showSyncNotice';
 import type { LastRun } from './ui/statusBar';
 import { describeSyncError, describeSyncOutcome } from './ui/syncNotices';
 import type { SyncNoticeSpec } from './ui/syncNotices';
-import { AuthError, ApiChangedError, ConfigError, NetworkError } from './util/errors';
+import { AuthError, ApiChangedError, ConfigError, NetworkError, errorLogFields } from './util/errors';
 import type { Logger } from './util/logger';
 
 /** What the controller needs from the plugin. */
@@ -243,8 +243,8 @@ export class SyncController {
 			hideProgress();
 			this.lastRun = { kind: 'failed', at: Date.now() };
 			this.dirtyQueue.requeue(this.takenDirty);
-			// Log only the error class, never the message (may contain credentials or URLs with secrets).
-			log.error('Sync failed', { error: err instanceof Error ? err.name : 'unknown' });
+			// Log only the error class and the cleaned server detail, never the message (may contain URLs).
+			log.error('Sync failed', { ...errorLogFields(err) });
 			if (manual) {
 				showSyncNotice(describeSyncError(err, t));
 			} else {

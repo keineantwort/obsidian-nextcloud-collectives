@@ -680,13 +680,9 @@ describe('executeSync: errors', () => {
 			h.deps,
 		);
 
-		expect(h.deps.log.entries()).toContainEqual(
-			expect.objectContaining({
-				level: 'warn',
-				message: 'Sync operation failed',
-				data: expect.objectContaining({ error: 'ServerError', detail: 'Disk full' }),
-			}),
-		);
+		const entry = h.deps.log.entries().find((e) => e.message === 'Sync operation failed');
+		expect(entry?.level).toBe('warn');
+		expect(entry?.data).toMatchObject({ error: 'ServerError', detail: 'Disk full' });
 	});
 
 	it.each([
