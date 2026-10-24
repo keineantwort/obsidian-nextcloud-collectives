@@ -6,7 +6,7 @@ import { globalIgnores, defineConfig } from 'eslint/config';
 export default defineConfig(
 	globalIgnores([
 		'node_modules', 'dist', 'coverage', 'main.js',
-		'esbuild.config.mjs', 'versions.json', 'package.json', 'package-lock.json', 'tsconfig.json',
+		'esbuild.config.mjs', 'esbuild.options.mjs', 'esbuild.options.d.mts', 'versions.json', 'package.json', 'package-lock.json', 'tsconfig.json',
 		'scripts/**', 'dev-vault/**',
 	]),
 	{
