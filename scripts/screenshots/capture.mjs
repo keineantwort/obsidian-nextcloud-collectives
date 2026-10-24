@@ -118,7 +118,8 @@ async function sync(page, dialogCls) {
 	await cmd(page, 'sync-now');
 	await sleep(1500);
 	if (dialogCls) return waitFor(`dialog ${dialogCls}`, () => modalOpen(page, dialogCls));
-	await waitFor('sync finished', () => page.run(`return !app.plugins.plugins['${PLUGIN}'].sync?.running;`).catch(() => true));
+	// `sync` is private in TypeScript, but readable at runtime.
+	await waitFor('sync finished', () => page.run(`return !app.plugins.plugins['${PLUGIN}'].sync.running;`));
 	await sleep(1500);
 }
 
@@ -149,20 +150,22 @@ const [first] = await targets();
 if (!first) throw new Error(`No Obsidian window on port ${PORT}; start Obsidian with --remote-debugging-port=${PORT}`);
 const opener = await connect(first.webSocketDebuggerUrl);
 const previousLanguage = await opener.run(`return localStorage.getItem('language');`);
-await opener.run(`localStorage.setItem('language', ${JSON.stringify(lang)}); return true;`);
-const before = new Set((await targets()).map((t) => t.id));
-await opener.run(`return require('electron').ipcRenderer.sendSync('vault-open', ${JSON.stringify(vault)}, false);`);
 
 let page;
 try {
+	await opener.run(`localStorage.setItem('language', ${JSON.stringify(lang)}); return true;`);
+	const before = new Set((await targets()).map((t) => t.id));
+	await opener.run(`return require('electron').ipcRenderer.sendSync('vault-open', ${JSON.stringify(vault)}, false);`);
 	const target = await waitFor('vault window', async () => (await targets()).find((t) => !before.has(t.id) && t.title.includes(basename(vault))));
 	page = await connect(target.webSocketDebuggerUrl);
 	await page.send('Page.enable');
 	await waitFor('workspace ready', () => page.run(`return !!(window.app && app.workspace.layoutReady);`).catch(() => false));
 
-	// A new vault starts in restricted mode: trust it so the plugin loads.
-	await sleep(1000);
-	await page.run(`document.querySelector('.modal-container button.mod-cta')?.click(); return true;`);
+	// A new vault starts in restricted mode. Turn community plugins on directly instead of racing the trust dialog,
+	// then close that dialog if it shows up.
+	await page.run(`if (!app.plugins.isEnabled()) await app.plugins.setEnable(true); return true;`);
+	await sleep(1500);
+	await closeModals(page);
 	// No Obsidian Sync icon in the status bar.
 	await page.run(`await app.internalPlugins.getPluginById('sync')?.disable(true); return true;`);
 	await page.run(`app.secretStorage.setSecret('${SECRET_ID}', ${JSON.stringify(creds.appPassword)});

@@ -73,12 +73,26 @@ const CONTENT = {
 	},
 }[lang];
 
-function occ(args, extraEnv = {}) {
+function occOnce(args, extraEnv) {
 	return execFileSync(
 		'docker',
 		['compose', 'exec', '-T', '-u', 'www-data', ...Object.keys(extraEnv).flatMap((k) => ['-e', k]), 'nextcloud', 'php', 'occ', ...args],
-		{ cwd: devDir, env: { ...process.env, ...extraEnv }, encoding: 'utf8' },
+		{ cwd: devDir, env: { ...process.env, ...extraEnv }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
 	);
+}
+
+const isLocked = (e) => String(e.stderr ?? '').includes('database is locked');
+
+/** Runs occ; retries while the SQLite database of the test server is locked by another client (tests, a synced vault). */
+function occ(args, extraEnv = {}) {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return occOnce(args, extraEnv);
+		} catch (e) {
+			if (!isLocked(e) || attempt === 5) throw e;
+			execFileSync('sleep', ['2']);
+		}
+	}
 }
 
 function userExists() {
@@ -126,7 +140,13 @@ if (userExists()) {
 	}
 	occ(['user:delete', user]);
 }
-occ(['user:add', '--password-from-env', '--display-name', CONTENT.displayName, user], { OC_PASS: password });
+try {
+	occOnce(['user:add', '--password-from-env', '--display-name', CONTENT.displayName, user], { OC_PASS: password });
+} catch (e) {
+	// user:add creates the account before it stores the display name; a lock in between leaves the account behind.
+	// The display name appears in no screenshot, so an existing account is good enough.
+	if (!isLocked(e) || !userExists()) throw e;
+}
 auth = basic(user, password);
 
 for (const c of CONTENT.collectives) {
