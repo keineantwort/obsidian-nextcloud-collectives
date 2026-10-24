@@ -33,6 +33,7 @@ const NOTE_CONTENT = 'Hallo Push';
 const LOCAL_EDIT = 'Lokal geändert';
 const CONFLICT_LOCAL = 'Lokal im Konflikt';
 const CONFLICT_REMOTE = 'Entfernt im Konflikt';
+const CONFLICT_REMOTE_AGAIN = 'Entfernt erneut geändert';
 const LOCAL_AFTER_CONFLICT = 'Lokal nach Konflikt';
 const REMOTE_DURING_PUSH = 'Entfernt während des Pushes';
 
@@ -325,6 +326,32 @@ describe('Push and conflicts against the local Docker Nextcloud with an in-memor
 		expect(further.openConflicts).toBe(1);
 		expect(notePutsSince(requestsBefore)).toBe(0);
 		expect((await clients.webdav.get(notePath)).content).toBe(CONFLICT_REMOTE);
+	});
+
+	it('a further server change while in conflict updates the existing conflict copy instead of adding one', async () => {
+		const f = required(fixture, 'fixture');
+		const notePath = remotePagePath(f.note);
+		const localNotePath = `${f.name}/Notiz.md`;
+
+		const before = required(conflictCopies()[0], 'conflict copy');
+
+		await waitPastSecondBoundary();
+		const current = await clients.webdav.get(notePath);
+		await clients.webdav.put(notePath, CONFLICT_REMOTE_AGAIN, { ifMatch: current.etag });
+		await waitPastSecondBoundary();
+
+		const requestsBefore = requests.length;
+		const outcome = await sync();
+
+		expect(outcome.result.conflicts).toBe(1);
+		expect(outcome.result.pushed).toBe(0);
+		expect(outcome.openConflicts).toBe(1);
+
+		expect(conflictCopies()).toEqual([before]);
+		expect(toRemote(await vault.read(before))).toBe(CONFLICT_REMOTE_AGAIN);
+		expect(toRemote(await vault.read(localNotePath))).toBe(CONFLICT_LOCAL);
+		expect((await clients.webdav.get(notePath)).content).toBe(CONFLICT_REMOTE_AGAIN);
+		expect(notePutsSince(requestsBefore)).toBe(0);
 	});
 
 	it('412 when the server changed after the listing: the local text stays in the file and the remote text becomes the conflict copy', async () => {

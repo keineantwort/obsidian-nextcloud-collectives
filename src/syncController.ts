@@ -373,6 +373,7 @@ export class SyncController {
 		const applied = await applyResolution({ vault: this.resolutionVault(), state, log: this.host.log, links: this.lastLinks ?? undefined }, entry.pageId, choice, {
 			localPath: entry.localPath,
 			expectedConflictPath: entry.conflictPath,
+			expectedBaseHash: entry.baseHash,
 		});
 		if (!applied) return false;
 		await store.save(state);
