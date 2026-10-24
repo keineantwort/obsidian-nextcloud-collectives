@@ -52,6 +52,8 @@ Prüfe vor dem Zusammenführen die Einstellung [Neue Ordner auf oberster Ebene](
 
 Jedes Collective ist ein Ordner auf oberster Ebene des Vaults. Eine Seite mit Unterseiten ist ein Ordner mit einer gleichnamigen Notiz darin. Beispiel:
 
+![Dateiliste in Obsidian mit den Collectives als Ordner und dem Seiten-Emoji vor den Notiztiteln](../../images/de/file-list.png)
+
 | In Collectives | Im Vault |
 |---|---|
 | Collective „Handbuch“ | Ordner `Handbuch/` |

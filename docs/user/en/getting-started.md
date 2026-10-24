@@ -52,6 +52,8 @@ Before you merge, check the setting [New top-level folders](settings.md#new-top-
 
 Each collective is a folder at the top level of the vault. A page with sub-pages is a folder with a note of the same name inside. Example:
 
+![File list in Obsidian with the collectives as folders and page emoji in front of the note titles](../../images/en/file-list.png)
+
 | In Collectives | In the vault |
 |---|---|
 | Collective "Handbook" | Folder `Handbook/` |

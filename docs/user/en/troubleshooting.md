@@ -8,6 +8,8 @@
 
 The command **Show log** (also the button **Show log** in the settings under "Diagnostics") opens "Nextcloud Collectives Sync – log". It shows the last entries of this session: syncs, warnings, errors, the Nextcloud version. **Copy log** copies it to the clipboard.
 
+![The log of the session with the Nextcloud version and a created conflict copy](../../images/en/log.png)
+
 - Credentials are never logged.
 - The log is kept in memory only (the last 500 entries) and is gone after a restart of Obsidian. Copy it right after the problem happened.
 - With the setting [Detailed log](settings.md#detailed-log), every request to the server is listed too (method, path, status, duration; never passwords or contents). The paths contain your username and the names of collectives and pages.

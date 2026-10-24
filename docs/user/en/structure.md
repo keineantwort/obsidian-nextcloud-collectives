@@ -36,6 +36,8 @@ Use the menu entry **Rename page…** (or the command **Rename page**) to rename
 
 Questions are collected in one dialog, **Confirm changes**, grouped under "Deleted in the vault", "Deleted on the server" and "New in the vault". Each row says what happens if you tick it, for example "Delete page “Holidays” on the server", with its path and the number of sub-pages.
 
+![The dialog "Confirm changes" asking before a page deleted in the vault is deleted on the server](../../images/en/delete-confirm.png)
+
 - **Nothing is ticked at first.** What you tick happens; what you leave unticked does not. A page you deleted in the vault and leave unticked comes back into the vault.
 - **Check all** and **Uncheck all** change all boxes at once.
 - **Apply** carries out your choice.

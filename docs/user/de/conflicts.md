@@ -28,6 +28,8 @@ Auch Anhänge können kollidieren. Haben ein Bild im Vault und eins auf dem Serv
 
 Offene Konflikte zeigt die Statusleiste als `NC ⚠︎ n` (nur Desktop); ein Klick öffnet den Dialog. Auch der Befehl **Konflikte anzeigen** öffnet ihn; auf dem Handy ist er der einzige Weg. Gibt es keine Konflikte, siehst du „Es gibt keine offenen Konflikte.“
 
+![Der Dialog „Synchronisierungskonflikte“ mit den Unterschieden zwischen der Datei im Vault und der Seite auf dem Server](../../images/de/conflict.png)
+
 Der Dialog **Synchronisierungskonflikte** listet jede Seite mit Konflikt. Pro Seite zeigt „Unterschiede anzeigen“ die Zeilen, die „Nur in deiner Datei“ und „Nur auf dem Server“ stehen. Die erste Seite ist gleich aufgeklappt. Sehr große Dateien zeigen „Zu groß für einen Vergleich.“
 
 | Auswahl | Wirkung |

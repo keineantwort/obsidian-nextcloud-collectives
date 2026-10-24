@@ -8,6 +8,8 @@
 
 Der Befehl **Protokoll anzeigen** (auch der Knopf **Protokoll anzeigen** in den Einstellungen unter „Diagnose“) öffnet „Nextcloud Collectives Sync – Protokoll“. Es zeigt die letzten Einträge dieser Sitzung: Synchronisierungen, Warnungen, Fehler, die Nextcloud-Version. **Protokoll kopieren** kopiert es in die Zwischenablage.
 
+![Das Protokoll der Sitzung mit der Nextcloud-Version und einer angelegten Konfliktkopie](../../images/de/log.png)
+
 - Zugangsdaten werden nie protokolliert.
 - Das Protokoll liegt nur im Speicher (die letzten 500 Einträge) und ist nach einem Neustart von Obsidian weg. Kopiere es gleich, nachdem das Problem aufgetreten ist.
 - Mit der Einstellung [Ausführliches Protokoll](settings.md#ausführliches-protokoll) steht zusätzlich jede Anfrage an den Server darin (Methode, Pfad, Status, Dauer; nie Passwörter oder Inhalte). Die Pfade enthalten deinen Benutzernamen und die Namen von Collectives und Seiten.
