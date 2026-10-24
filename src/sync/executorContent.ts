@@ -80,13 +80,16 @@ async function writeConflictCopy(deps: ExecutorDeps, pageId: PageId, path: strin
 
 /**
  * Overwrites the existing conflict copy of a page in conflict with the newer remote text. Returns its path, or null if
- * no copy may be updated: the page has none, the copy is gone, or the user edited it (its text no longer hashes to the
- * base, which is the remote text of the copy). A new copy is created then, so no user text is lost.
+ * no copy may be updated: the page has none, the copy is gone, or the user edited it (it is no longer exactly the text
+ * the plugin wrote for the base). A new copy is created then, so no user text is lost.
  */
 async function refreshConflictCopy(deps: ExecutorDeps, s: PageState, pageId: PageId, remoteContent: string): Promise<string | null> {
 	if (s.status === 'synced' || s.conflictPath === null || !deps.vault.exists(s.conflictPath)) return null;
 	const current = await deps.vault.read(s.conflictPath);
-	if (await sha256Hex(toRemote(current, linkContext(deps, pageId))) !== s.baseHash) {
+	const held = toRemote(current, linkContext(deps, pageId));
+	// Unchanged = exactly the text the plugin writes for the server version of the base. toRemote alone drops nc_* and
+	// tags lines, so a metadata conflict copy or a tag edit would otherwise count as unchanged.
+	if (conflictCopyText(deps, pageId, held) !== current || (await sha256Hex(held)) !== s.baseHash) {
 		deps.log.info('Conflict copy edited, keeping it', { pageId, path: s.conflictPath });
 		return null;
 	}
