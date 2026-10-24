@@ -28,6 +28,8 @@ Attachments can collide as well. If an image in the vault and on the server have
 
 Open conflicts are shown in the status bar as `NC ⚠︎ n` (desktop only); click it to open the dialog. The command **Show conflicts** opens it too; on phones it is the only way. If there are no conflicts, you see "There are no open conflicts."
 
+![The dialog "Sync conflicts" with the differences between the file in the vault and the page on the server](../../images/en/conflict.png)
+
 The dialog **Sync conflicts** lists every page with a conflict. For each page, "Show differences" shows the lines that are "Only in your file" and "Only on the server". The first page is opened right away. Very large files show "Too large to compare here."
 
 | Choice | Effect |

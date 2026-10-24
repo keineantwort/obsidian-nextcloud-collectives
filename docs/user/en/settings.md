@@ -6,6 +6,8 @@
 
 Open "Settings › Nextcloud Collectives Sync". At the top, **Help** has a link "Open the manual" to this page. The settings are listed here in the order of the settings tab. Text and number fields are saved when you leave the field or press Enter. An invalid value is not saved: you see a message, and the field shows the saved value again.
 
+![The settings of the plugin with server URL, username, sign-in with the browser and app password](../../images/en/settings.png)
+
 Contents:
 
 - [Connection](#connection): [Server URL](#server-url), [Username](#username), [Sign in with the browser](#sign-in-with-the-browser), [App password](#app-password), [Test connection](#test-connection)

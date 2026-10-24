@@ -36,6 +36,8 @@ Eine Seite mit Unterseiten benennst du am einfachsten mit dem Menüeintrag **Sei
 
 Rückfragen sammelt das Plugin in einem Dialog, **Änderungen bestätigen**, gruppiert nach „Im Vault gelöscht“, „Auf dem Server gelöscht“ und „Neu im Vault“. Jede Zeile sagt, was passiert, wenn du sie anhakst, zum Beispiel „Seite „Urlaub“ auf dem Server löschen“, mit Pfad und Zahl der Unterseiten.
 
+![Der Dialog „Änderungen bestätigen“ fragt, bevor eine im Vault gelöschte Seite auf dem Server gelöscht wird](../../images/de/delete-confirm.png)
+
 - **Anfangs ist nichts angehakt.** Was du anhakst, passiert; was du nicht anhakst, nicht. Eine im Vault gelöschte Seite, die du nicht anhakst, kommt in den Vault zurück.
 - **Alle anhaken** und **Alle abwählen** ändern alle Kästchen auf einmal.
 - **Übernehmen** führt deine Auswahl aus.
