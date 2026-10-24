@@ -12,7 +12,7 @@ Nextcloud + Collectives + Circles in one container (SQLite), reachable only on `
 - Version selectable via `NC_VERSION` in `.env` (default 33; tested 33–35, see `docs/release.md`)
 - `./versions.sh [project name]` shows the Nextcloud, Collectives, Circles and Text versions of the running server
 - `npm run test:int` also takes `NC_PORT`, `NC_TEST_USER`, `NC_TEST_PASSWORD` from the environment (takes precedence over `.env`)
-- `hooks/10-collectives.sh` runs once after the installation: enables the apps, creates the test user
+- `hooks/10-collectives.sh` runs once after the installation: enables the apps (retries the app store download up to five times), creates the test user
 - Scripts create app passwords themselves when needed, via `occ user:auth-tokens:add`
 
 Also available as `npm run nc:up` / `npm run nc:down`.

@@ -11,7 +11,7 @@
 ## Decision
 
 - **`npm run test:int`** excludes the performance test; it runs via **`npm run test:perf`** (`vitest.performance.config.ts`).
-- **`integration.yml`**: `test:int` against the current, i.e. newest, version from `TESTED_NEXTCLOUD_MAJORS` (currently 35), and against `latest` (newest image on Docker Hub, may fail as an early warning); on every PR (path filter as before, plus `vitest.*.config.ts`), every push to `main` and manually. No tag trigger, no schedule.
+- **`integration.yml`**: `test:int` against the current, i.e. newest, version from `TESTED_NEXTCLOUD_MAJORS` (currently 35), and against `latest` (newest image on Docker Hub, may fail as an early warning); on every PR (path filter as before, plus `vitest.*.config.ts`; replaced by a check inside the job in [0026](0026-required-checks-and-retried-app-install.md)), every push to `main` and manually. No tag trigger, no schedule.
 - **`nightly.yml`**: on `main`, daily at 01:00 UTC.
   - Job `integration`: `test:int` against the two versions before the current one (currently 33, 34).
   - Job `performance`: `test:perf` against all tested versions and `latest` (`latest` may fail).

@@ -16,14 +16,23 @@ Each job starts a fresh test server of the respective version (ADR 0024). Runner
 
 | Workflow | What | Versions | When |
 |---|---|---|---|
-| `integration.yml` | `npm run test:int` | the newest from `TESTED_NEXTCLOUD_MAJORS` (currently 35) and `latest` | every pull request (if source code, tests or test server scripts are affected), every push to `main`, "Run workflow" |
+| `integration.yml` | `npm run test:int` | the newest from `TESTED_NEXTCLOUD_MAJORS` (currently 35) and `latest` | every pull request (skips its steps if neither source code, tests nor test server scripts are affected), every push to `main`, "Run workflow" |
 | `nightly.yml` | `npm run test:int` | the two before it (currently 33, 34) | nightly on `main` if there was a merge since the night before; the night from Wednesday to Thursday always; "Run workflow" |
 | `nightly.yml` | `npm run test:perf` (500 pages) | all from `TESTED_NEXTCLOUD_MAJORS` and `latest` | as above |
 
 A release tag does not start integration tests: the tagged state on `main` passed them at the pull request and at the merge. Before a release it is worth looking at the latest run of `nightly.yml`; when in doubt, use "Run workflow" there. The `latest` jobs may be red; they do not block a merge. As long as `nextcloud:apache` is the same image as the current version, they skip their steps (`scripts/dev-nextcloud/latest-is-current.sh`).
 
+**Merging only with green checks**: the branch protection rule for `main` (Repository › Settings › Branches) has "Enable status check" switched on with these required checks:
+
+```
+CI / build-and-test (pull_request)
+Integration (Nextcloud versions) / Nextcloud 35 (pull_request)
+```
+
+Not required: the `latest` job (may be red) and `CI / mirror-github` (runs only after the merge and stays "pending" on a pull request). Because the check is required, `integration.yml` has no paths filter; it reports on every pull request.
+
 - The Nextcloud and app versions (Collectives, Circles, Text) appear in the "Versions under test" step and in the job summary.
-- New major version: if the `latest` run shows a new Nextcloud version as green, add the number to `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **and** to the matrices: in `integration.yml` the new version replaces the previous one; the previous one moves to the `integration` job of `nightly.yml` (the oldest drops out there if it is no longer tested), and to the `performance` job of `nightly.yml`. Otherwise `tests/unit/testedVersions.test.ts` fails.
+- New major version: if the `latest` run shows a new Nextcloud version as green, add the number to `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`) **and** to the matrices: in `integration.yml` the new version replaces the previous one; the previous one moves to the `integration` job of `nightly.yml` (the oldest drops out there if it is no longer tested), and to the `performance` job of `nightly.yml`. Otherwise `tests/unit/testedVersions.test.ts` fails. Then replace the required check `Nextcloud <old>` with `Nextcloud <new>` in the branch protection rule, or no pull request can be merged.
 - Locally against a second version: `NC_VERSION=35 NC_PORT=8135 docker compose -p nc-test-35 up -d --wait` in the folder `scripts/dev-nextcloud`, then `NC_PORT=8135 NC_VERSION=35 npm run test:int` (performance: `npm run test:perf`); `sh scripts/dev-nextcloud/versions.sh nc-test-35` shows the versions.
 
 ## Outside the repo (for the maintainer to do)
