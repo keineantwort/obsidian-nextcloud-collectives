@@ -4,7 +4,7 @@ import { createApiClients, type ApiClients } from '../../src/api/clients';
 import type { HttpClientOptions } from '../../src/api/http';
 import type { Collective, PageInfo } from '../../src/api/types';
 import { remotePagePath } from '../../src/mapping/paths';
-import { AuthError, ConflictError } from '../../src/util/errors';
+import { AuthError, ConflictError, ServerError } from '../../src/util/errors';
 import { fetchRequest, loadTestServerEnv, type TestServerEnv } from './helpers';
 
 const TEST_COLLECTIVE_NAME = 'ONC Integrationstest';
@@ -163,6 +163,17 @@ describe('API clients against the local Docker Nextcloud', () => {
 			isCollection: false,
 			etag: defined(etagAfter, 'ETag after write'),
 		});
+	});
+
+	it('rejects MKCOL on an existing folder with ServerError (HTTP 405) carrying the Sabre exception as detail', async () => {
+		const current = defined(page, 'page');
+
+		const err = await captureError(clients.webdav.mkcol(current.collectivePath));
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect(err).toMatchObject({ status: 405 });
+		expect((err as ServerError).detail).toMatch(/^Sabre\\DAV\\Exception\\MethodNotAllowed: \S/);
+		expect((err as ServerError).detail).not.toContain(env.password);
 	});
 
 	it('rejects listCollectives with AuthError (HTTP 401) when the password is wrong', async () => {
