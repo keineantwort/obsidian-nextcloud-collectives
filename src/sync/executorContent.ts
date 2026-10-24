@@ -64,13 +64,37 @@ export async function writeIfUnchanged(vault: VaultWriter, path: string, expecte
 	return userChanged ? null : mtime;
 }
 
+/** Text of a conflict copy for remote content. */
+function conflictCopyText(deps: ExecutorDeps, pageId: PageId, remoteContent: string): string {
+	// Wikilinks like in the note, so the copy reads the same; taking it over converts them back (toRemote).
+	return linksToLocal(canonicalRemote(remoteContent), linkContext(deps, pageId));
+}
+
 /** Creates the conflict copy of remote content next to `path`; returns its path. */
 async function writeConflictCopy(deps: ExecutorDeps, pageId: PageId, path: string, remoteContent: string): Promise<string> {
 	const copyPath = conflictPath(path, deps.conflictLabel, deps.now(), deps.occupied);
-	// Wikilinks like in the note, so the copy reads the same; taking it over converts them back (toRemote).
-	await deps.vault.create(copyPath, linksToLocal(canonicalRemote(remoteContent), linkContext(deps, pageId)));
+	await deps.vault.create(copyPath, conflictCopyText(deps, pageId, remoteContent));
 	deps.occupied.add(pathKey(copyPath));
 	return copyPath;
+}
+
+/**
+ * Overwrites the existing conflict copy of a page in conflict with the newer remote text. Returns its path, or null if
+ * no copy may be updated: the page has none, the copy is gone, or the user edited it (it is no longer exactly the text
+ * the plugin wrote for the base). A new copy is created then, so no user text is lost.
+ */
+async function refreshConflictCopy(deps: ExecutorDeps, s: PageState, pageId: PageId, remoteContent: string): Promise<string | null> {
+	if (s.status === 'synced' || s.conflictPath === null || !deps.vault.exists(s.conflictPath)) return null;
+	const current = await deps.vault.read(s.conflictPath);
+	const held = toRemote(current, linkContext(deps, pageId));
+	// Unchanged = exactly the text the plugin writes for the server version of the base. toRemote alone drops nc_* and
+	// tags lines, so a metadata conflict copy or a tag edit would otherwise count as unchanged.
+	if (conflictCopyText(deps, pageId, held) !== current || (await sha256Hex(held)) !== s.baseHash) {
+		deps.log.info('Conflict copy edited, keeping it', { pageId, path: s.conflictPath });
+		return null;
+	}
+	const written = await writeIfUnchanged(deps.vault, s.conflictPath, current, conflictCopyText(deps, pageId, remoteContent));
+	return written === null ? null : s.conflictPath;
 }
 
 export function requireState(deps: ExecutorDeps, pageId: number): PageState {
@@ -360,10 +384,12 @@ async function updateCollision(op: ContentOp, s: PageState, remote: Fetched, dep
 
 /**
  * Both sides changed: keep the local file, save the remote text as conflict copy, move the remote fields on.
- * A collision stays a collision; a linked page becomes a conflict.
+ * A collision stays a collision; a linked page becomes a conflict. A page already in conflict gets its existing copy
+ * updated if the user did not edit it; otherwise a new copy is created.
  */
 async function recordUpdateConflict(op: ContentOp, s: PageState, remote: Fetched, deps: ExecutorDeps, result: SyncResult, now: number): Promise<boolean> {
-	const copyPath = await writeConflictCopy(deps, op.page.id, op.path, remote.content);
+	const updated = await refreshConflictCopy(deps, s, op.page.id, remote.content);
+	const copyPath = updated ?? (await writeConflictCopy(deps, op.page.id, op.path, remote.content));
 	deps.state.pages[String(op.page.id)] = markConflict(s, {
 		page: op.page,
 		remote,
@@ -374,7 +400,7 @@ async function recordUpdateConflict(op: ContentOp, s: PageState, remote: Fetched
 		localMtime: deps.vault.mtime(op.path) ?? s.localMtime,
 		now,
 	});
-	deps.log.info('Conflict copy created', { pageId: op.page.id, path: copyPath });
+	deps.log.info(updated === null ? 'Conflict copy created' : 'Conflict copy updated', { pageId: op.page.id, path: copyPath });
 	result.conflicts++;
 	return true;
 }

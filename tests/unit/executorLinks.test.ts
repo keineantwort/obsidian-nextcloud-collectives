@@ -96,4 +96,33 @@ describe('executor: links', () => {
 		const copy = deps.state.pages['10']?.conflictPath;
 		expect(await vault.read(copy ?? '')).toBe('Siehe [[Coll/Ziel]] und [[Coll/Ziel#abschnitt|Doku]].');
 	});
+
+	it('updates the conflict copy of a page with links in place when the server changes again', async () => {
+		const { vault, dav, deps } = harness();
+		const REMOTE_B = `${REMOTE}Neu vom Server\n`;
+		const REMOTE_C = `${REMOTE}Noch neuer\n`;
+		dav.serve(SRC, REMOTE, '"e1"');
+		await executeSync(plan([{ kind: 'create', page: SRC, path: SRC_PATH, meta: meta(10), metaHash: META_HASH }]), deps);
+		await vault.process(SRC_PATH, (cur) => `${cur}Mein Zusatz\n`);
+
+		const newer = { ...SRC, timestamp: 2000 };
+		dav.serve(newer, REMOTE_B, '"e2"');
+		await executeSync(plan([{ kind: 'update', page: newer, path: SRC_PATH, meta: meta(10), metaHash: META_HASH, metaChanged: false }]), deps);
+		const copyPath = deps.state.pages['10']?.conflictPath;
+		if (copyPath === null || copyPath === undefined) throw new Error('no conflict copy after run 1');
+		expect(await vault.read(copyPath)).toContain('[[Coll/Ziel]]');
+
+		const localBefore = await vault.read(SRC_PATH);
+		const newest = { ...SRC, timestamp: 3000 };
+		dav.serve(newest, REMOTE_C, '"e3"');
+		await executeSync(plan([{ kind: 'update', page: newest, path: SRC_PATH, meta: meta(10), metaHash: META_HASH, metaChanged: false }]), deps);
+
+		expect(deps.state.pages['10']?.conflictPath).toBe(copyPath);
+		const conflictFiles = vault.listFiles().map((file) => file.path).filter((path) => path.includes('(Konflikt'));
+		expect(conflictFiles).toEqual([copyPath]);
+		const copy = await vault.read(copyPath);
+		expect(copy).toContain('Noch neuer');
+		expect(copy).toContain('[[Coll/Ziel]]');
+		expect(await vault.read(SRC_PATH)).toBe(localBefore);
+	});
 });

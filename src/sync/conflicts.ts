@@ -17,6 +17,8 @@ export interface ConflictEntry {
 	status: 'conflict' | 'collision';
 	localPath: string;
 	conflictPath: string | null;
+	/** Hash of the remote text in the conflict copy when the list was taken; a resolution is refused if it changed. */
+	baseHash: string;
 }
 
 /** Vault operations used to resolve a conflict; implemented over app.vault and app.fileManager in main.ts. */
@@ -52,6 +54,7 @@ export function listConflicts(state: SyncState): ConflictEntry[] {
 			status,
 			localPath: page.localPath,
 			conflictPath: page.conflictPath,
+			baseHash: page.baseHash,
 		});
 	}
 	return entries.sort((a, b) => compareText(a.localPath, b.localPath));
@@ -106,6 +109,8 @@ export interface ResolutionOptions {
 	 * conflictPath, the choice is refused: the server version of the current copy was never shown.
 	 */
 	expectedConflictPath?: string | null;
+	/** Remote hash of the conflict copy the user saw. If given and different from the page's current baseHash, the choice is refused: the copy was updated with a newer server version since. */
+	expectedBaseHash?: string;
 }
 
 /**
@@ -119,7 +124,8 @@ async function withLegacyBase(vault: ResolutionVault, page: PageState, links: Li
 
 /**
  * Applies the user's choice for one page in `state` (mutates state.pages[id]). Returns false if the page is missing,
- * has no open conflict, or the options name a conflict copy that is no longer the page's conflict (nothing changes then).
+ * has no open conflict, or the options name a conflict copy that is no longer the page's conflict or was updated since
+ * (nothing changes then).
  * The caller persists the state and then starts a sync run.
  * The state itself keeps its localPath (see `options.localPath`).
  */
@@ -133,6 +139,7 @@ export async function applyResolution(
 	const prev = deps.state.pages[key];
 	if (prev === undefined || openStatus(prev) === null) return false;
 	if (options.expectedConflictPath !== undefined && options.expectedConflictPath !== prev.conflictPath) return false;
+	if (options.expectedBaseHash !== undefined && options.expectedBaseHash !== prev.baseHash) return false;
 	const currentPath = options.localPath ?? prev.localPath;
 
 	let page = prev;

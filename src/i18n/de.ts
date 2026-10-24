@@ -151,7 +151,7 @@ export const de: Record<MessageKey, string> = {
 	'conflicts.remaining.other': '{count} Konflikte offen.',
 	'conflicts.reappeared': 'Die Server-Fassung von „{name}“ hat sich inzwischen erneut geändert, daher gibt es einen neuen Konflikt.',
 	'conflicts.allResolved': 'Alle Konflikte sind geklärt.',
-	'conflicts.stale': 'Dieser Konflikt war bereits geklärt. Die Liste wurde aktualisiert.',
+	'conflicts.stale': 'Dieser Konflikt wurde inzwischen geklärt oder hat sich geändert. Die Liste wurde aktualisiert.',
 	'conflicts.resolveFailed': 'Deine Wahl konnte nicht übernommen werden. Bitte versuche es erneut.',
 	'conflicts.none': 'Es gibt keine offenen Konflikte.',
 	'settings.newFolder.name': 'Neue Ordner auf oberster Ebene',
