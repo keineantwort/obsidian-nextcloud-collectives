@@ -31,3 +31,4 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |
 | [0026](0026-required-checks-and-retried-app-install.md) | Required checks for main, in-job change detection, retried app installation | accepted |
 | [0027](0027-update-existing-conflict-copy.md) | Update the existing conflict copy when the server changes again | accepted |
+| [0028](0028-server-error-detail-in-the-log.md) | Server error detail (OCS message, Sabre exception) on HTTP errors and in the log | accepted |

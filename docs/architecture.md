@@ -41,7 +41,7 @@ The plugin is an independent implementation; existing plugins serve only as refe
 | Topic | Rule |
 |---|---|
 | Language | TypeScript, `strict: true` |
-| Build | esbuild, based on the official `obsidian-sample-plugin` |
+| Build | esbuild, based on the official `obsidian-sample-plugin`; options in `esbuild.options.mjs`, minified with `keepNames` so error class names survive for the log (ADR 0028) |
 | HTTP | only `requestUrl` from `obsidian` (avoids CORS, works on mobile). No `fetch`, no Node modules |
 | Hashing | Web Crypto `crypto.subtle.digest('SHA-256', …)` |
 | File access | only the Obsidian vault API (`app.vault`, `app.fileManager`), no `fs` |
@@ -153,6 +153,7 @@ src/
     collectivesApi.ts     typed domain methods (listPages, createPage, …)
     clients.ts            wires HttpClient, OcsClient, WebdavClient, CollectivesApi (created per run)
     parse.ts              strict structure check of responses → ApiChanged
+    errorDetail.ts        PURE: server's reason from a failed response (OCS meta.message, Sabre exception), masked (ADR 0028)
     loginFlow.ts          Nextcloud Login Flow v2
     versionCheck.ts       Nextcloud version from the capabilities, TESTED_NEXTCLOUD_MAJORS
     types.ts              Collective, PageInfo, TrashedPage, Tag, Attachment; branded IDs
@@ -492,9 +493,9 @@ Link conversion (§9) is always on; there is no setting for it. Values from `dat
 
 ## 12. Error handling and logging
 
-- Error classes (mapping centrally in `src/api/http.ts`, classes in `src/util/errors.ts`, [ADR 0015](adr/0015-http-error-mapping-and-retry.md)): `AuthError` (401 → pause automatic sync, notice), `ForbiddenError` (403 → no rights on this resource; only the operation fails, notice), `NotFound` (404), `Conflict` (412), `Network` (retry with backoff 1/2/4 s, at most 3 retries), `ServerError` (5xx and other non-2xx; retry only for 5xx), `ApiChanged` (unexpected response structure → stop the sync with a clear message). Retries only for reading requests (`GET`, `PROPFIND`); writes are repeated by the next run. Requests time out after 30 s by default (per request configurable, e.g. for large attachments).
+- Error classes (mapping centrally in `src/api/http.ts`, classes in `src/util/errors.ts`, [ADR 0015](adr/0015-http-error-mapping-and-retry.md)): `AuthError` (401 → pause automatic sync, notice), `ForbiddenError` (403 → no rights on this resource; only the operation fails, notice), `NotFound` (404), `Conflict` (412), `Network` (retry with backoff 1/2/4 s, at most 3 retries), `ServerError` (5xx and other non-2xx; retry only for 5xx), `ApiChanged` (unexpected response structure → stop the sync with a clear message). Every error built from an HTTP response carries the server's reason as `detail` (OCS `meta.message` or the Sabre exception, also from binary bodies; credentials masked, at most 200 characters; [ADR 0028](adr/0028-server-error-detail-in-the-log.md)). Retries only for reading requests (`GET`, `PROPFIND`); writes are repeated by the next run. Requests time out after 30 s by default (per request configurable, e.g. for large attachments).
 - Version check: on the first run of a session the Nextcloud version is read from `/ocs/v2.php/cloud/capabilities` and compared with `TESTED_NEXTCLOUD_MAJORS` (`src/api/versionCheck.ts`); an untested major version causes one warning notice per session. The check never stops the sync. The Collectives version cannot be queried by normal users (not in the capabilities, the app API is admin-only); compatibility is therefore ensured by the structure check of the responses (`ApiChanged`) ([ADR 0023](adr/0023-release-version-check-log-and-ci.md)).
-- Logger with a ring buffer (last 500 entries, in memory, current session), shown in a modal via the command "Show log" or the settings, copyable; `debugLogging` adds request details (without auth header).
+- Logger with a ring buffer (last 500 entries, in memory, current session), shown in a modal via the command "Show log" or the settings, copyable; `debugLogging` adds request details (without auth header). Failed operations log the error class and its `detail` (`errorLogFields`), never the error message.
 
 ## 13. Tests and quality
 

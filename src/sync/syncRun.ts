@@ -16,7 +16,7 @@ import { planLocalPaths, remotePagePath } from '../mapping/paths';
 import type { CollectiveTree, PathPlan } from '../mapping/paths';
 import type { Translator } from '../i18n';
 import type { WebdavClient } from '../api/webdavClient';
-import { ConfigError, isRunFatal } from '../util/errors';
+import { ConfigError, errorLogFields, isRunFatal } from '../util/errors';
 import { metaHash, sha256Hex } from '../util/hash';
 import type { Logger } from '../util/logger';
 import { countConflicts } from './conflicts';
@@ -237,7 +237,7 @@ async function findRemoteChanged(
 			if ((await sha256Hex(canonicalRemote(file.content, { index: links, sourceId: known.pageId }))) !== known.baseHash) changed.add(known.pageId);
 		} catch (err) {
 			if (isRunFatal(err)) throw err;
-			log.warn('Deleted page could not be compared with the server', { pageId: known.pageId, error: err instanceof Error ? err.name : 'unknown' });
+			log.warn('Deleted page could not be compared with the server', { pageId: known.pageId, ...errorLogFields(err) });
 			changed.add(known.pageId);
 		}
 	}
@@ -325,6 +325,6 @@ async function reportServerVersion(ocs: OcsClient, deps: SyncRunDeps): Promise<v
 		else deps.onServerVersion?.(version);
 	} catch (err) {
 		// An auth failure would already have failed getCurrentUserId; anything here is a capabilities-only problem.
-		deps.log.warn('Server version check failed', { error: err instanceof Error ? err.name : 'unknown' });
+		deps.log.warn('Server version check failed', errorLogFields(err));
 	}
 }

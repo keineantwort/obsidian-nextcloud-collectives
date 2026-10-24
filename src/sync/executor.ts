@@ -1,7 +1,7 @@
 // Sync executor (architecture §6.3, §7.2): applies the planner's operations to the vault and the sync state.
 // Imports nothing from 'obsidian': all vault access goes through VaultWriter.
 import { pathKey } from '../mapping/paths';
-import { isRunFatal } from '../util/errors';
+import { errorLogFields, isRunFatal } from '../util/errors';
 import { syncAttachments } from './executorAttachments';
 import { applyContentOp } from './executorContent';
 import type { ExecutorDeps } from './executorDeps';
@@ -14,8 +14,8 @@ export type { SyncResult } from './types';
 export type { ExecutorDeps, VaultWriter } from './executorDeps';
 
 /**
- * Applies the planner's operations in order. A failing page operation is counted and logged (pageId and error class
- * only), then the run continues. Errors for which isRunFatal is true abort the run and are rethrown.
+ * Applies the planner's operations in order. A failing page operation is counted and logged (pageId, error class and
+ * server detail only), then the run continues. Errors for which isRunFatal is true abort the run and are rethrown.
  */
 export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<SyncResult> {
 	const result = emptyResult();
@@ -29,7 +29,7 @@ export async function executeSync(plan: SyncPlan, deps: ExecutorDeps): Promise<S
 			deps.log.warn('Sync operation failed', {
 				kind: op.kind,
 				...pageFields(op),
-				error: err instanceof Error ? err.name : 'unknown',
+				...errorLogFields(err),
 			});
 			continue;
 		}
@@ -77,7 +77,7 @@ async function attachmentsOf(op: Extract<SyncOp, { page: unknown; path: string }
 	} catch (err) {
 		if (isRunFatal(err)) throw err;
 		result.failed++;
-		deps.log.warn('Attachment step failed', { pageId: op.page.id, error: err instanceof Error ? err.name : 'unknown' });
+		deps.log.warn('Attachment step failed', { pageId: op.page.id, ...errorLogFields(err) });
 		return false;
 	}
 }

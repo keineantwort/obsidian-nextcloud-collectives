@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
 	basicAuthHeader,
+	errorForResponse,
 	errorForStatus,
 	getHeader,
 	HttpClient,
@@ -8,7 +10,13 @@ import {
 	type HttpResponse,
 	type RequestFn,
 } from '../../src/api/http';
-import { AuthError, ConflictError, ForbiddenError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+import { AuthError, ConflictError, ForbiddenError, NcError, NetworkError, NotFoundError, ServerError } from '../../src/util/errors';
+
+/** Body of a recorded fixture: the `response` member of tests/fixtures/m0/<name>, as the server sent it. */
+function fixtureBody(name: string): string {
+	const fixture = JSON.parse(readFileSync(new URL(`../fixtures/m0/${name}`, import.meta.url), 'utf8')) as { response: unknown };
+	return JSON.stringify(fixture.response);
+}
 
 const BASE_URL = 'https://cloud.example.com';
 const PASSWORD = 'pw-SECRET-123';
@@ -117,6 +125,73 @@ describe('errorForStatus', () => {
 		const err = errorForStatus(500, `GET ${PATH}`);
 
 		expect(err?.message).toContain(`GET ${PATH}`);
+	});
+});
+
+describe('errorForStatus detail', () => {
+	it('puts the detail on a ServerError', () => {
+		const err = errorForStatus(500, `GET ${PATH}`, 'x');
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('x');
+	});
+
+	it('keeps mapping 404 to NotFoundError when a detail is given', () => {
+		const err = errorForStatus(404, `GET ${PATH}`, 'x');
+
+		expect(err).toBeInstanceOf(NotFoundError);
+		expect((err as NotFoundError).detail).toBe('x');
+	});
+
+	it.each([
+		[401, 'AuthError', AuthError],
+		[403, 'ForbiddenError', ForbiddenError],
+		[412, 'ConflictError', ConflictError],
+	])('puts the detail on the error for HTTP %i (%s)', (status, _name, errorClass) => {
+		const err = errorForStatus(status, `GET ${PATH}`, 'x');
+
+		expect(err).toBeInstanceOf(errorClass);
+		expect((err as NcError).detail).toBe('x');
+	});
+});
+
+describe('errorForResponse', () => {
+	it('returns null for a 200 whose body carries an OCS message, without inspecting it', () => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'ok', statuscode: 200, message: 'OK' } } });
+
+		expect(errorForResponse(reply(200, body), `GET ${PATH}`, [])).toBeNull();
+	});
+
+	it('returns a ServerError with the OCS message as detail for a 500', () => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'failure', statuscode: 500, message: 'Database is locked' } } });
+
+		const err = errorForResponse(reply(500, body), `GET ${PATH}`, []);
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('Database is locked');
+	});
+
+	it('reads the detail from the bytes of a binary response when the text is empty', () => {
+		const xml = `<?xml version="1.0"?>
+<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
+  <s:exception>Sabre\\DAV\\Exception\\ServiceUnavailable</s:exception>
+  <s:message>down</s:message>
+</d:error>`;
+		const response: HttpResponse = { status: 500, headers: {}, text: '', data: new TextEncoder().encode(xml).buffer };
+
+		const err = errorForResponse(response, `GET ${PATH}`, []);
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('Sabre\\DAV\\Exception\\ServiceUnavailable: down');
+	});
+
+	it('masks a secret given in the list in the detail', () => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'failure', statuscode: 500, message: `Token ${PASSWORD} is broken` } } });
+
+		const err = errorForResponse(reply(500, body), `GET ${PATH}`, [PASSWORD]);
+
+		expect((err as ServerError).detail).toBe('Token *** is broken');
+		expect((err as ServerError).detail).not.toContain(PASSWORD);
 	});
 });
 
@@ -283,6 +358,48 @@ describe('HttpClient.send failure handling', () => {
 		expect(err).toBeInstanceOf(ConflictError);
 	});
 
+	it.each([
+		[401, 'AuthError', AuthError],
+		[403, 'ForbiddenError', ForbiddenError],
+		[404, 'NotFoundError', NotFoundError],
+		[412, 'ConflictError', ConflictError],
+	])('carries the server detail on the error for HTTP %i (%s)', async (status, _name, errorClass) => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'failure', statuscode: status, message: 'Server says no' } } });
+		const fake = fakeRequest(reply(status, body));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'GET', path: PATH }));
+
+		expect(err).toBeInstanceOf(errorClass);
+		expect((err as NcError).detail).toBe('Server says no');
+	});
+
+	it('rejects a 403 of a collective trash request as member with a ForbiddenError whose detail masks the username', async () => {
+		const fake = fakeRequest(reply(403, fixtureBody('collective-trash-as-member.json')));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'DELETE', path: '/collectives/3' }));
+
+		expect(err).toBeInstanceOf(ForbiddenError);
+		expect((err as ForbiddenError).detail).toBe('Member *** not allowed to delete collective: 3');
+	});
+
+	it('rejects a binary GET answered with a Sabre NotFound in its bytes with a NotFoundError carrying the detail', async () => {
+		const xml = `<?xml version="1.0" encoding="utf-8"?>
+<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
+  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>
+  <s:message>File not found</s:message>
+</d:error>`;
+		const response: HttpResponse = { status: 404, headers: {}, text: '', data: new TextEncoder().encode(xml).buffer };
+		const fake = fakeRequest(response);
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'GET', path: PATH, binaryResponse: true }));
+
+		expect(err).toBeInstanceOf(NotFoundError);
+		expect((err as NotFoundError).detail).toBe('Sabre\\DAV\\Exception\\NotFound: File not found');
+	});
+
 	it('rejects HTTP 400 with ServerError carrying the status', async () => {
 		const fake = fakeRequest(reply(400));
 		const client = createClient(fake, { retry: false });
@@ -291,6 +408,53 @@ describe('HttpClient.send failure handling', () => {
 
 		expect(err).toBeInstanceOf(ServerError);
 		expect(err).toMatchObject({ status: 400 });
+	});
+
+	it('rejects HTTP 400 with a ServerError whose detail is the OCS message of the response', async () => {
+		const fake = fakeRequest(reply(400, fixtureBody('tag-create-duplicate.json')));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'POST', path: PATH }));
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('Tag already exists for collective: Projekt');
+	});
+
+	it('rejects HTTP 405 with a ServerError whose detail is the Sabre exception and message', async () => {
+		const body = `<?xml version="1.0" encoding="utf-8"?>
+<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
+  <s:exception>Sabre\\DAV\\Exception\\MethodNotAllowed</s:exception>
+  <s:message>The resource you tried to create already exists</s:message>
+</d:error>`;
+		const fake = fakeRequest(reply(405, body));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'MKCOL', path: PATH }));
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBe('Sabre\\DAV\\Exception\\MethodNotAllowed: The resource you tried to create already exists');
+	});
+
+	it('removes the password from the detail of a 500 whose OCS message contains it', async () => {
+		const body = JSON.stringify({ ocs: { meta: { status: 'failure', statuscode: 500, message: `Login alice with ${PASSWORD} failed` } } });
+		const fake = fakeRequest(reply(500, body));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'GET', path: PATH }));
+
+		const detail = (err as ServerError).detail;
+		expect(detail).toBe('Login *** with *** failed');
+		expect(detail).not.toContain(PASSWORD);
+	});
+
+	it('leaves the detail undefined for a 502 with an HTML body', async () => {
+		const fake = fakeRequest(reply(502, '<html><body>Bad Gateway</body></html>'));
+		const client = createClient(fake, { retry: false });
+
+		const err = await captureError(client.send({ method: 'GET', path: PATH }));
+
+		expect(err).toBeInstanceOf(ServerError);
+		expect((err as ServerError).detail).toBeUndefined();
 	});
 
 	it('never puts the password or the Authorization value into an error message', async () => {

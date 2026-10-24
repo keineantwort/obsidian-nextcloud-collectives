@@ -8,6 +8,7 @@ import { indexFiles, locatePage } from './locate';
 import type { Locatable } from './locate';
 import { UNCHECKED_LOCAL_MTIME, UNCONFIRMED_REMOTE_MTIME } from './state';
 import type { PageState, SyncState } from './state';
+import { errorLogFields } from '../util/errors';
 
 export type ConflictChoice = 'keepLocal' | 'takeRemote';
 
@@ -164,8 +165,8 @@ export async function applyResolution(
 		try {
 			await deps.vault.trash(trashPath);
 		} catch (err) {
-			// Only the error class is logged: messages may contain URLs or credentials.
-			deps.log.warn('Conflict copy could not be moved to trash', { pageId, error: err instanceof Error ? err.name : 'unknown' });
+			// The error class and the server's detail are logged, never the message.
+			deps.log.warn('Conflict copy could not be moved to trash', { pageId, ...errorLogFields(err) });
 		}
 	}
 	return true;

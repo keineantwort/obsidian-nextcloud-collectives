@@ -4,7 +4,7 @@ import type { CollectiveId, PageId, PageInfo } from '../api/types';
 import { readLocalFields, readNcMeta, replaceNcMeta, stripNcMeta, toLocal, toRemote } from '../mapping/frontmatter';
 import type { NcMeta } from '../mapping/frontmatter';
 import { ncTitleFor, pathKey, sanitizeName } from '../mapping/paths';
-import { NotFoundError, isRunFatal } from '../util/errors';
+import { NotFoundError, errorLogFields, isRunFatal } from '../util/errors';
 import { metaHash, sha256Hex } from '../util/hash';
 import { applyContentOp, fetchPage, linkContext, readLocal, requireMtime, requireState, uploadLocal, writeIfUnchanged } from './executorContent';
 import type { ContentOp } from './executorContent';
@@ -89,7 +89,7 @@ async function refreshPage(deps: ExecutorDeps, collectiveId: CollectiveId, pageI
 	try {
 		scratchOf(deps).refreshed.set(pageId, await requireApi(deps).getPage(collectiveId, pageId));
 	} catch (err) {
-		deps.log.info('Page could not be refreshed', { pageId, error: err instanceof Error ? err.name : 'unknown' });
+		deps.log.info('Page could not be refreshed', { pageId, ...errorLogFields(err) });
 	}
 }
 
@@ -338,7 +338,7 @@ async function reassignedHash(deps: ExecutorDeps, page: PageInfo, collectiveId: 
 	} catch (err) {
 		if (isRunFatal(err)) throw err;
 		// The tags stay lost on the server; the next run takes the server's metadata over.
-		deps.log.warn('Tags of a moved sub-page could not be assigned again', { pageId: page.id, error: err instanceof Error ? err.name : 'unknown' });
+		deps.log.warn('Tags of a moved sub-page could not be assigned again', { pageId: page.id, ...errorLogFields(err) });
 		return {};
 	}
 }
