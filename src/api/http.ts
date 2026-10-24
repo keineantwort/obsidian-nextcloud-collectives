@@ -39,17 +39,28 @@ export function basicAuthHeader(username: string, password: string): string {
 /**
  * Central status → error mapping. Returns null for 2xx (200–299).
  * 401 → AuthError(401); 403 → ForbiddenError; 404 → NotFoundError; 412 → ConflictError;
- * every other status → ServerError(status, message, detail).
+ * every other status → ServerError(status, message).
  * `what` is a short, credential-free description used in the message, e.g. 'GET /ocs/v2.php/…/collectives'.
- * `detail` is the server's cleaned reason (extractErrorDetail); only ServerError carries it.
+ * `detail` is the server's cleaned reason (extractErrorDetail); it is put on every error as `detail`.
  */
 export function errorForStatus(status: number, what: string, detail?: string): NcError | null {
 	if (status >= 200 && status <= 299) return null;
-	if (status === 401) return new AuthError(401, `Authentication failed (HTTP 401) for ${what}`);
-	if (status === 403) return new ForbiddenError(`Access denied (HTTP 403) for ${what}`);
-	if (status === 404) return new NotFoundError(`Not found (HTTP 404) for ${what}`);
-	if (status === 412) return new ConflictError(`Precondition failed (HTTP 412) for ${what}`);
-	return new ServerError(status, `Unexpected HTTP ${status} for ${what}`, detail);
+	const options = detail === undefined ? undefined : { detail };
+	if (status === 401) return new AuthError(401, `Authentication failed (HTTP 401) for ${what}`, options);
+	if (status === 403) return new ForbiddenError(`Access denied (HTTP 403) for ${what}`, options);
+	if (status === 404) return new NotFoundError(`Not found (HTTP 404) for ${what}`, options);
+	if (status === 412) return new ConflictError(`Precondition failed (HTTP 412) for ${what}`, options);
+	return new ServerError(status, `Unexpected HTTP ${status} for ${what}`, options);
+}
+
+/**
+ * The error for a response, with the server's reason as detail (ADR 0028); null for 2xx. The body is read only on
+ * failure. A binary response has no text, so its bytes are decoded as UTF-8. `secrets` are masked in the detail.
+ */
+export function errorForResponse(res: HttpResponse, what: string, secrets: readonly string[]): NcError | null {
+	if (res.status >= 200 && res.status <= 299) return null;
+	const body = res.text === '' && res.data !== undefined ? new TextDecoder().decode(res.data) : res.text;
+	return errorForStatus(res.status, what, extractErrorDetail(body, secrets));
 }
 
 /** Case-insensitive header lookup (requestUrl does not guarantee lower-case keys on every platform). Returns undefined if absent. */
@@ -115,7 +126,7 @@ export class HttpClient {
 	 * - If the RequestFn rejects: an NcError is passed through unchanged; anything else becomes
 	 *   NetworkError('Request failed: <METHOD> <path>', { cause }).
 	 * - 2xx → resolves with the HttpResponse.
-	 * - non-2xx → rejects with errorForStatus(status, `${method} ${path}`, detail), where detail is the server's own reason
+	 * - non-2xx → rejects with errorForResponse(res, `${method} ${path}`, secrets), where the detail is the server's own reason
 	 *   from the body (extractErrorDetail, password and username removed). Never the raw body.
 	 * - Retry: only if retry is enabled AND method is in RETRYABLE_METHODS AND the failure is a NetworkError or a status >= 500.
 	 *   Before retry n (n = 1..3) it awaits sleep(RETRY_DELAYS_MS[n-1]). After the 3rd retry fails, the last error is thrown.
@@ -166,10 +177,7 @@ export class HttpClient {
 		}
 
 		this.onAttempt?.({ method, path, status: res.status, ms: Date.now() - started });
-		// The body is read for the detail only on failure; a 2xx body is never inspected here.
-		const failed = res.status < 200 || res.status > 299;
-		const detail = failed ? extractErrorDetail(res.text, [this.appPassword, this.username]) : undefined;
-		const error = errorForStatus(res.status, what, detail);
+		const error = errorForResponse(res, what, [this.appPassword, this.username]);
 		if (error) throw error;
 		return res;
 	}

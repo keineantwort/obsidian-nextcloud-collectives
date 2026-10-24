@@ -158,7 +158,7 @@ export async function applyResolution(
 		try {
 			await deps.vault.trash(trashPath);
 		} catch (err) {
-			// Only the error class is logged: messages may contain URLs or credentials.
+			// The error class and the server's detail are logged, never the message.
 			deps.log.warn('Conflict copy could not be moved to trash', { pageId, ...errorLogFields(err) });
 		}
 	}

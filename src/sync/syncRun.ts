@@ -325,6 +325,6 @@ async function reportServerVersion(ocs: OcsClient, deps: SyncRunDeps): Promise<v
 		else deps.onServerVersion?.(version);
 	} catch (err) {
 		// An auth failure would already have failed getCurrentUserId; anything here is a capabilities-only problem.
-		deps.log.warn('Server version check failed', { ...errorLogFields(err) });
+		deps.log.warn('Server version check failed', errorLogFields(err));
 	}
 }

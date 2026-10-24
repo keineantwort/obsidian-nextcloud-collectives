@@ -244,7 +244,7 @@ export class SyncController {
 			this.lastRun = { kind: 'failed', at: Date.now() };
 			this.dirtyQueue.requeue(this.takenDirty);
 			// Log only the error class and the cleaned server detail, never the message (may contain URLs).
-			log.error('Sync failed', { ...errorLogFields(err) });
+			log.error('Sync failed', errorLogFields(err));
 			if (manual) {
 				showSyncNotice(describeSyncError(err, t));
 			} else {

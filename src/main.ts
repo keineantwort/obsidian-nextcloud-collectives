@@ -275,7 +275,7 @@ export default class NextcloudCollectivesPlugin extends Plugin {
 			}
 			new Notice(this.t('rename.done'));
 		} catch (err) {
-			this.log.warn('Page rename failed', { ...errorLogFields(err) });
+			this.log.warn('Page rename failed', errorLogFields(err));
 			new Notice(this.t('rename.failed'));
 		}
 	}
