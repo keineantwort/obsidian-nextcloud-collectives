@@ -10,7 +10,7 @@ name: Integration (Nextcloud versions)
 # A release tag does not run the tests again: the tagged commit on main has passed them on its pull request and its merge.
 # "Nextcloud 35" is a required status check for merging into main (docs/release.md), so the workflow has no paths filter:
 # without a run, a pull request that changes only documentation could never be merged. Instead the job skips its steps
-# when the pull request touches nothing the tests depend on.
+# when the pull request or the push to main touches nothing the tests depend on (scripts/ci/affects-tests.sh).
 # Runs on the runner label docker-host (requirements: docs/ci-runner.md).
 on:
   pull_request:
@@ -43,16 +43,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The checkout of a pull request is the merge with its base, so the diff against the base holds exactly its changes.
-      # If git cannot tell, the tests run.
-      - name: Skip if the pull request does not affect the tests
-        if: github.event_name == 'pull_request'
+      # A pull request is compared with its base: its checkout is the merge with the base, so the diff holds exactly its
+      # changes. A push to main is compared with the state before the push, so a merge holds everything it brought in.
+      # If git cannot tell (base not fetchable, first push of a branch), the tests run. Started by hand, they always run.
+      - name: Skip if the change does not affect the tests
+        if: github.event_name != 'workflow_dispatch'
         run: |
-          RELEVANT='^(src/|tests/|scripts/dev-nextcloud/|\.forgejo/workflows/integration\.yml$|vitest\..*\.config\.ts$|package(-lock)?\.json$)'
-          if git fetch -q --depth=1 origin "${{ github.base_ref }}" && CHANGED=$(git diff --name-only FETCH_HEAD HEAD) \
-            && ! printf '%s\n' "$CHANGED" | grep -qE "$RELEVANT"; then
+          BASE=
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch -q --depth=1 origin "${{ github.base_ref }}" && BASE=$(git rev-parse FETCH_HEAD) || true
+          else
+            git fetch -q --depth=1 origin "${{ github.event.before }}" && BASE="${{ github.event.before }}" || true
+          fi
+          if [ -n "$BASE" ] && [ "$(sh scripts/ci/affects-tests.sh "$BASE")" = "false" ]; then
             echo "SKIP_TESTS=true" >> "$GITHUB_ENV"
-            echo "The pull request changes nothing the integration tests depend on, nothing to test." | tee "$GITHUB_STEP_SUMMARY"
+            echo "The change affects nothing the integration tests depend on, nothing to test." | tee "$GITHUB_STEP_SUMMARY"
           fi
 
       # "latest" is often the same image as the current version; then its job would only repeat that one and is skipped.

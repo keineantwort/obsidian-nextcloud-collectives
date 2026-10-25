@@ -16,8 +16,8 @@ Each job starts a fresh test server of the respective version (ADR 0024). Runner
 
 | Workflow | What | Versions | When |
 |---|---|---|---|
-| `integration.yml` | `npm run test:int` | the newest from `TESTED_NEXTCLOUD_MAJORS` (currently 35) and `latest` | every pull request (skips its steps if neither source code, tests nor test server scripts are affected), every push to `main`, "Run workflow" |
-| `nightly.yml` | `npm run test:int` | the two before it (currently 33, 34) | nightly on `main` if there was a merge since the night before; the night from Wednesday to Thursday always; "Run workflow" |
+| `integration.yml` | `npm run test:int` | the newest from `TESTED_NEXTCLOUD_MAJORS` (currently 35) and `latest` | every pull request and every push to `main` (each skips its steps if neither source code, tests, test server scripts, dependencies nor the test workflows are affected, `scripts/ci/affects-tests.sh`), "Run workflow" |
+| `nightly.yml` | `npm run test:int` | the two before it (currently 33, 34) | nightly on `main` if a merge since the night before affected the tests (not for documentation only, `scripts/ci/affects-tests.sh`); the night from Wednesday to Thursday always; "Run workflow" |
 | `nightly.yml` | `npm run test:perf` (500 pages) | all from `TESTED_NEXTCLOUD_MAJORS` and `latest` | as above |
 
 A release tag does not start integration tests: the tagged state on `main` passed them at the pull request and at the merge. Before a release it is worth looking at the latest run of `nightly.yml`; when in doubt, use "Run workflow" there. The `latest` jobs may be red; they do not block a merge. As long as `nextcloud:apache` is the same image as the current version, they skip their steps (`scripts/dev-nextcloud/latest-is-current.sh`).

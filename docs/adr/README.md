@@ -27,8 +27,9 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0021](0021-attachments-embeds-index-and-reconciliation.md) | Attachments: embeds via the index, reconciliation via ETags, step after the content | accepted |
 | [0022](0022-automation-mutex-login-flow-and-throttled-saving.md) | Automation: mutex with re-run flag, silent auto runs, Login Flow v2, throttled saving | accepted |
 | [0023](0023-release-version-check-log-and-ci.md) | Release: version check, log view, release CI | accepted, integration test trigger superseded by 0024 |
-| [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted, paths filter superseded by 0026 |
+| [0024](0024-integration-tests-split-pr-and-nightly.md) | Integration tests split: current version and latest per PR, older versions and performance nightly | accepted, paths filter superseded by 0026, nightly condition refined by 0029 |
 | [0025](0025-english-documentation-user-manual-and-architecture.md) | English documentation, user manual, architecture instead of plan | accepted |
-| [0026](0026-required-checks-and-retried-app-install.md) | Required checks for main, in-job change detection, retried app installation | accepted |
+| [0026](0026-required-checks-and-retried-app-install.md) | Required checks for main, in-job change detection, retried app installation | accepted, change detection extended by 0029 |
 | [0027](0027-update-existing-conflict-copy.md) | Update the existing conflict copy when the server changes again | accepted |
 | [0028](0028-server-error-detail-in-the-log.md) | Server error detail (OCS message, Sabre exception) on HTTP errors and in the log | accepted |
+| [0029](0029-skip-integration-tests-for-documentation-on-main.md) | Skip the integration and nightly tests for documentation-only changes on main too | accepted |
