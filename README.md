@@ -4,7 +4,7 @@
 
 An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) of a Nextcloud server with your vault, in both directions. Each collective becomes a folder in your vault, each page a note. You edit in Obsidian, on desktop or on your phone, and your colleagues keep working in Collectives in the browser. When both sides change the same page, the plugin keeps both versions instead of overwriting one.
 
-**Status:** pre-release, version 0.3.2. The plugin is not in the Obsidian community store yet; install it with BRAT or by hand (see [Installation](#installation)).
+**Status:** pre-release, version 0.3.2. Install it from Obsidian's community plugins (see [Installation](#installation)).
 
 ![File list in Obsidian with the collectives as folders and page emoji in front of the note titles](docs/images/en/file-list.png)
 
@@ -47,13 +47,18 @@ The log for reporting problems; credentials are never logged.
 
 ## Installation
 
-The plugin is not in the Obsidian community store yet. Releases are published on GitHub: [keineantwort/obsidian-nextcloud-collectives](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases). Read [Risks and backup](#risks-and-backup) before your first sync.
+Read [Risks and backup](#risks-and-backup) before your first sync. For every way, restricted mode must be off: in Obsidian under "Settings › Community plugins", community plugins must be allowed.
 
-For both ways, restricted mode must be off: in Obsidian under "Settings › Community plugins", community plugins must be allowed.
+### From the community plugins (recommended, also on your phone)
 
-### With BRAT (recommended, also on your phone)
+1. In Obsidian, open "Settings › Community plugins › Browse" and search for **"Nextcloud Collectives Sync"**.
+2. Select **Install**, then **Enable**.
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs plugins straight from a GitHub repository and keeps them up to date.
+Obsidian installs updates under "Settings › Community plugins › Check for updates". The plugin's page in the community directory: [community.obsidian.md/plugins/nextcloud-collectives](https://community.obsidian.md/plugins/nextcloud-collectives).
+
+### With BRAT
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs plugins straight from the GitHub repository ([releases](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases)). Use it to stay on a specific release, or to get a new release before the community directory has picked it up.
 
 1. In Obsidian, under "Community plugins › Browse", install and enable the plugin **"BRAT"** (Obsidian42 – BRAT).
 2. In the settings of BRAT, choose **"Add beta plugin"** (or run the command "BRAT: Plugins: Add a beta plugin for testing (with or without version)").
@@ -62,6 +67,8 @@ For both ways, restricted mode must be off: in Obsidian under "Settings › Comm
 5. If the plugin is not enabled afterwards: enable **"Nextcloud Collectives Sync"** under "Community plugins".
 
 From then on, BRAT checks for new releases when Obsidian starts (by hand: command "BRAT: Plugins: Check for updates to all beta plugins and UPDATE"). If you picked a specific release, the plugin stays at that version until you choose another one in BRAT.
+
+If you installed the plugin with BRAT before, it is the same plugin as in the community plugins; your settings and notes stay. To let Obsidian update it instead of BRAT, remove it from the list of beta plugins in BRAT's settings (this does not uninstall it).
 
 ### By hand
 
