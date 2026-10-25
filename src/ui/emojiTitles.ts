@@ -4,6 +4,8 @@
 
 export const EMOJI_ATTR = 'data-nc-emoji';
 export const FOLDER_NOTE_ATTR = 'data-nc-folder-note';
+/** On the item list of a folder whose note is flagged: lets the style sheet order it without `:has` (slow to invalidate). */
+export const HAS_FOLDER_NOTE_ATTR = 'data-nc-has-folder-note';
 
 /** The emoji of a frontmatter value: a non-empty string of at most 16 characters, else null. */
 export function emojiFromFrontmatter(value: unknown): string | null {
@@ -31,14 +33,17 @@ export function isFolderNotePath(path: string): boolean {
 
 /**
  * Marks the titles below `root` (a file explorer): notes and folders with the emoji of their page (a folder shows the emoji
- * of its own note `Folder/Folder.md`), and with `folderNoteFirst` the note of each folder, so the style sheet shows it first
- * in its folder. Only attributes change; Obsidian's order of the items stays as it is.
+ * of its own note `Folder/Folder.md`), and with `folderNoteFirst` the note of each folder and the item list that holds it, so
+ * the style sheet shows it first in its folder. Only attributes change; Obsidian's order of the items stays as it is.
  */
 export function decorateExplorer(root: ParentNode, emojiOf: (path: string) => string | null, folderNoteFirst = true): void {
 	for (const item of Array.from(root.querySelectorAll('.nav-file-title[data-path]'))) {
 		const path = item.getAttribute('data-path') ?? '';
 		mark(item.querySelector('.nav-file-title-content'), emojiOf(path));
-		flag(item.closest('.nav-file'), folderNoteFirst && isFolderNotePath(path));
+		flag(item.closest('.nav-file'), folderNoteFirst && isFolderNotePath(path), FOLDER_NOTE_ATTR);
+	}
+	for (const list of Array.from(root.querySelectorAll('.nav-folder-children'))) {
+		flag(list, Array.from(list.children).some((child) => child.hasAttribute(FOLDER_NOTE_ATTR)), HAS_FOLDER_NOTE_ATTR);
 	}
 	for (const item of Array.from(root.querySelectorAll('.nav-folder-title[data-path]'))) {
 		const path = item.getAttribute('data-path') ?? '';
@@ -47,13 +52,13 @@ export function decorateExplorer(root: ParentNode, emojiOf: (path: string) => st
 	}
 }
 
-/** Sets or removes the folder-note flag. */
-function flag(el: Element | null, on: boolean): void {
+/** Sets or removes a flag attribute. */
+function flag(el: Element | null, on: boolean, attr: string): void {
 	if (el === null) return;
 	if (on) {
-		if (!el.hasAttribute(FOLDER_NOTE_ATTR)) el.setAttribute(FOLDER_NOTE_ATTR, '');
-	} else if (el.hasAttribute(FOLDER_NOTE_ATTR)) {
-		el.removeAttribute(FOLDER_NOTE_ATTR);
+		if (!el.hasAttribute(attr)) el.setAttribute(attr, '');
+	} else if (el.hasAttribute(attr)) {
+		el.removeAttribute(attr);
 	}
 }
 
@@ -67,4 +72,5 @@ export function decorateView(container: ParentNode, emoji: string | null): void 
 export function clearEmoji(root: ParentNode): void {
 	for (const el of Array.from(root.querySelectorAll(`[${EMOJI_ATTR}]`))) el.removeAttribute(EMOJI_ATTR);
 	for (const el of Array.from(root.querySelectorAll(`[${FOLDER_NOTE_ATTR}]`))) el.removeAttribute(FOLDER_NOTE_ATTR);
+	for (const el of Array.from(root.querySelectorAll(`[${HAS_FOLDER_NOTE_ATTR}]`))) el.removeAttribute(HAS_FOLDER_NOTE_ATTR);
 }

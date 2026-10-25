@@ -4,7 +4,7 @@
 
 An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) of a Nextcloud server with your vault, in both directions. Each collective becomes a folder in your vault, each page a note. You edit in Obsidian, on desktop or on your phone, and your colleagues keep working in Collectives in the browser. When both sides change the same page, the plugin keeps both versions instead of overwriting one.
 
-**Status:** pre-release, version 0.3.0. The plugin is not in the Obsidian community store yet; install it with BRAT or by hand (see [Installation](#installation)).
+**Status:** pre-release, version 0.3.2. The plugin is not in the Obsidian community store yet; install it with BRAT or by hand (see [Installation](#installation)).
 
 ![File list in Obsidian with the collectives as folders and page emoji in front of the note titles](docs/images/en/file-list.png)
 
@@ -102,7 +102,7 @@ The plugin connects **only to the Nextcloud server you enter in the settings**. 
 - Version and account check: `/ocs/v2.php/cloud/capabilities` and `/ocs/v2.php/cloud/user`.
 - Collectives and pages: the Collectives and Circles interfaces (`/ocs/v2.php/apps/collectives/…`, `/ocs/v2.php/apps/circles/…`) and WebDAV (`/remote.php/dav/files/…`) for page contents and attachments.
 
-The plugin uses no other services: no telemetry, no analytics, no update checks. Links to this manual (for example in the settings) open GitHub in your browser only when you click them. The plugin reads and writes files only inside your vault.
+The plugin uses no other services: no telemetry, no analytics, no update checks. Links to this manual (for example in the settings) open GitHub in your browser only when you click them. The plugin reads and writes files only inside your vault. It writes to the clipboard only when you press **Copy log** in the log view, and it never reads the clipboard.
 
 ## Documentation
 

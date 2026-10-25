@@ -1,6 +1,6 @@
 {
   "name": "nextcloud-collectives",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Obsidian plugin that syncs Nextcloud Collectives bidirectionally with a vault.",
   "main": "main.js",
   "type": "module",

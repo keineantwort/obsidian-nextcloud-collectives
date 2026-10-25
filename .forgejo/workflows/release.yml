@@ -1,7 +1,8 @@
 name: Release
 
 # A tag that equals the version in manifest.json (no "v" prefix; Obsidian and BRAT require this) builds the release
-# and attaches main.js, manifest.json and styles.css as single files to a Forgejo release (docs/release.md).
+# and attaches main.js, manifest.json and styles.css as single files to a Forgejo release (docs/release.md). The section
+# of the version in CHANGELOG.md becomes the description of the release.
 on:
   push:
     tags:
@@ -25,8 +26,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Check that the tag matches manifest.json, package.json and versions.json
+      - name: Check that the tag matches manifest.json, package.json and versions.json, and CHANGELOG.md describes it
         run: node scripts/check-release.mjs "${GITHUB_REF_NAME}"
+
+      # Tag, name and description (the section of the version in CHANGELOG.md) for both release APIs.
+      - name: Prepare the release description
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME}" > release.json
 
       - name: Build, lint and test
         run: |
@@ -50,7 +55,7 @@ jobs:
           RESPONSE=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: token ${FORGEJO_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\"}" \
+            --data-binary @release.json \
             "${API}/releases") || { echo "$RESPONSE" >&2; exit 1; }
           RELEASE_ID=$(printf '%s' "$RESPONSE" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
           for f in main.js manifest.json styles.css; do
@@ -75,7 +80,7 @@ jobs:
           RESPONSE=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\"}" \
+            --data-binary @release.json \
             "https://api.github.com/repos/${REPO}/releases") || { echo "$RESPONSE" >&2; exit 1; }
           RELEASE_ID=$(printf '%s' "$RESPONSE" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
           for f in main.js manifest.json styles.css; do

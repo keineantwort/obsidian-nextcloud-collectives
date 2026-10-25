@@ -4,7 +4,7 @@ A release is a Git tag `x.y.z` (without `v`) that exactly matches the `version` 
 
 ## Procedure
 
-1. Raise the version in `manifest.json` and `package.json`, add `"<version>": "<minAppVersion>"` to `versions.json`. `npm run release:check` verifies that everything fits together.
+1. Raise the version in `manifest.json` and `package.json`, add `"<version>": "<minAppVersion>"` to `versions.json`, and add a section `## <version> – <date>` with the changes users notice to `CHANGELOG.md` (it becomes the description of the release on Forgejo and GitHub, `scripts/release-notes.mjs`). `npm run release:check` verifies that everything fits together.
 2. Pull request to `main`; CI (`.forgejo/workflows/ci.yml`) builds, lints and tests.
 3. Set the tag on `main` and push it: `git tag 0.2.0 && git push origin 0.2.0`.
 4. `.forgejo/workflows/release.yml` checks the tag, builds and creates a Forgejo release with `main.js`, `manifest.json` and `styles.css`, plus the same release on GitHub ([keineantwort/obsidian-nextcloud-collectives](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases)). BRAT and, later, the store read only GitHub. Prerequisite: Actions secret `RELEASE_TOKEN` (Forgejo token with write access to releases); for GitHub the variable `MIRROR_GITHUB_REPO` and the secret `MIRROR_GITHUB_TOKEN`.
