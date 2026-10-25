@@ -129,13 +129,13 @@ export class NcSettingTab extends PluginSettingTab {
 
 	private serverUrlDefinition(): SettingDefinition {
 		const { plugin } = this;
-		const settings = plugin.settings;
 		const t = plugin.t;
 		return {
 			name: t('settings.serverUrl.name'),
 			desc: t('settings.serverUrl.desc'),
 			aliases: ['nextcloud', 'url', 'https'],
 			render: (setting) => {
+				const settings = plugin.settings;
 				const urlWarningEl = setting.infoEl.createDiv({ cls: 'nc-url-warning', attr: { role: 'status', 'aria-live': 'polite' } });
 				/** Warns about plain http to a remote host. Invalid URLs show nothing here; the connection test reports them. */
 				const updateUrlWarning = (raw: string): void => {
@@ -170,12 +170,12 @@ export class NcSettingTab extends PluginSettingTab {
 
 	private usernameDefinition(): SettingDefinition {
 		const { plugin } = this;
-		const settings = plugin.settings;
 		const t = plugin.t;
 		return {
 			name: t('settings.username.name'),
 			aliases: ['user', 'login'],
 			render: (setting) => {
+				const settings = plugin.settings;
 				setting.addText((text) => {
 					this.usernameField = text;
 					text
@@ -352,13 +352,13 @@ export class NcSettingTab extends PluginSettingTab {
 
 	private conflictStrategyDefinition(): SettingDefinition {
 		const { plugin } = this;
-		const settings = plugin.settings;
 		const t = plugin.t;
 		return {
 			name: t('settings.conflictStrategy.name'),
 			desc: t('settings.conflictStrategy.desc'),
 			aliases: ['conflict', 'merge'],
 			render: (setting) => {
+				const settings = plugin.settings;
 				setting.descEl.id = 'nc-conflict-strategy-desc';
 				const strategyWarningEl = setting.infoEl.createDiv({
 					cls: 'nc-strategy-warning',
@@ -387,12 +387,12 @@ export class NcSettingTab extends PluginSettingTab {
 
 	private attachmentFolderDefinition(): SettingDefinition {
 		const { plugin } = this;
-		const settings = plugin.settings;
 		const t = plugin.t;
 		return {
 			name: t('settings.attachmentFolder.name'),
 			desc: t('settings.attachmentFolder.desc'),
 			render: (setting) => {
+				const settings = plugin.settings;
 				setting.addText((text) => {
 					text.setValue(settings.attachmentFolderPattern);
 					// Saved on commit; an unusable pattern is refused and the field shows the saved value again.
