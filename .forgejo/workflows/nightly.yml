@@ -3,8 +3,9 @@ name: Nightly (older Nextcloud, performance)
 # The slow part of the tests, on main only (integration.yml covers pull requests and merges):
 # - the integration tests (npm run test:int) against the two Nextcloud major versions before the current one,
 # - the performance test (npm run test:perf, 500 pages) against every version in TESTED_NEXTCLOUD_MAJORS and the newest image.
-# A night runs only if main has changed since the night before; the night from Wednesday to Thursday always runs, so every
-# version is tested at least once a week. The job "latest" tests the newest image as an early warning for the next major
+# A night runs only if main has changed since the night before in something the tests depend on (scripts/ci/affects-tests.sh,
+# so not for documentation only); the night from Wednesday to Thursday always runs, so every version is tested at least
+# once a week. The job "latest" tests the newest image as an early warning for the next major
 # version; it may fail without failing the workflow, and it skips its steps while the newest image is the current version
 # (scripts/dev-nextcloud/latest-is-current.sh). Runs on the runner label docker-host (requirements: docs/ci-runner.md).
 on:
@@ -26,17 +27,23 @@ jobs:
       run: ${{ steps.check.outputs.run }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history, to find the state of main from 25 hours ago.
+          fetch-depth: 0
 
-      # A merge in Forgejo sets the committer date of the new head of main to the time of the merge. 25 hours instead of
-      # 24 so that a night that starts a little late does not miss a merge from the evening before.
+      # Compares main with its state 25 hours ago, following main itself (first parent), not the commits of merged
+      # branches. A merge in Forgejo sets the committer date of the new head of main to the time of the merge. 25 hours
+      # instead of 24 so that a night that starts a little late does not miss a merge from the evening before.
       - name: Decide whether to run
         id: check
         run: |
-          AGE=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          BASE=$(git rev-list -1 --first-parent --before="25 hours ago" HEAD)
           if [ "${{ github.event_name }}" != "schedule" ]; then RUN=true; REASON="started by hand"
           elif [ "$(date -u +%u)" = "4" ]; then RUN=true; REASON="weekly run (night from Wednesday to Thursday)"
-          elif [ "$AGE" -lt 90000 ]; then RUN=true; REASON="main changed in the last 25 hours"
-          else RUN=false; REASON="no change on main since the last night"
+          elif [ -z "$BASE" ]; then RUN=true; REASON="no state of main older than 25 hours"
+          elif [ "$(sh scripts/ci/affects-tests.sh "$BASE")" = "true" ]; then RUN=true; REASON="main changed in the last 25 hours in something the tests depend on"
+          elif [ "$BASE" = "$(git rev-parse HEAD)" ]; then RUN=false; REASON="no change on main since the last night"
+          else RUN=false; REASON="main changed in the last 25 hours, but only in things the tests do not depend on"
           fi
           echo "run=${RUN}" >> "$GITHUB_OUTPUT"
           echo "Head of main: $(git log -1 --format='%h %ci %s'). Run: ${RUN} (${REASON})." | tee "$GITHUB_STEP_SUMMARY"
