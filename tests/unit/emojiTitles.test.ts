@@ -81,6 +81,26 @@ describe('folders in the explorer', () => {
 		expect(root.querySelectorAll('[data-nc-folder-note]')).toHaveLength(0);
 	});
 
+	it('flags the list of a folder that holds its note, so the style sheet needs no :has, and unflags it with the note', () => {
+		const root = dom(`${TREE}
+<div class="nav-folder"><div class="nav-folder-title" data-path="Coll/Leer"><div class="nav-folder-title-content">Leer</div></div>
+<div class="nav-folder-children">
+<div class="nav-file"><div class="nav-file-title" data-path="Coll/Leer/Alpha.md"><div class="nav-file-title-content">Alpha</div></div></div>
+</div></div>`);
+		const lists = Array.from(root.querySelectorAll('.nav-folder-children'));
+
+		decorateExplorer(root, () => null);
+		expect(lists.map((el) => el.hasAttribute('data-nc-has-folder-note'))).toEqual([true, false]);
+
+		decorateExplorer(root, () => null, false);
+		expect(lists.map((el) => el.hasAttribute('data-nc-has-folder-note'))).toEqual([false, false]);
+
+		decorateExplorer(root, () => null);
+		root.querySelector('[data-path="Coll/Ordner/Ordner.md"]')?.closest('.nav-file')?.remove();
+		decorateExplorer(root, () => null);
+		expect(lists[0]?.hasAttribute('data-nc-has-folder-note')).toBe(false);
+	});
+
 	it('never moves or renames anything: the order of the items and the titles stay as they are', () => {
 		const root = dom(TREE);
 		const before = Array.from(root.querySelectorAll('.nav-file-title')).map((el) => `${el.getAttribute('data-path')}|${el.textContent}`);
@@ -95,6 +115,7 @@ describe('folders in the explorer', () => {
 		decorateExplorer(root, () => null);
 		clearEmoji(root);
 		expect(root.querySelectorAll('[data-nc-folder-note]')).toHaveLength(0);
+		expect(root.querySelectorAll('[data-nc-has-folder-note]')).toHaveLength(0);
 	});
 
 	it('knows a folder note by its path', () => {

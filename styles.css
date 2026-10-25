@@ -20,7 +20,7 @@
 /* Shared */
 .nc-visually-hidden {
 	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-	overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+	overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 /* Status bar */
@@ -137,8 +137,8 @@
 .nc-rename-message { min-height: 1.5em; margin-bottom: var(--size-4-2); color: var(--text-error); font-size: var(--font-ui-small); }
 .is-mobile .nc-rename-modal .modal-button-container button { min-height: 44px; }
 
-/* The note of a folder first in its folder (display only; the flag comes from src/ui/emojiTitles.ts). */
-.nav-folder-children:has(> .nav-file[data-nc-folder-note]) { display: flex; flex-direction: column; }
+/* The note of a folder first in its folder (display only; both flags come from src/ui/emojiTitles.ts, no :has). */
+.nav-folder-children[data-nc-has-folder-note] { display: flex; flex-direction: column; }
 .nav-folder-children > .nav-file[data-nc-folder-note] { order: -1; }
 
 /* Log view */
