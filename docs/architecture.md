@@ -214,7 +214,9 @@ tests/
   integration/            against the Docker Nextcloud, incl. performance.test.ts (500 pages)
 scripts/
   dev-nextcloud/          docker compose test server with Collectives (several Nextcloud versions)
-  check-release.mjs       release consistency check
+  ci/affects-tests.sh     whether a change affects the integration tests (integration.yml, nightly.yml)
+  check-release.mjs       release consistency check (versions, CHANGELOG.md section)
+  release-notes.mjs       release description from CHANGELOG.md for release.yml
 docs/
   architecture.md         this document
   adr/                    architecture decision records
