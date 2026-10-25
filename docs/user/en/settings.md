@@ -4,7 +4,7 @@
 
 [Manual](README.md) › Settings
 
-Open "Settings › Nextcloud Collectives Sync". At the top, **Help** has a link "Open the manual" to this page. The settings are listed here in the order of the settings tab. Text and number fields are saved when you leave the field or press Enter. An invalid value is not saved: you see a message, and the field shows the saved value again.
+Open "Settings › Nextcloud Collectives Sync". At the top, **Help** has a link "Open the manual" to this page. The settings are listed here in the order of the settings tab. Text and number fields are saved when you leave the field or press Enter. An invalid value is not saved: you see a message, and the field shows the saved value again. In Obsidian 1.13 or newer, the settings search finds these settings by name, description and keywords such as "password" or "conflict".
 
 ![The settings of the plugin with server URL, username, sign-in with the browser and app password](../../images/en/settings.png)
 

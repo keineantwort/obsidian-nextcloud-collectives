@@ -1,6 +1,6 @@
 # 0011 – Obsidian ≥ 1.11.4, app password in secret storage
 
-- Status: accepted; input UI superseded by [0014](0014-app-password-input-without-secretcomponent.md)
+- Status: accepted; input UI superseded by [0014](0014-app-password-input-without-secretcomponent.md); settings tab structure extended by [0030](0030-declarative-settings-definitions.md)
 - Date: 2026-10-16
 - Related: architecture §3, §10.1, ONC-1
 
