@@ -94,6 +94,16 @@ Das Plugin schreibt in beide Richtungen: in deinen Vault **und** auf deinen Next
 - Die Collectives-Schnittstelle ist nicht offiziell stabil. Antwortet der Server unerwartet, stoppt das Plugin mit einer Meldung, statt zu raten.
 - Das App-Passwort liegt im Secret Storage von Obsidian, nicht in den Plugin-Einstellungen und nie im Protokoll.
 
+## Netzwerk und Datenschutz
+
+Das Plugin verbindet sich **nur mit dem Nextcloud-Server, den du in den Einstellungen einträgst**. Diesen Server braucht es für die Synchronisierung:
+
+- Anmeldung: der Login Flow von Nextcloud (`/index.php/login/v2`, öffnet die Anmeldeseite deines Servers im Browser) oder ein App-Passwort, das du einträgst.
+- Versions- und Kontoprüfung: `/ocs/v2.php/cloud/capabilities` und `/ocs/v2.php/cloud/user`.
+- Collectives und Seiten: die Schnittstellen von Collectives und Circles (`/ocs/v2.php/apps/collectives/…`, `/ocs/v2.php/apps/circles/…`) und WebDAV (`/remote.php/dav/files/…`) für Seiteninhalte und Anhänge.
+
+Andere Dienste nutzt das Plugin nicht: keine Telemetrie, keine Statistik, keine Update-Prüfung. Links zu diesem Handbuch (zum Beispiel in den Einstellungen) öffnen GitHub im Browser, und zwar nur, wenn du sie anklickst. Das Plugin liest und schreibt Dateien nur in deinem Vault.
+
 ## Dokumentation
 
 Das Handbuch erklärt alle Teile des Plugins:
@@ -120,3 +130,5 @@ Siehe [CONTRIBUTING.md](CONTRIBUTING.md) (auf Englisch).
 ## Lizenz
 
 [MIT](LICENSE)
+
+Dank an [Nextcloud Sync](https://github.com/siosig/obsidian-nextcloudsync) von Daisuke ITO (MIT): Anmeldung, Konfliktbehandlung und das Auslesen der WebDAV-Antworten dienten als Vorbild. Code wurde nicht übernommen.
