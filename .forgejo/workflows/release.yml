@@ -2,7 +2,7 @@ name: Release
 
 # A tag that equals the version in manifest.json (no "v" prefix; Obsidian and BRAT require this) builds the release
 # and attaches main.js, manifest.json and styles.css as single files to a Forgejo release (docs/release.md). The section
-# of the version in CHANGELOG.md becomes the description of the release.
+# of the version in CHANGELOG.md becomes the description of the release. Only a tag on main is released.
 on:
   push:
     tags:
@@ -15,6 +15,24 @@ jobs:
     container: node:24-bookworm
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The history of main, to check that the tag is on it.
+          fetch-depth: 0
+
+      # A tag set before its pull request was merged points to a commit of the branch and would release a state that is
+      # not on main. A tag on an older commit of main is stopped by the version check below.
+      - name: Check that the tag is on main
+        run: |
+          git fetch -q origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            {
+              echo "Tag ${GITHUB_REF_NAME} points to $(git rev-parse --short "$GITHUB_SHA"), which is not on main."
+              echo "Merge the pull request first, then move the tag to main:"
+              echo "  git push origin :refs/tags/${GITHUB_REF_NAME} && git tag -d ${GITHUB_REF_NAME}"
+              echo "  git checkout main && git pull --ff-only origin main && git tag ${GITHUB_REF_NAME} && git push origin ${GITHUB_REF_NAME}"
+            } >&2
+            exit 1
+          fi
 
       # The npm cache needs the cache server of the runner (docs/ci-runner.md); without it the step only warns.
       - uses: actions/cache@v4
