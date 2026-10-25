@@ -12,13 +12,24 @@ interface FieldReader {
 	numberArray(key: string): number[];
 }
 
+/** ApiChangedError whose message also goes to the log as `detail` (ONC-56). Callers pass only entity, field and type names, never values. */
+function shapeError(message: string, cause?: unknown): ApiChangedError {
+	return new ApiChangedError(message, cause === undefined ? { detail: message } : { detail: message, cause });
+}
+
+/** Type name of a JSON value for error texts: 'null', 'array', 'object', 'string', 'number', 'boolean', 'undefined'. */
+function jsonType(value: unknown): string {
+	if (value === null) return 'null';
+	return Array.isArray(value) ? 'array' : typeof value;
+}
+
 /** Starts reading the fields of one entity. Any object that is not a plain object is ApiChangedError. */
 function reader(entity: string, raw: unknown): FieldReader {
-	if (!isRecord(raw)) throw new ApiChangedError(`Unexpected ${entity}: not an object`);
+	if (!isRecord(raw)) throw shapeError(`Unexpected ${entity}: not an object (got ${jsonType(raw)})`);
 	const obj = raw;
 
 	const fail = (key: string, problem: string): never => {
-		throw new ApiChangedError(`Unexpected ${entity}: field "${key}" ${problem}`);
+		throw shapeError(`Unexpected ${entity}: field "${key}" ${problem} (got ${jsonType(obj[key])})`);
 	};
 	const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -131,23 +142,25 @@ export function parseAttachment(raw: unknown): Attachment {
 /** Reads data[key] and requires an array; maps each element with `parse`. Wrong/missing → ApiChangedError naming the key. */
 export function parseList<T>(data: unknown, key: string, parse: (raw: unknown) => T): T[] {
 	const list: unknown = isRecord(data) ? data[key] : undefined;
-	if (!Array.isArray(list)) throw new ApiChangedError(`Unexpected response: "${key}" is not an array`);
-	return list.map((item: unknown) => parseNamed(key, item, parse));
+	if (!Array.isArray(list)) throw shapeError(`Unexpected response: "${key}" is not an array (got ${jsonType(list)})`);
+	return list.map((item: unknown, index) => parseNamed(key, item, parse, index));
 }
 
 /** Reads data[key] and parses it as a single object. Wrong/missing → ApiChangedError naming the key. */
 export function parseItem<T>(data: unknown, key: string, parse: (raw: unknown) => T): T {
 	const item: unknown = isRecord(data) ? data[key] : undefined;
-	if (!isRecord(item)) throw new ApiChangedError(`Unexpected response: "${key}" is not an object`);
+	if (!isRecord(item)) throw shapeError(`Unexpected response: "${key}" is not an object (got ${jsonType(item)})`);
 	return parseNamed(key, item, parse);
 }
 
-/** Runs a parser and prefixes its ApiChangedError with the key, so the message names the place in the response. */
-function parseNamed<T>(key: string, raw: unknown, parse: (raw: unknown) => T): T {
+/** Runs a parser and prefixes its ApiChangedError with the key (and list position and id), so the message names the place in the response. */
+function parseNamed<T>(key: string, raw: unknown, parse: (raw: unknown) => T, index?: number): T {
 	try {
 		return parse(raw);
 	} catch (err) {
 		if (!(err instanceof ApiChangedError)) throw err;
-		throw new ApiChangedError(`Unexpected response in "${key}": ${err.message}`, { cause: err });
+		const id = isRecord(raw) && typeof raw['id'] === 'number' ? raw['id'] : undefined;
+		const where = index === undefined ? '' : ` [item ${index}${id === undefined ? '' : `, id ${id}`}]`;
+		throw shapeError(`Unexpected response in "${key}"${where}: ${err.message}`, err);
 	}
 }
