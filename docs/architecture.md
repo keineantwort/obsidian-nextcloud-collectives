@@ -49,7 +49,7 @@ The plugin is an independent implementation; existing plugins serve only as refe
 | Tests | Vitest for pure logic; integration tests against Nextcloud in Docker ([ADR 0006](adr/0006-local-docker-test-server.md)) |
 | Lint | ESLint with `eslint-plugin-obsidianmd` (rules for community plugins); purity of planner and mapping enforced via `no-restricted-imports` (`eslint.config.mts`) |
 | Localisation | User-facing texts in English and German via `src/i18n/`, chosen by `getLanguage()` ([ADR 0013](adr/0013-localisation-de-en.md)) |
-| Minimum version | Obsidian ≥ 1.11.4 because of the secret storage (`app.secretStorage`, `@since 1.11.4`; `minAppVersion` in `manifest.json`, [ADR 0011](adr/0011-minimum-version-and-secret-storage.md)). The declarative settings API (≥ 1.13.0) is not used |
+| Minimum version | Obsidian ≥ 1.11.4 because of the secret storage (`app.secretStorage`, `@since 1.11.4`; `minAppVersion` in `manifest.json`, [ADR 0011](adr/0011-minimum-version-and-secret-storage.md)). The settings are also provided as declarative definitions for the settings search of Obsidian ≥ 1.13; below that, `display()` renders the same definitions ([ADR 0031](adr/0031-declarative-settings-definitions.md)) |
 | Server | Nextcloud with the Collectives app (and Circles/Teams), OCS API `v1.0`. The tested Nextcloud major versions are `TESTED_NEXTCLOUD_MAJORS` in `src/api/versionCheck.ts`; the CI matrices in `.forgejo/workflows/integration.yml` and `nightly.yml` run the integration tests against them ([ADR 0024](adr/0024-integration-tests-split-pr-and-nightly.md)) |
 | Licence | MIT |
 
@@ -484,7 +484,7 @@ Link conversion (§9) is always on; there is no setting for it. Values from `dat
 | Notices | a manual run always shows a result notice; automatic runs only for warnings and errors (`src/ui/syncNotices.ts`); the same automatic notice is not repeated |
 | Commands | Sync now · Show conflicts · Show log · Set page emoji · Rename page |
 | File and editor menu | "Set page emoji…", "Rename page…" for synced notes |
-| Settings tab | Connection (server URL, username, app password, sign in with the browser, test connection), Automatic sync, Behaviour (conflicts, deletions, new folders, attachments, display options), Diagnostics (log, detailed log) |
+| Settings tab | `getSettingDefinitions()` (rows with `render`, searchable in Obsidian ≥ 1.13) and `display()` for older versions, both from the same definitions: Connection (server URL, username, app password, sign in with the browser, test connection), Automatic sync, Behaviour (conflicts, deletions, new folders, attachments, display options), Diagnostics (log, detailed log) |
 
 ### Initial sync
 

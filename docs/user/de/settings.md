@@ -4,7 +4,7 @@
 
 [Handbuch](README.md) › Einstellungen
 
-Öffne „Einstellungen › Nextcloud Collectives Sync“. Ganz oben führt **Hilfe** mit dem Link „Handbuch öffnen“ auf diese Seite. Die Einstellungen stehen hier in der Reihenfolge der Einstellungsseite. Text- und Zahlenfelder werden gespeichert, wenn du das Feld verlässt oder Enter drückst. Ein ungültiger Wert wird nicht gespeichert: Du siehst eine Meldung, und das Feld zeigt wieder den gespeicherten Wert.
+Öffne „Einstellungen › Nextcloud Collectives Sync“. Ganz oben führt **Hilfe** mit dem Link „Handbuch öffnen“ auf diese Seite. Die Einstellungen stehen hier in der Reihenfolge der Einstellungsseite. Text- und Zahlenfelder werden gespeichert, wenn du das Feld verlässt oder Enter drückst. Ein ungültiger Wert wird nicht gespeichert: Du siehst eine Meldung, und das Feld zeigt wieder den gespeicherten Wert. Ab Obsidian 1.13 findet die Suche in den Einstellungen diese Einstellungen über Name, Beschreibung und Stichwörter wie „Passwort“ oder „Konflikt“.
 
 ![Die Einstellungen des Plugins mit Server-URL, Benutzername, Anmeldung im Browser und App-Passwort](../../images/de/settings.png)
 

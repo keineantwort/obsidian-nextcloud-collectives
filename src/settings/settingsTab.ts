@@ -1,10 +1,12 @@
-import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
-import type { ButtonComponent, TextComponent } from 'obsidian';
+import { App, Notice, PluginSettingTab, SettingGroup } from 'obsidian';
+import type { ButtonComponent, SettingDefinition, SettingDefinitionItem, TextComponent } from 'obsidian';
 import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
 import { settingsManualUrl } from './manualLinks';
+import type { MessageKey } from '../i18n';
+import type { NcSettings } from './types';
 import { isSyncDebounceSec, isSyncIntervalMinutes, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
 
 export class NcSettingTab extends PluginSettingTab {
@@ -13,452 +15,470 @@ export class NcSettingTab extends PluginSettingTab {
 	private passwordField: TextComponent | null = null;
 	/** Set while a browser login waits; hide() cancels it so no invisible flow keeps polling. */
 	private cancelLogin: (() => void) | null = null;
-	/** Re-evaluates whether the connection test can run; replaced on every display(). */
-	private updateTestAvailability: () => void = () => {};
+	private urlInput: HTMLInputElement | null = null;
+	private testButton: ButtonComponent | null = null;
+	private testRunning = false;
+
+	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
 
 	hide(): void {
 		this.cancelLogin?.();
 	}
 
-	constructor(app: App, private readonly plugin: NextcloudCollectivesPlugin) { super(app, plugin); }
+	/**
+	 * The settings as definitions: Obsidian ≥ 1.13 renders and indexes them for its settings search (ADR 0031).
+	 * Every row uses `render` because the rows are not plain values: they save on commit, validate with notices,
+	 * keep the app password out of data.json and run the login and the connection test.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const { plugin } = this;
+		const t = plugin.t;
+		return [
+			{ type: 'group', items: [this.helpDefinition()] },
+			{
+				type: 'group',
+				heading: t('settings.heading.connection'),
+				items: [
+					this.serverUrlDefinition(),
+					this.usernameDefinition(),
+					this.loginDefinition(),
+					this.appPasswordDefinition(),
+					this.testDefinition(),
+				],
+			},
+			{
+				type: 'group',
+				heading: t('settings.heading.automation'),
+				items: [
+					this.numberDefinition('settings.syncInterval', 'syncIntervalMinutes', isSyncIntervalMinutes),
+					this.toggleDefinition('settings.syncOnStartup', 'syncOnStartup'),
+					this.toggleDefinition('settings.syncOnForeground', 'syncOnForeground'),
+					this.toggleDefinition('settings.syncOnSave', 'syncOnSave'),
+					this.numberDefinition('settings.syncDebounce', 'syncOnSaveDebounceSec', isSyncDebounceSec),
+				],
+			},
+			{
+				type: 'group',
+				heading: t('settings.heading.behaviour'),
+				items: [
+					this.conflictStrategyDefinition(),
+					this.dropdownDefinition('settings.newFolder', 'newFolderBehaviour', ['createCollective', 'ask', 'ignore'], isNewFolderBehaviour),
+					this.dropdownDefinition('settings.localDelete', 'localDeleteBehaviour', ['ask', 'trashRemote'], isLocalDeleteBehaviour),
+					this.dropdownDefinition('settings.remoteDelete', 'remoteDeleteBehaviour', ['obsidianTrash', 'keepUnlinked'], isRemoteDeleteBehaviour),
+					this.attachmentFolderDefinition(),
+					this.numberDefinition('settings.maxAttachmentSize', 'maxAttachmentSizeMb', isMaxAttachmentSizeMb, false),
+					this.toggleDefinition('settings.deleteRemoteAttachments', 'deleteRemoteAttachments'),
+					this.toggleDefinition('settings.hideProperties', 'hidePluginProperties', () => { plugin.refreshEmojiTitles(); }),
+					this.toggleDefinition('settings.folderNoteFirst', 'folderNoteFirst', () => { plugin.refreshEmojiTitles(); }),
+					this.toggleDefinition('settings.emojiTitles', 'showEmojiInTitles', () => { plugin.refreshEmojiTitles(); }),
+				],
+			},
+			{
+				type: 'group',
+				heading: t('settings.heading.diagnostics'),
+				items: [
+					{
+						name: t('settings.log.name'),
+						desc: t('settings.log.desc'),
+						render: (setting) => {
+							setting.addButton((btn) => {
+								btn.setButtonText(t('settings.log.button')).onClick(() => { plugin.showLog(); });
+							});
+						},
+					},
+					this.toggleDefinition('settings.debugLogging', 'debugLogging'),
+				],
+			},
+		];
+	}
 
+	/**
+	 * Fallback for Obsidian < 1.13, which never calls getSettingDefinitions(): renders the same definitions
+	 * (group by group, row by row) so that both versions show identical settings.
+	 */
 	display(): void {
 		const { containerEl } = this;
-		const { plugin } = this;
-		const settings = plugin.settings;
-		const t = plugin.t;
 		containerEl.empty();
-
-		const helpSetting = new Setting(containerEl).setName(t('settings.help.name'));
-		helpSetting.descEl.appendText(`${t('settings.help.desc')} `);
-		helpSetting.descEl.createEl('a', { text: t('settings.help.link'), href: settingsManualUrl(plugin.locale) });
-
-		new Setting(containerEl).setName(t('settings.heading.connection')).setHeading();
-
-		let urlInput!: HTMLInputElement;
-
-		new Setting(containerEl)
-			.setName(t('settings.serverUrl.name'))
-			.setDesc(t('settings.serverUrl.desc'))
-			.addText((text) => {
-				urlInput = text.inputEl;
-				text
-					.setPlaceholder('https://cloud.example.com')
-					.setValue(settings.serverUrl)
-					.onChange((value) => { updateUrlWarning(value); updateTestAvailability(); });
-				// Saved on commit (blur/Enter), not per keystroke: an automatic sync must never send the app password
-				// to a half-typed server address.
-				text.inputEl.addEventListener('change', () => { void (async () => {
-					settings.serverUrl = text.inputEl.value.trim();
-					await plugin.saveSettings();
-				})(); });
-				applyPlainInputAttributes(text.inputEl);
-				// type="url" is not styled like the other text fields on mobile; inputmode still brings up the URL keyboard.
-				text.inputEl.inputMode = 'url';
-			});
-
-		const urlWarningEl = containerEl.createDiv({ cls: 'nc-url-warning', attr: { role: 'status', 'aria-live': 'polite' } });
-		/** Warns about plain http to a remote host. Invalid URLs show nothing here; the connection test reports them. */
-		function updateUrlWarning(raw: string): void {
-			let insecure = false;
-			try {
-				insecure = isInsecureRemoteUrl(normalizeServerUrl(raw));
-			} catch {
-				insecure = false;
+		for (const item of this.getSettingDefinitions()) {
+			if (!('type' in item) || item.type !== 'group') continue;
+			const group = new SettingGroup(containerEl);
+			if (item.heading) group.setHeading(item.heading);
+			for (const row of item.items ?? []) {
+				if (!('render' in row) || !row.render) continue;
+				group.addSetting((setting) => {
+					setting.setName(row.name);
+					if (row.desc) setting.setDesc(row.desc);
+					row.render(setting, group);
+				});
 			}
-			urlWarningEl.setText(insecure ? t('settings.serverUrl.insecureWarning') : '');
 		}
-		updateUrlWarning(settings.serverUrl);
+	}
 
-		new Setting(containerEl)
-			.setName(t('settings.username.name'))
-			.addText((text) => {
-				this.usernameField = text;
-				text
-					.setValue(settings.username)
-					.onChange(async (value) => {
-						settings.username = value.trim();
-						updateTestAvailability();
-						await plugin.saveSettings();
-					});
-				applyPlainInputAttributes(text.inputEl);
-			});
+	private helpDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.help.name'),
+			desc: t('settings.help.desc'),
+			render: (setting) => {
+				setting.descEl.appendText(' ');
+				setting.descEl.createEl('a', { text: t('settings.help.link'), href: settingsManualUrl(plugin.locale) });
+			},
+		};
+	}
 
-		// Username first; then the two alternatives for the app password: browser sign-in or typing it in.
-		this.displayLogin(containerEl);
-
-		new Setting(containerEl)
-			.setName(t('settings.appPassword.name'))
-			.setDesc(t('settings.appPassword.desc'))
-			.addText((text) => {
-				this.passwordField = text;
-				text.inputEl.type = 'password';
-				text.inputEl.autocomplete = 'off';
-				applyPlainInputAttributes(text.inputEl);
-				text.setPlaceholder(plugin.hasStoredAppPassword() ? t('settings.appPassword.placeholderStored') : t('settings.appPassword.placeholderEmpty'));
-				// Save on commit (blur/Enter), not on every keystroke; the field never shows the stored password.
-				// The element is discarded by containerEl.empty() on the next display(), so the listener does not outlive it.
-				text.inputEl.addEventListener('change', () => { void (async () => {
-					const value = text.inputEl.value;
-					if (value === '') return;
+	private serverUrlDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.serverUrl.name'),
+			desc: t('settings.serverUrl.desc'),
+			aliases: ['nextcloud', 'url', 'https'],
+			render: (setting) => {
+				const settings = plugin.settings;
+				const urlWarningEl = setting.infoEl.createDiv({ cls: 'nc-url-warning', attr: { role: 'status', 'aria-live': 'polite' } });
+				/** Warns about plain http to a remote host. Invalid URLs show nothing here; the connection test reports them. */
+				const updateUrlWarning = (raw: string): void => {
+					let insecure = false;
 					try {
-						await plugin.storeAppPassword(value);
+						insecure = isInsecureRemoteUrl(normalizeServerUrl(raw));
 					} catch {
-						// Keep the typed value so the user can retry; the error itself may contain the secret, so it is not shown.
-						new Notice(t('settings.appPassword.saveFailed'));
-						return;
+						insecure = false;
 					}
-					text.setValue('');
-					text.setPlaceholder(t('settings.appPassword.placeholderStored'));
-					updateTestAvailability();
-				})(); });
-			});
-
-		let testButton: ButtonComponent | null = null;
-		let running = false;
-		/** The test only makes sense once URL, username and app password are all set. */
-		function updateTestAvailability(): void {
-			const ready = urlInput.value.trim() !== '' && settings.username !== '' && plugin.hasStoredAppPassword();
-			testButton?.setDisabled(running || !ready);
-		}
-		this.updateTestAvailability = updateTestAvailability;
-
-		const testSetting = new Setting(containerEl)
-			.setName(t('settings.test.name'))
-			.setDesc(t('settings.test.desc'));
-		const resultEl = containerEl.createDiv({ cls: 'nc-connection-result', attr: { role: 'status', 'aria-live': 'polite' } });
-
-		testSetting.addButton((btn) => {
-			testButton = btn;
-			btn.setButtonText(t('settings.test.button')).setCta().onClick(async () => {
-				running = true;
-				btn.setDisabled(true).setButtonText(t('settings.test.buttonRunning'));
-				resultEl.setText(t('settings.test.statusRunning'));
-				resultEl.removeClass('is-success', 'is-error');
-				try {
-					const result = await plugin.testConnection();
-					resultEl.setText(formatConnectionSuccess(result, t));
-					resultEl.addClass('is-success');
-				} catch (err) {
-					resultEl.setText(describeConnectionError(err, t));
-					resultEl.addClass('is-error');
-				} finally {
-					running = false;
-					btn.setButtonText(t('settings.test.button'));
-					updateTestAvailability();
-				}
-			});
-		});
-		updateTestAvailability();
-
-		new Setting(containerEl).setName(t('settings.heading.automation')).setHeading();
-
-		new Setting(containerEl)
-			.setName(t('settings.syncInterval.name'))
-			.setDesc(t('settings.syncInterval.desc'))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.setValue(String(settings.syncIntervalMinutes));
-				text.inputEl.addEventListener('change', () => { void (async () => {
-					const value = Number(text.inputEl.value);
-					if (text.inputEl.value.trim() === '' || !isSyncIntervalMinutes(value)) {
-						new Notice(t('settings.syncInterval.invalid'));
-						text.setValue(String(settings.syncIntervalMinutes));
-						return;
-					}
-					settings.syncIntervalMinutes = value;
-					await plugin.saveSettings();
-				})(); });
-				text.inputEl.setAttribute('aria-label', t('settings.syncInterval.name'));
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.syncOnStartup.name'))
-			.setDesc(t('settings.syncOnStartup.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.syncOnStartup).onChange(async (value) => {
-					settings.syncOnStartup = value;
-					await plugin.saveSettings();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.syncOnForeground.name'))
-			.setDesc(t('settings.syncOnForeground.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.syncOnForeground).onChange(async (value) => {
-					settings.syncOnForeground = value;
-					await plugin.saveSettings();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.syncOnSave.name'))
-			.setDesc(t('settings.syncOnSave.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.syncOnSave).onChange(async (value) => {
-					settings.syncOnSave = value;
-					await plugin.saveSettings();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.syncDebounce.name'))
-			.setDesc(t('settings.syncDebounce.desc'))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.setValue(String(settings.syncOnSaveDebounceSec));
-				text.inputEl.addEventListener('change', () => { void (async () => {
-					const value = Number(text.inputEl.value);
-					if (text.inputEl.value.trim() === '' || !isSyncDebounceSec(value)) {
-						new Notice(t('settings.syncDebounce.invalid'));
-						text.setValue(String(settings.syncOnSaveDebounceSec));
-						return;
-					}
-					settings.syncOnSaveDebounceSec = value;
-					await plugin.saveSettings();
-				})(); });
-				text.inputEl.setAttribute('aria-label', t('settings.syncDebounce.name'));
-			});
-
-		new Setting(containerEl).setName(t('settings.heading.behaviour')).setHeading();
-
-		const strategySetting = new Setting(containerEl)
-			.setName(t('settings.conflictStrategy.name'))
-			.setDesc(t('settings.conflictStrategy.desc'));
-		strategySetting.descEl.id = 'nc-conflict-strategy-desc';
-		const strategyWarningEl = containerEl.createDiv({
-			cls: 'nc-strategy-warning',
-			attr: { id: 'nc-conflict-strategy-warning', role: 'status', 'aria-live': 'polite' },
-		});
-		strategySetting.addDropdown((dd) => {
-			dd.addOptions({
-				conflictFile: t('settings.conflictStrategy.option.conflictFile'),
-				preferLocal: t('settings.conflictStrategy.option.preferLocal'),
-				preferRemote: t('settings.conflictStrategy.option.preferRemote'),
-			})
-				.setValue(settings.conflictStrategy)
-				.onChange(async (value) => {
-					if (!isConflictStrategy(value)) return;
-					settings.conflictStrategy = value;
-					strategyWarningEl.setText(strategyWarning(value, t));
-					await plugin.saveSettings();
-				});
-			dd.selectEl.setAttribute('aria-label', t('settings.conflictStrategy.name'));
-			dd.selectEl.setAttribute('aria-describedby', 'nc-conflict-strategy-desc nc-conflict-strategy-warning');
-		});
-		strategyWarningEl.setText(strategyWarning(settings.conflictStrategy, t));
-
-		new Setting(containerEl)
-			.setName(t('settings.newFolder.name'))
-			.setDesc(t('settings.newFolder.desc'))
-			.addDropdown((dd) => {
-				dd.addOptions({
-					createCollective: t('settings.newFolder.option.createCollective'),
-					ask: t('settings.newFolder.option.ask'),
-					ignore: t('settings.newFolder.option.ignore'),
-				})
-					.setValue(settings.newFolderBehaviour)
-					.onChange(async (value) => {
-						if (!isNewFolderBehaviour(value)) return;
-						settings.newFolderBehaviour = value;
+					urlWarningEl.setText(insecure ? t('settings.serverUrl.insecureWarning') : '');
+				};
+				setting.addText((text) => {
+					this.urlInput = text.inputEl;
+					text
+						.setPlaceholder('https://cloud.example.com')
+						.setValue(settings.serverUrl)
+						.onChange((value) => { updateUrlWarning(value); this.updateTestAvailability(); });
+					// Saved on commit (blur/Enter), not per keystroke: an automatic sync must never send the app password
+					// to a half-typed server address.
+					text.inputEl.addEventListener('change', () => { void (async () => {
+						settings.serverUrl = text.inputEl.value.trim();
 						await plugin.saveSettings();
-					});
-				dd.selectEl.setAttribute('aria-label', t('settings.newFolder.name'));
-			});
+					})(); });
+					applyPlainInputAttributes(text.inputEl);
+					// type="url" is not styled like the other text fields on mobile; inputmode still brings up the URL keyboard.
+					text.inputEl.inputMode = 'url';
+				});
+				updateUrlWarning(settings.serverUrl);
+			},
+		};
+	}
 
-		new Setting(containerEl)
-			.setName(t('settings.localDelete.name'))
-			.setDesc(t('settings.localDelete.desc'))
-			.addDropdown((dd) => {
-				dd.addOptions({
-					ask: t('settings.localDelete.option.ask'),
-					trashRemote: t('settings.localDelete.option.trashRemote'),
-				})
-					.setValue(settings.localDeleteBehaviour)
-					.onChange(async (value) => {
-						if (!isLocalDeleteBehaviour(value)) return;
-						settings.localDeleteBehaviour = value;
+	private usernameDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.username.name'),
+			aliases: ['user', 'login'],
+			render: (setting) => {
+				const settings = plugin.settings;
+				setting.addText((text) => {
+					this.usernameField = text;
+					text
+						.setValue(settings.username)
+						.onChange(async (value) => {
+							settings.username = value.trim();
+							this.updateTestAvailability();
+							await plugin.saveSettings();
+						});
+					applyPlainInputAttributes(text.inputEl);
+				});
+			},
+		};
+	}
+
+	private appPasswordDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.appPassword.name'),
+			desc: t('settings.appPassword.desc'),
+			aliases: ['password', 'token', 'secret'],
+			render: (setting) => {
+				setting.addText((text) => {
+					this.passwordField = text;
+					text.inputEl.type = 'password';
+					text.inputEl.autocomplete = 'off';
+					applyPlainInputAttributes(text.inputEl);
+					text.setPlaceholder(plugin.hasStoredAppPassword() ? t('settings.appPassword.placeholderStored') : t('settings.appPassword.placeholderEmpty'));
+					// Save on commit (blur/Enter), not on every keystroke; the field never shows the stored password.
+					// The element is discarded when the tab is rendered again, so the listener does not outlive it.
+					text.inputEl.addEventListener('change', () => { void (async () => {
+						const value = text.inputEl.value;
+						if (value === '') return;
+						try {
+							await plugin.storeAppPassword(value);
+						} catch {
+							// Keep the typed value so the user can retry; the error itself may contain the secret, so it is not shown.
+							new Notice(t('settings.appPassword.saveFailed'));
+							return;
+						}
+						text.setValue('');
+						text.setPlaceholder(t('settings.appPassword.placeholderStored'));
+						this.updateTestAvailability();
+					})(); });
+				});
+			},
+		};
+	}
+
+	/** The test only makes sense once URL, username and app password are all set. */
+	private updateTestAvailability(): void {
+		const ready = (this.urlInput?.value.trim() ?? '') !== '' && this.plugin.settings.username !== '' && this.plugin.hasStoredAppPassword();
+		this.testButton?.setDisabled(this.testRunning || !ready);
+	}
+
+	private testDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.test.name'),
+			desc: t('settings.test.desc'),
+			aliases: ['connection', 'check'],
+			render: (setting) => {
+				const resultEl = setting.infoEl.createDiv({ cls: 'nc-connection-result', attr: { role: 'status', 'aria-live': 'polite' } });
+				setting.addButton((btn) => {
+					this.testButton = btn;
+					btn.setButtonText(t('settings.test.button')).setCta().onClick(async () => {
+						this.testRunning = true;
+						btn.setDisabled(true).setButtonText(t('settings.test.buttonRunning'));
+						resultEl.setText(t('settings.test.statusRunning'));
+						resultEl.removeClass('is-success', 'is-error');
+						try {
+							const result = await plugin.testConnection();
+							resultEl.setText(formatConnectionSuccess(result, t));
+							resultEl.addClass('is-success');
+						} catch (err) {
+							resultEl.setText(describeConnectionError(err, t));
+							resultEl.addClass('is-error');
+						} finally {
+							this.testRunning = false;
+							btn.setButtonText(t('settings.test.button'));
+							this.updateTestAvailability();
+						}
+					});
+				});
+				this.updateTestAvailability();
+			},
+		};
+	}
+
+	private toggleDefinition(
+		prefix: 'settings.syncOnStartup' | 'settings.syncOnForeground' | 'settings.syncOnSave' | 'settings.deleteRemoteAttachments' | 'settings.hideProperties' | 'settings.folderNoteFirst' | 'settings.emojiTitles' | 'settings.debugLogging',
+		key: BooleanSettingKey,
+		afterChange?: () => void,
+	): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t(`${prefix}.name`),
+			desc: t(`${prefix}.desc`),
+			render: (setting) => {
+				setting.addToggle((toggle) => {
+					toggle.setValue(plugin.settings[key]).onChange(async (value) => {
+						plugin.settings[key] = value;
 						await plugin.saveSettings();
+						afterChange?.();
 					});
-				dd.selectEl.setAttribute('aria-label', t('settings.localDelete.name'));
-			});
+				});
+			},
+		};
+	}
 
-		new Setting(containerEl)
-			.setName(t('settings.remoteDelete.name'))
-			.setDesc(t('settings.remoteDelete.desc'))
-			.addDropdown((dd) => {
-				dd.addOptions({
-					obsidianTrash: t('settings.remoteDelete.option.obsidianTrash'),
-					keepUnlinked: t('settings.remoteDelete.option.keepUnlinked'),
-				})
-					.setValue(settings.remoteDeleteBehaviour)
-					.onChange(async (value) => {
-						if (!isRemoteDeleteBehaviour(value)) return;
-						settings.remoteDeleteBehaviour = value;
+	/**
+	 * A number field saved on commit. An invalid value is refused with a notice and the field shows the saved value again.
+	 * `emptyIsInvalid`: an empty field would read as 0, which is valid for the sync interval but must not be taken as typed.
+	 */
+	private numberDefinition(
+		prefix: 'settings.syncInterval' | 'settings.syncDebounce' | 'settings.maxAttachmentSize',
+		key: NumberSettingKey,
+		isValid: (value: number) => boolean,
+		emptyIsInvalid = true,
+	): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t(`${prefix}.name`),
+			desc: t(`${prefix}.desc`),
+			render: (setting) => {
+				setting.addText((text) => {
+					text.inputEl.type = 'number';
+					text.setValue(String(plugin.settings[key]));
+					text.inputEl.addEventListener('change', () => { void (async () => {
+						const value = Number(text.inputEl.value);
+						if ((emptyIsInvalid && text.inputEl.value.trim() === '') || !isValid(value)) {
+							new Notice(t(`${prefix}.invalid`));
+							text.setValue(String(plugin.settings[key]));
+							return;
+						}
+						plugin.settings[key] = value;
 						await plugin.saveSettings();
-					});
-				dd.selectEl.setAttribute('aria-label', t('settings.remoteDelete.name'));
-			});
+					})(); });
+					text.inputEl.setAttribute('aria-label', t(`${prefix}.name`));
+				});
+			},
+		};
+	}
 
-		const patternSetting = new Setting(containerEl)
-			.setName(t('settings.attachmentFolder.name'))
-			.setDesc(t('settings.attachmentFolder.desc'));
-		patternSetting.addText((text) => {
-			text.setValue(settings.attachmentFolderPattern);
-			// Saved on commit; an unusable pattern is refused and the field shows the saved value again.
-			text.inputEl.addEventListener('change', () => { void (async () => {
-				const value = text.inputEl.value;
-				if (!isAttachmentFolderPattern(value)) {
-					new Notice(t('settings.attachmentFolder.invalid'));
+	private dropdownDefinition<K extends DropdownSettingKey>(
+		prefix: 'settings.newFolder' | 'settings.localDelete' | 'settings.remoteDelete',
+		key: K,
+		options: Array<NcSettings[K]>,
+		isValid: (value: string) => value is NcSettings[K],
+	): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t(`${prefix}.name`),
+			desc: t(`${prefix}.desc`),
+			render: (setting) => {
+				setting.addDropdown((dd) => {
+					for (const option of options) dd.addOption(option, t(`${prefix}.option.${option}` as MessageKey));
+					dd.setValue(plugin.settings[key])
+						.onChange(async (value) => {
+							if (!isValid(value)) return;
+							plugin.settings[key] = value;
+							await plugin.saveSettings();
+						});
+					dd.selectEl.setAttribute('aria-label', t(`${prefix}.name`));
+				});
+			},
+		};
+	}
+
+	private conflictStrategyDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.conflictStrategy.name'),
+			desc: t('settings.conflictStrategy.desc'),
+			aliases: ['conflict', 'merge'],
+			render: (setting) => {
+				const settings = plugin.settings;
+				setting.descEl.id = 'nc-conflict-strategy-desc';
+				const strategyWarningEl = setting.infoEl.createDiv({
+					cls: 'nc-strategy-warning',
+					attr: { id: 'nc-conflict-strategy-warning', role: 'status', 'aria-live': 'polite' },
+				});
+				setting.addDropdown((dd) => {
+					dd.addOptions({
+						conflictFile: t('settings.conflictStrategy.option.conflictFile'),
+						preferLocal: t('settings.conflictStrategy.option.preferLocal'),
+						preferRemote: t('settings.conflictStrategy.option.preferRemote'),
+					})
+						.setValue(settings.conflictStrategy)
+						.onChange(async (value) => {
+							if (!isConflictStrategy(value)) return;
+							settings.conflictStrategy = value;
+							strategyWarningEl.setText(strategyWarning(value, t));
+							await plugin.saveSettings();
+						});
+					dd.selectEl.setAttribute('aria-label', t('settings.conflictStrategy.name'));
+					dd.selectEl.setAttribute('aria-describedby', 'nc-conflict-strategy-desc nc-conflict-strategy-warning');
+				});
+				strategyWarningEl.setText(strategyWarning(settings.conflictStrategy, t));
+			},
+		};
+	}
+
+	private attachmentFolderDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.attachmentFolder.name'),
+			desc: t('settings.attachmentFolder.desc'),
+			render: (setting) => {
+				const settings = plugin.settings;
+				setting.addText((text) => {
 					text.setValue(settings.attachmentFolderPattern);
-					return;
-				}
-				settings.attachmentFolderPattern = value.trim().replace(/^\/+|\/+$/g, '');
-				await plugin.saveSettings();
-			})(); });
-			text.inputEl.setAttribute('aria-label', t('settings.attachmentFolder.name'));
-			applyPlainInputAttributes(text.inputEl);
-		});
-
-		new Setting(containerEl)
-			.setName(t('settings.maxAttachmentSize.name'))
-			.setDesc(t('settings.maxAttachmentSize.desc'))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.setValue(String(settings.maxAttachmentSizeMb));
-				text.inputEl.addEventListener('change', () => { void (async () => {
-					const value = Number(text.inputEl.value);
-					if (!isMaxAttachmentSizeMb(value)) {
-						new Notice(t('settings.maxAttachmentSize.invalid'));
-						text.setValue(String(settings.maxAttachmentSizeMb));
-						return;
-					}
-					settings.maxAttachmentSizeMb = value;
-					await plugin.saveSettings();
-				})(); });
-				text.inputEl.setAttribute('aria-label', t('settings.maxAttachmentSize.name'));
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.deleteRemoteAttachments.name'))
-			.setDesc(t('settings.deleteRemoteAttachments.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.deleteRemoteAttachments).onChange(async (value) => {
-					settings.deleteRemoteAttachments = value;
-					await plugin.saveSettings();
+					// Saved on commit; an unusable pattern is refused and the field shows the saved value again.
+					text.inputEl.addEventListener('change', () => { void (async () => {
+						const value = text.inputEl.value;
+						if (!isAttachmentFolderPattern(value)) {
+							new Notice(t('settings.attachmentFolder.invalid'));
+							text.setValue(settings.attachmentFolderPattern);
+							return;
+						}
+						settings.attachmentFolderPattern = value.trim().replace(/^\/+|\/+$/g, '');
+						await plugin.saveSettings();
+					})(); });
+					text.inputEl.setAttribute('aria-label', t('settings.attachmentFolder.name'));
+					applyPlainInputAttributes(text.inputEl);
 				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.hideProperties.name'))
-			.setDesc(t('settings.hideProperties.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.hidePluginProperties).onChange(async (value) => {
-					settings.hidePluginProperties = value;
-					await plugin.saveSettings();
-					plugin.refreshEmojiTitles();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.folderNoteFirst.name'))
-			.setDesc(t('settings.folderNoteFirst.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.folderNoteFirst).onChange(async (value) => {
-					settings.folderNoteFirst = value;
-					await plugin.saveSettings();
-					plugin.refreshEmojiTitles();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.emojiTitles.name'))
-			.setDesc(t('settings.emojiTitles.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.showEmojiInTitles).onChange(async (value) => {
-					settings.showEmojiInTitles = value;
-					await plugin.saveSettings();
-					plugin.refreshEmojiTitles();
-				});
-			});
-
-		new Setting(containerEl).setName(t('settings.heading.diagnostics')).setHeading();
-
-		new Setting(containerEl)
-			.setName(t('settings.log.name'))
-			.setDesc(t('settings.log.desc'))
-			.addButton((btn) => {
-				btn.setButtonText(t('settings.log.button')).onClick(() => { plugin.showLog(); });
-			});
-
-		new Setting(containerEl)
-			.setName(t('settings.debugLogging.name'))
-			.setDesc(t('settings.debugLogging.desc'))
-			.addToggle((toggle) => {
-				toggle.setValue(settings.debugLogging).onChange(async (value) => {
-					settings.debugLogging = value;
-					await plugin.saveSettings();
-				});
-			});
+			},
+		};
 	}
 
 	/** Login Flow v2: a button that opens the Nextcloud login page; username and app password are filled in afterwards. */
-	private displayLogin(containerEl: HTMLElement): void {
+	private loginDefinition(): SettingDefinition {
 		const { plugin } = this;
 		const t = plugin.t;
-		const setting = new Setting(containerEl).setName(t('settings.login.name')).setDesc(t('settings.login.desc'));
-		const statusEl = containerEl.createDiv({ cls: 'nc-login-status', attr: { role: 'status', 'aria-live': 'polite' } });
-		let cancelled = false;
-		let running = false;
-		setting.addButton((btn) => {
-			btn.setButtonText(t('settings.login.button')).onClick(async () => {
-				if (running) {
-					cancelled = true;
-					return;
-				}
-				// Plain http would send the sign-in and the new app password unencrypted.
-				try {
-					if (isInsecureRemoteUrl(normalizeServerUrl(plugin.settings.serverUrl))) {
-						statusEl.setText(t('settings.login.insecure'));
-						return;
-					}
-				} catch {
-					// An invalid or missing URL is reported by the login itself.
-				}
-				running = true;
-				cancelled = false;
-				this.cancelLogin = () => { cancelled = true; };
-				btn.setButtonText(t('settings.login.cancel'));
-				statusEl.empty();
-				statusEl.setText(t('settings.login.waiting'));
-				try {
-					const outcome = await plugin.loginWithBrowser((start) => {
-						// The login URL is shown as a link too: a pop-up blocker may swallow window.open.
-						window.open(start.loginUrl);
+		return {
+			name: t('settings.login.name'),
+			desc: t('settings.login.desc'),
+			aliases: ['browser', 'sign in', 'login flow'],
+			render: (setting) => {
+				const statusEl = setting.infoEl.createDiv({ cls: 'nc-login-status', attr: { role: 'status', 'aria-live': 'polite' } });
+				let cancelled = false;
+				let running = false;
+				setting.addButton((btn) => {
+					btn.setButtonText(t('settings.login.button')).onClick(async () => {
+						if (running) {
+							cancelled = true;
+							return;
+						}
+						// Plain http would send the sign-in and the new app password unencrypted.
+						try {
+							if (isInsecureRemoteUrl(normalizeServerUrl(plugin.settings.serverUrl))) {
+								statusEl.setText(t('settings.login.insecure'));
+								return;
+							}
+						} catch {
+							// An invalid or missing URL is reported by the login itself.
+						}
+						running = true;
+						cancelled = false;
+						this.cancelLogin = () => { cancelled = true; };
+						btn.setButtonText(t('settings.login.cancel'));
 						statusEl.empty();
-						statusEl.createSpan({ text: t('settings.login.waiting') + ' ' });
-						statusEl.createEl('a', { text: t('settings.login.openAgain'), href: start.loginUrl });
-					}, () => cancelled);
-					if (outcome.kind === 'done') {
-						this.usernameField?.setValue(outcome.user);
-						this.passwordField?.setPlaceholder(t('settings.appPassword.placeholderStored'));
-						this.updateTestAvailability();
-						statusEl.setText(t('settings.login.success', { user: outcome.user }));
-						return;
-					}
-					statusEl.setText(outcome.kind === 'cancelled' ? t('settings.login.cancelled') : t('settings.login.timeout'));
-				} catch (err) {
-					statusEl.setText(t('settings.login.failed', { reason: describeConnectionError(err, t) }));
-				} finally {
-					running = false;
-					this.cancelLogin = null;
-					btn.setButtonText(t('settings.login.button'));
-				}
-			});
-		});
+						statusEl.setText(t('settings.login.waiting'));
+						try {
+							const outcome = await plugin.loginWithBrowser((start) => {
+								// The login URL is shown as a link too: a pop-up blocker may swallow window.open.
+								window.open(start.loginUrl);
+								statusEl.empty();
+								statusEl.createSpan({ text: t('settings.login.waiting') + ' ' });
+								statusEl.createEl('a', { text: t('settings.login.openAgain'), href: start.loginUrl });
+							}, () => cancelled);
+							if (outcome.kind === 'done') {
+								this.usernameField?.setValue(outcome.user);
+								this.passwordField?.setPlaceholder(t('settings.appPassword.placeholderStored'));
+								this.updateTestAvailability();
+								statusEl.setText(t('settings.login.success', { user: outcome.user }));
+								return;
+							}
+							statusEl.setText(outcome.kind === 'cancelled' ? t('settings.login.cancelled') : t('settings.login.timeout'));
+						} catch (err) {
+							statusEl.setText(t('settings.login.failed', { reason: describeConnectionError(err, t) }));
+						} finally {
+							running = false;
+							this.cancelLogin = null;
+							btn.setButtonText(t('settings.login.button'));
+						}
+					});
+				});
+			},
+		};
 	}
 }
+
+type BooleanSettingKey = { [K in keyof NcSettings]: NcSettings[K] extends boolean ? K : never }[keyof NcSettings];
+type NumberSettingKey = { [K in keyof NcSettings]: NcSettings[K] extends number ? K : never }[keyof NcSettings];
+type DropdownSettingKey = 'newFolderBehaviour' | 'localDeleteBehaviour' | 'remoteDeleteBehaviour';
 
 /** Disables mobile keyboard auto-correction for values that are identifiers or URLs. */
 function applyPlainInputAttributes(input: HTMLInputElement): void {

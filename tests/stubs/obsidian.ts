@@ -73,6 +73,8 @@ export class PluginSettingTab {}
 
 export class Setting {}
 
+export class SettingGroup {}
+
 export function getLanguage(): string {
 	return 'en';
 }
