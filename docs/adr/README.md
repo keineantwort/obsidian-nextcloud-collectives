@@ -33,3 +33,4 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0027](0027-update-existing-conflict-copy.md) | Update the existing conflict copy when the server changes again | accepted |
 | [0028](0028-server-error-detail-in-the-log.md) | Server error detail (OCS message, Sabre exception) on HTTP errors and in the log | accepted |
 | [0029](0029-skip-integration-tests-for-documentation-on-main.md) | Skip the integration and nightly tests for documentation-only changes on main too | accepted |
+| [0030](0030-no-github-artifact-attestations.md) | No GitHub artifact attestations for the release files | accepted |
