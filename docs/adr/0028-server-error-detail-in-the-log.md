@@ -19,6 +19,8 @@ The log must not contain credentials (AGENTS.md, rule 5), and it must not contai
 - The log sites use `errorLogFields(err)` (`src/util/errors.ts`): the error class plus the detail. The error message itself is still never logged.
 - The production build keeps class names (esbuild `keepNames`, `esbuild.options.mjs`). Without it the minifier renamed the error classes and the log read `error=Q` (found in the manual test; present since the first release). `tests/unit/bundle.test.ts` bundles `errors.ts` with these options and checks the names. Cost: about 11 KB more in `main.js` (≈ 5 %).
 
+- Addendum (ONC-56): `ApiChangedError`s from the response parsers (`src/api/parse.ts`) carry a `detail` too: entity, list position, page ID, field and the JSON type found (e.g. `field "linkedPageIds" is not a number array (got object)`), never a value. A response that is valid JSON but has an unexpected shape is then diagnosable from the log alone.
+
 ## Alternatives considered
 
 - **Log the error message** – the message contains the request path and later maybe more; the existing rule "class only, never the message" stays.

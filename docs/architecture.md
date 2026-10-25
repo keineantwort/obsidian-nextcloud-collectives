@@ -100,7 +100,7 @@ Further endpoints outside the Collectives API: `GET /ocs/v2.php/cloud/user` (use
 
 `id`, `slug`, `title`, `emoji`, `tags` (list of tag IDs), `timestamp` (mtime, Unix seconds), `size`, `fileName`, `filePath` (`""` at root level), `collectivePath`, `parentId`, `subpageOrder`, `lastUserId`, `linkedPageIds`, `trashTimestamp`.
 
-Landing page: `title` = "Landing page" (localised), `slug` = `""`. Pages created via WebDAV also have `slug = ""`. The Collectives version is not part of the capabilities.
+Landing page: `title` = "Landing page" (localised), `slug` = `""`. Pages created via WebDAV also have `slug = ""` (or `null`, which the client reads as `""`). The Collectives version is not part of the capabilities.
 
 Responses are checked strictly in `src/api/parse.ts`, but only for the fields the sync actually uses; an unexpected structure raises `ApiChanged` (§12).
 

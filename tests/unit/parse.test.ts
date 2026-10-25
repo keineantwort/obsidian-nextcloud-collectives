@@ -350,6 +350,38 @@ describe('parseList', () => {
 	});
 });
 
+describe('page without a slug (ONC-56)', () => {
+	it.each([['null', null], ['an empty string', '']])('maps a slug of %s to an empty slug in pages and trash entries', (_label, slug) => {
+		const raw = withField(rawAt('pages-list-final.json', 'pages', 1), 'slug', slug);
+
+		expect(parsePageInfo(raw).slug).toBe('');
+		expect(parseTrashedPage(raw).slug).toBe('');
+	});
+
+	it('still rejects a slug of another type', () => {
+		expectApiChanged(() => parsePageInfo(withField(rawAt('pages-list-final.json', 'pages', 1), 'slug', 5)), 'slug');
+	});
+});
+
+describe('parse errors for the log (ONC-56)', () => {
+	it('puts entity, list position, page id, field and found type into detail, without any value', () => {
+		const pages = [rawAt('pages-list-final.json', 'pages', 0), withField(rawAt('pages-list-final.json', 'pages', 1), 'linkedPageIds', { '0': 5, '2': 9 })];
+		const badId = (pages[1] as Raw)['id'];
+
+		const err = captureSync(() => parseList({ pages }, 'pages', parsePageInfo)) as ApiChangedError;
+
+		expect(err.detail).toBe(
+			`Unexpected response in "pages" [item 1, id ${String(badId)}]: Unexpected PageInfo: field "linkedPageIds" is not a number array (got object)`,
+		);
+	});
+
+	it('names the found type of a list that is not an array', () => {
+		const err = captureSync(() => parseList({ pages: null }, 'pages', parsePageInfo)) as ApiChangedError;
+
+		expect(err.detail).toBe('Unexpected response: "pages" is not an array (got null)');
+	});
+});
+
 describe('parseItem', () => {
 	it('maps the single page of a page response', () => {
 		const data = loadData('page-get-after-leaf-to-parent.json');
