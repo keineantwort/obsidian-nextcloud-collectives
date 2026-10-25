@@ -6,9 +6,10 @@ Device/OS: ______  Obsidian: ______  Nextcloud/Collectives: ______  Date: ______
 
 ## 0. Installation on the phone
 
-The plugin is not in the community store (open decision on store publication). Two ways:
+Three ways:
 
-- **BRAT** (recommended): Install the "BRAT" plugin in Obsidian Mobile, use "Add beta plugin" with `keineantwort/obsidian-nextcloud-collectives`, then enable it under "Community plugins". Steps: [README › Installation](../README.md#installation).
+- **Community plugins** (recommended): "Settings › Community plugins › Browse", search for "Nextcloud Collectives Sync", install and enable it.
+- **BRAT** (for a specific release, or a release the community directory has not picked up yet): Install the "BRAT" plugin in Obsidian Mobile, use "Add beta plugin" with `keineantwort/obsidian-nextcloud-collectives`, then enable it under "Community plugins". Steps: [README › Installation](../README.md#installation).
 - **Manual**: Put `main.js`, `manifest.json` and `styles.css` from the [latest GitHub release](https://github.com/keineantwort/obsidian-nextcloud-collectives/releases/latest) into `<Vault>/.obsidian/plugins/nextcloud-collectives/` (e.g. via the Files app/iCloud on iOS, via USB or the Nextcloud app on Android), restart Obsidian, enable the plugin. The `.obsidian` folder is hidden on the phone: if necessary, prepare the vault with the plugin from a desktop.
 
 - [ ] iOS: the plugin appears under "Community plugins" and can be enabled
