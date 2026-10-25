@@ -28,7 +28,7 @@ export function checkRelease({ manifest, pkg, versions, changelog }, tag) {
 	if (versions[version] === undefined) problems.push(`versions.json has no entry for ${version}`);
 	else if (versions[version] !== manifest.minAppVersion) problems.push(`versions.json maps ${version} to ${versions[version]}, manifest.json minAppVersion is ${manifest.minAppVersion}`);
 	if (releaseNotes(changelog, version) === null) problems.push(`CHANGELOG.md has no section "## ${version}" with the changes`);
-	if (tag !== undefined && tag !== version) problems.push(`tag "${tag}" differs from manifest.json version ${version} (no "v" prefix)`);
+	if (tag !== undefined && tag !== version) problems.push(`tag "${tag}" differs from manifest.json version ${version} (no "v" prefix; or was the tag set on main before the pull request with the new version was merged?)`);
 	return problems;
 }
 
