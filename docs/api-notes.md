@@ -62,7 +62,7 @@ Full fields (fixture `pages-list-final.json`): `id`, `slug`, `lastUserId`, `last
 
 Peculiarities:
 - Landing page: `title` = "Landing page" (localized), `slug` = `""`, `parentId` = 0.
-- Pages created via WebDAV have `slug = ""` until they are renamed through the API.
+- Pages created via WebDAV have `slug = ""` or, on Nextcloud 35.0.2 (ONC-56), `slug = null` until they are renamed through the API. The client reads both as `""`; a missing `slug` key is still `ApiChangedError`.
 - `linkedPageIds` is computed by the server on every write from the links in the content.
 
 ## 5. File structure and WebDAV ([architecture §4.4, §4.5](architecture.md))

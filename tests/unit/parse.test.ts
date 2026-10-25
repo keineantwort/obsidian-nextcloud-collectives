@@ -350,6 +350,19 @@ describe('parseList', () => {
 	});
 });
 
+describe('page without a slug (ONC-56)', () => {
+	it.each([['null', null], ['an empty string', '']])('maps a slug of %s to an empty slug in pages and trash entries', (_label, slug) => {
+		const raw = withField(rawAt('pages-list-final.json', 'pages', 1), 'slug', slug);
+
+		expect(parsePageInfo(raw).slug).toBe('');
+		expect(parseTrashedPage(raw).slug).toBe('');
+	});
+
+	it('still rejects a slug of another type', () => {
+		expectApiChanged(() => parsePageInfo(withField(rawAt('pages-list-final.json', 'pages', 1), 'slug', 5)), 'slug');
+	});
+});
+
 describe('parse errors for the log (ONC-56)', () => {
 	it('puts entity, list position, page id, field and found type into detail, without any value', () => {
 		const pages = [rawAt('pages-list-final.json', 'pages', 0), withField(rawAt('pages-list-final.json', 'pages', 1), 'linkedPageIds', { '0': 5, '2': 9 })];

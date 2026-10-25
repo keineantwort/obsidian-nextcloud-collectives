@@ -97,7 +97,7 @@ export function parseTrashedPage(raw: unknown): TrashedPage {
 function readPageFields(r: FieldReader): Omit<PageInfo, 'collectivePath'> {
 	return {
 		id: asPageId(r.number('id')),
-		slug: r.string('slug'),
+		slug: r.stringOrNull('slug') ?? '',
 		title: r.string('title'),
 		emoji: emojiOrNull(r.stringOrNull('emoji')),
 		tags: r.numberArray('tags').map(asTagId),
