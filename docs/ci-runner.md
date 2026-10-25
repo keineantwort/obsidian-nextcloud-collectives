@@ -8,8 +8,8 @@ For the workflows in `.forgejo/workflows/` of this repo. Status: feedback from t
 |---|---|---|---|
 | `ci.yml` | every PR, push to `main` | `ubuntu-latest` | job container `node:24-bookworm`, the runner's cache server (see below); about 1–2 minutes |
 | `release.yml` | tag `x.y.z` | `ubuntu-latest` | job container `node:24-bookworm` (ships `curl` and `git`), cache server; secret `RELEASE_TOKEN` |
-| `integration.yml` | every pull request (the test steps only on changes to `src/`, `tests/`, `scripts/dev-nextcloud/`, `vitest.*.config.ts`, `package*.json`), push to `main`, manual | **`docker-host`** | Docker with Compose, see below |
-| `nightly.yml` | daily 01:00 UTC, but only if `main` changed since the night before; the night from Wednesday to Thursday always; manual | `ubuntu-latest` (check) and **`docker-host`** | as `integration.yml` |
+| `integration.yml` | every pull request and push to `main` (the test steps only on changes to `src/`, `tests/`, `scripts/dev-nextcloud/`, `scripts/ci/`, `vitest.*.config.ts`, `package*.json` or the test workflows, `scripts/ci/affects-tests.sh`), manual | **`docker-host`** | Docker with Compose, see below |
+| `nightly.yml` | daily 01:00 UTC, but only if `main` changed since the night before in something the tests depend on (as `integration.yml`); the night from Wednesday to Thursday always; manual | `ubuntu-latest` (check) and **`docker-host`** | as `integration.yml` |
 
 ## `ubuntu-latest` (job container)
 
