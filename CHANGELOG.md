@@ -2,6 +2,12 @@
 
 The changes that matter to users, newest first. The section of a version becomes the description of its release on Forgejo and GitHub (`scripts/release-notes.mjs`); `npm run release:check` fails without it ([docs/release.md](docs/release.md)).
 
+## 0.3.3 – 2026-10-25
+
+### Added
+
+- In Obsidian 1.13 or newer, the search in the settings finds the settings of this plugin, for example by searching for "password" or "conflict".
+
 ## 0.3.2 – 2026-10-25
 
 ### Changed

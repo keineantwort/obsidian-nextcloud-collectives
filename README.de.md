@@ -4,7 +4,7 @@
 
 Ein Obsidian-Plugin, das alle [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) eines Nextcloud-Servers in beide Richtungen mit deinem Vault synchronisiert. Jedes Collective wird ein Ordner in deinem Vault, jede Seite eine Notiz. Du schreibst in Obsidian, am Desktop oder auf dem Handy, und deine Kolleginnen und Kollegen arbeiten weiter im Browser in Collectives. Ändern beide Seiten dieselbe Seite, behält das Plugin beide Fassungen, statt eine zu überschreiben.
 
-**Status:** Vorab-Version 0.3.2. Installiere es aus den Community-Plugins von Obsidian (siehe [Installation](#installation)).
+**Status:** Vorab-Version 0.3.3. Installiere es aus den Community-Plugins von Obsidian (siehe [Installation](#installation)).
 
 ![Dateiliste in Obsidian mit den Collectives als Ordner und dem Seiten-Emoji vor den Notiztiteln](docs/images/de/file-list.png)
 
