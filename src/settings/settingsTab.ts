@@ -26,7 +26,7 @@ export class NcSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * The settings as definitions: Obsidian ≥ 1.13 renders and indexes them for its settings search (ADR 0030).
+	 * The settings as definitions: Obsidian ≥ 1.13 renders and indexes them for its settings search (ADR 0031).
 	 * Every row uses `render` because the rows are not plain values: they save on commit, validate with notices,
 	 * keep the app password out of data.json and run the login and the connection test.
 	 */

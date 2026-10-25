@@ -49,7 +49,7 @@ The plugin is an independent implementation; existing plugins serve only as refe
 | Tests | Vitest for pure logic; integration tests against Nextcloud in Docker ([ADR 0006](adr/0006-local-docker-test-server.md)) |
 | Lint | ESLint with `eslint-plugin-obsidianmd` (rules for community plugins); purity of planner and mapping enforced via `no-restricted-imports` (`eslint.config.mts`) |
 | Localisation | User-facing texts in English and German via `src/i18n/`, chosen by `getLanguage()` ([ADR 0013](adr/0013-localisation-de-en.md)) |
-| Minimum version | Obsidian ≥ 1.11.4 because of the secret storage (`app.secretStorage`, `@since 1.11.4`; `minAppVersion` in `manifest.json`, [ADR 0011](adr/0011-minimum-version-and-secret-storage.md)). The settings are also provided as declarative definitions for the settings search of Obsidian ≥ 1.13; below that, `display()` renders the same definitions ([ADR 0030](adr/0030-declarative-settings-definitions.md)) |
+| Minimum version | Obsidian ≥ 1.11.4 because of the secret storage (`app.secretStorage`, `@since 1.11.4`; `minAppVersion` in `manifest.json`, [ADR 0011](adr/0011-minimum-version-and-secret-storage.md)). The settings are also provided as declarative definitions for the settings search of Obsidian ≥ 1.13; below that, `display()` renders the same definitions ([ADR 0031](adr/0031-declarative-settings-definitions.md)) |
 | Server | Nextcloud with the Collectives app (and Circles/Teams), OCS API `v1.0`. The tested Nextcloud major versions are `TESTED_NEXTCLOUD_MAJORS` in `src/api/versionCheck.ts`; the CI matrices in `.forgejo/workflows/integration.yml` and `nightly.yml` run the integration tests against them ([ADR 0024](adr/0024-integration-tests-split-pr-and-nightly.md)) |
 | Licence | MIT |
 

@@ -13,7 +13,7 @@ function rows(items: SettingDefinitionItem[]) {
 	return items.flatMap((item) => ('type' in item && item.type === 'group' ? item.items ?? [] : []));
 }
 
-describe('NcSettingTab.getSettingDefinitions (Obsidian settings search, ADR 0030)', () => {
+describe('NcSettingTab.getSettingDefinitions (Obsidian settings search, ADR 0031)', () => {
 	it('lists every setting of the tab by name, in tab order', () => {
 		const names = rows(definitionsFor('en')).map((row) => row.name);
 		expect(names).toEqual([

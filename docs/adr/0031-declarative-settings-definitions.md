@@ -1,4 +1,4 @@
-# 0030 – Settings as declarative definitions, classic rendering as fallback
+# 0031 – Settings as declarative definitions, classic rendering as fallback
 
 - Status: accepted
 - Date: 2026-10-25
