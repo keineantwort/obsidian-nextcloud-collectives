@@ -2,7 +2,7 @@
 
 The changes that matter to users, newest first. The section of a version becomes the description of its release on Forgejo and GitHub (`scripts/release-notes.mjs`); `npm run release:check` fails without it ([docs/release.md](docs/release.md)).
 
-## 0.3.1 – 2026-10-25
+## 0.3.2 – 2026-10-25
 
 ### Changed
 
