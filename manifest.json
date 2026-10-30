@@ -5,5 +5,6 @@
 	"minAppVersion": "1.11.4",
 	"description": "Synchronize all Nextcloud Collectives of a server bidirectionally with your vault.",
 	"author": "Martin Schumacher",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+	"fundingUrl": "https://ko-fi.com/keineantwort"
 }
