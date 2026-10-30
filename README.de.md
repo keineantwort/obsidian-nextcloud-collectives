@@ -6,6 +6,10 @@ Ein Obsidian-Plugin, das alle [Nextcloud Collectives](https://apps.nextcloud.com
 
 **Status:** Vorab-Version 0.3.3. Installiere es aus den Community-Plugins von Obsidian (siehe [Installation](#installation)).
 
+> ⚠️ **Haftungsausschluss**
+>
+> Dieses Plugin wird ohne jegliche Gewährleistung bereitgestellt. Die Nutzung erfolgt auf eigene Gefahr. Der Autor übernimmt keine Verantwortung für beschädigte, überschriebene oder verlorene Notizen oder sonstigen Datenverlust, der durch die Nutzung dieses Plugins entsteht. Lege vor der Nutzung unbedingt ein unabhängiges Backup deines Vaults und deiner Nextcloud Collectives an. Details siehe [MIT-Lizenz](LICENSE).
+
 ![Dateiliste in Obsidian mit den Collectives als Ordner und dem Seiten-Emoji vor den Notiztiteln](docs/images/de/file-list.png)
 
 ## Funktionen
