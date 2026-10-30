@@ -113,7 +113,11 @@ Das Plugin verbindet sich **nur mit dem Nextcloud-Server, den du in den Einstell
 - Versions- und Kontoprüfung: `/ocs/v2.php/cloud/capabilities` und `/ocs/v2.php/cloud/user`.
 - Collectives und Seiten: die Schnittstellen von Collectives und Circles (`/ocs/v2.php/apps/collectives/…`, `/ocs/v2.php/apps/circles/…`) und WebDAV (`/remote.php/dav/files/…`) für Seiteninhalte und Anhänge.
 
-Andere Dienste nutzt das Plugin nicht: keine Telemetrie, keine Statistik, keine Update-Prüfung. Links zu diesem Handbuch (zum Beispiel in den Einstellungen) öffnen GitHub im Browser, und zwar nur, wenn du sie anklickst. Das Plugin liest und schreibt Dateien nur in deinem Vault. In die Zwischenablage schreibt es nur, wenn du im Protokoll auf **Protokoll kopieren** tippst, und es liest sie nie.
+Andere Dienste nutzt das Plugin nicht: keine Telemetrie, keine Statistik, keine Update-Prüfung. Links zu diesem Handbuch und zu Ko-fi (zum Beispiel in den Einstellungen) öffnen GitHub bzw. Ko-fi im Browser, und zwar nur, wenn du sie anklickst; das Plugin selbst verbindet sich nie mit Ko-fi. Das Plugin liest und schreibt Dateien nur in deinem Vault. In die Zwischenablage schreibt es nur, wenn du im Protokoll auf **Protokoll kopieren** tippst, und es liest sie nie.
+
+## Unterstützen
+
+Das Plugin ist kostenlos und bleibt es. Wenn es dir Zeit spart und du Danke sagen möchtest, kannst du auf [Ko-fi](https://ko-fi.com/keineantwort) ein Trinkgeld hinterlassen. Das ist ganz freiwillig und bringt dir keine Gegenleistung.
 
 ## Dokumentation
 

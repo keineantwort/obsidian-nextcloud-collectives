@@ -14,6 +14,7 @@ Contents:
 - [Automatic sync](#automatic-sync): [Sync interval (minutes)](#sync-interval-minutes), [Sync on startup](#sync-on-startup), [Sync when returning to Obsidian](#sync-when-returning-to-obsidian), [Sync after changes](#sync-after-changes), [Wait after the last change (seconds)](#wait-after-the-last-change-seconds)
 - [Behaviour](#behaviour): [Conflicts](#conflicts), [New top-level folders](#new-top-level-folders), [Deleting notes in this vault](#deleting-notes-in-this-vault), [Pages deleted on the server](#pages-deleted-on-the-server), [Attachment folder](#attachment-folder), [Largest attachment (MB)](#largest-attachment-mb), [Delete attachments on the server](#delete-attachments-on-the-server), [Hide the plugin’s properties](#hide-the-plugins-properties), [Show the page of a folder first](#show-the-page-of-a-folder-first), [Show page emoji in titles](#show-page-emoji-in-titles)
 - [Diagnostics](#diagnostics): [Log](#log), [Detailed log](#detailed-log)
+- [Support](#support)
 
 ## Connection
 
@@ -203,3 +204,7 @@ Also logs every request to the server: method, path, status and duration. Passwo
 
 - Default: off.
 - Turn it on when you are looking into a problem, then turn it off again. The paths contain your username and the names of collectives and pages, so check the log before you share it.
+
+## Support
+
+At the very end of the settings tab, **Support** has a link "Say thanks on Ko-fi". The plugin is free and stays free; a tip on [Ko-fi](https://ko-fi.com/keineantwort) is voluntary and gets you nothing in return. The link opens in your browser only when you click it. The plugin shows no other reminder: no message, no pop-up, nothing in the status bar.
