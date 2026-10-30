@@ -6,6 +6,10 @@ An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud
 
 **Status:** pre-release, version 0.3.3. Install it from Obsidian's community plugins (see [Installation](#installation)).
 
+> ⚠️ **Disclaimer**
+>
+> This plugin is provided "as is", without warranty of any kind. Use it at your own risk. The author takes no responsibility for corrupted, overwritten or lost notes or any other data loss resulting from the use of this plugin. Always keep an independent backup of your vault and your Nextcloud Collectives before using it. See the [MIT License](LICENSE) for details.
+
 ![File list in Obsidian with the collectives as folders and page emoji in front of the note titles](docs/images/en/file-list.png)
 
 ## Features
