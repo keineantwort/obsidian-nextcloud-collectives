@@ -35,3 +35,4 @@ Format and process: [0001](0001-adrs-as-markdown-in-the-repo.md). Create new ADR
 | [0029](0029-skip-integration-tests-for-documentation-on-main.md) | Skip the integration and nightly tests for documentation-only changes on main too | accepted |
 | [0030](0030-no-github-artifact-attestations.md) | No GitHub artifact attestations for the release files | accepted |
 | [0031](0031-declarative-settings-definitions.md) | Settings as declarative definitions for the settings search, classic rendering as fallback for Obsidian < 1.13 | accepted |
+| [0032](0032-release-workflow-sets-the-tag.md) | The release workflow sets the tag after checking that the version is not released yet | accepted |
