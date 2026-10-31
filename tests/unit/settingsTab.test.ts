@@ -40,12 +40,13 @@ describe('NcSettingTab.getSettingDefinitions (Obsidian settings search, ADR 0031
 			'Show page emoji in titles',
 			'Log',
 			'Detailed log',
+			'Support',
 		]);
 	});
 
 	it('groups the settings under the four headings', () => {
 		const headings = definitionsFor('en').map((item) => ('heading' in item ? item.heading : undefined));
-		expect(headings).toEqual([undefined, 'Connection', 'Automatic sync', 'Behaviour', 'Diagnostics']);
+		expect(headings).toEqual([undefined, 'Connection', 'Automatic sync', 'Behaviour', 'Diagnostics', undefined]);
 	});
 
 	it('gives every row a render function and a description (except the username) so search can index it', () => {

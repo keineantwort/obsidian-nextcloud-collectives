@@ -1,9 +1,10 @@
 {
 	"id": "nextcloud-collectives",
 	"name": "Nextcloud Collectives Sync",
-	"version": "0.3.3",
+	"version": "0.3.4",
 	"minAppVersion": "1.11.4",
 	"description": "Synchronize all Nextcloud Collectives of a server bidirectionally with your vault.",
 	"author": "Martin Schumacher",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+	"fundingUrl": "https://ko-fi.com/keineantwort"
 }

@@ -4,7 +4,9 @@
 
 Ein Obsidian-Plugin, das alle [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) eines Nextcloud-Servers in beide Richtungen mit deinem Vault synchronisiert. Jedes Collective wird ein Ordner in deinem Vault, jede Seite eine Notiz. Du schreibst in Obsidian, am Desktop oder auf dem Handy, und deine Kolleginnen und Kollegen arbeiten weiter im Browser in Collectives. Ändern beide Seiten dieselbe Seite, behält das Plugin beide Fassungen, statt eine zu überschreiben.
 
-**Status:** Vorab-Version 0.3.3. Installiere es aus den Community-Plugins von Obsidian (siehe [Installation](#installation)).
+Installiere es aus den Community-Plugins von Obsidian (siehe [Installation](#installation)).
+
+<a href="https://ko-fi.com/keineantwort"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Unterstütze mich auf Ko-fi" /></a>
 
 > ⚠️ **Haftungsausschluss**
 >
@@ -113,7 +115,11 @@ Das Plugin verbindet sich **nur mit dem Nextcloud-Server, den du in den Einstell
 - Versions- und Kontoprüfung: `/ocs/v2.php/cloud/capabilities` und `/ocs/v2.php/cloud/user`.
 - Collectives und Seiten: die Schnittstellen von Collectives und Circles (`/ocs/v2.php/apps/collectives/…`, `/ocs/v2.php/apps/circles/…`) und WebDAV (`/remote.php/dav/files/…`) für Seiteninhalte und Anhänge.
 
-Andere Dienste nutzt das Plugin nicht: keine Telemetrie, keine Statistik, keine Update-Prüfung. Links zu diesem Handbuch (zum Beispiel in den Einstellungen) öffnen GitHub im Browser, und zwar nur, wenn du sie anklickst. Das Plugin liest und schreibt Dateien nur in deinem Vault. In die Zwischenablage schreibt es nur, wenn du im Protokoll auf **Protokoll kopieren** tippst, und es liest sie nie.
+Andere Dienste nutzt das Plugin nicht: keine Telemetrie, keine Statistik, keine Update-Prüfung. Links zu diesem Handbuch und zu Ko-fi (zum Beispiel in den Einstellungen) öffnen GitHub bzw. Ko-fi im Browser, und zwar nur, wenn du sie anklickst; das Plugin selbst verbindet sich nie mit Ko-fi. Das Plugin liest und schreibt Dateien nur in deinem Vault. In die Zwischenablage schreibt es nur, wenn du im Protokoll auf **Protokoll kopieren** tippst, und es liest sie nie.
+
+## Unterstützen
+
+Das Plugin ist kostenlos und bleibt es. Wenn es dir Zeit spart und du Danke sagen möchtest, kannst du auf [Ko-fi](https://ko-fi.com/keineantwort) ein Trinkgeld hinterlassen (der Knopf oben auf dieser Seite führt ebenfalls dorthin). Das ist ganz freiwillig und bringt dir keine Gegenleistung.
 
 ## Dokumentation
 

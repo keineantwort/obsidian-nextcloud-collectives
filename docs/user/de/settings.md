@@ -14,6 +14,7 @@ Inhalt:
 - [Automatische Synchronisierung](#automatische-synchronisierung): [Sync-Intervall (Minuten)](#sync-intervall-minuten), [Beim Start synchronisieren](#beim-start-synchronisieren), [Bei Rückkehr zu Obsidian synchronisieren](#bei-rückkehr-zu-obsidian-synchronisieren), [Nach Änderungen synchronisieren](#nach-änderungen-synchronisieren), [Wartezeit nach der letzten Änderung (Sekunden)](#wartezeit-nach-der-letzten-änderung-sekunden)
 - [Verhalten](#verhalten): [Konflikte](#konflikte), [Neue Ordner auf oberster Ebene](#neue-ordner-auf-oberster-ebene), [Notizen in diesem Vault löschen](#notizen-in-diesem-vault-löschen), [Auf dem Server gelöschte Seiten](#auf-dem-server-gelöschte-seiten), [Anhang-Ordner](#anhang-ordner), [Größter Anhang (MB)](#größter-anhang-mb), [Anhänge auf dem Server löschen](#anhänge-auf-dem-server-löschen), [Eigenschaften des Plugins ausblenden](#eigenschaften-des-plugins-ausblenden), [Seite des Ordners zuerst anzeigen](#seite-des-ordners-zuerst-anzeigen), [Seiten-Emoji in Titeln anzeigen](#seiten-emoji-in-titeln-anzeigen)
 - [Diagnose](#diagnose): [Protokoll](#protokoll), [Ausführliches Protokoll](#ausführliches-protokoll)
+- [Unterstützen](#unterstützen)
 
 ## Verbindung
 
@@ -203,3 +204,7 @@ Protokolliert zusätzlich jede Anfrage an den Server: Methode, Pfad, Status und 
 
 - Standard: aus.
 - Schalte es ein, wenn du einem Problem nachgehst, und danach wieder aus. Die Pfade enthalten deinen Benutzernamen und die Namen von Collectives und Seiten; prüfe das Protokoll also, bevor du es weitergibst.
+
+## Unterstützen
+
+Ganz am Ende der Einstellungsseite steht unter **Unterstützen** der Link „Danke sagen auf Ko-fi“. Das Plugin ist kostenlos und bleibt es; ein Trinkgeld auf [Ko-fi](https://ko-fi.com/keineantwort) ist freiwillig und bringt dir keine Gegenleistung. Der Link öffnet sich nur, wenn du ihn anklickst, im Browser. Einen anderen Hinweis zeigt das Plugin nicht: keine Meldung, kein Popup, nichts in der Statusleiste.

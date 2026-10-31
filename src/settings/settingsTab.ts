@@ -4,7 +4,7 @@ import type NextcloudCollectivesPlugin from '../main';
 import { isInsecureRemoteUrl, normalizeServerUrl } from '../api/connection';
 import { describeConnectionError, formatConnectionSuccess } from './connectionMessages';
 import { strategyWarning } from './behaviourMessages';
-import { settingsManualUrl } from './manualLinks';
+import { FUNDING_URL, settingsManualUrl } from './manualLinks';
 import type { MessageKey } from '../i18n';
 import type { NcSettings } from './types';
 import { isSyncDebounceSec, isSyncIntervalMinutes, isAttachmentFolderPattern, isConflictStrategy, isLocalDeleteBehaviour, isMaxAttachmentSizeMb, isNewFolderBehaviour, isRemoteDeleteBehaviour } from './types';
@@ -89,6 +89,7 @@ export class NcSettingTab extends PluginSettingTab {
 					this.toggleDefinition('settings.debugLogging', 'debugLogging'),
 				],
 			},
+			{ type: 'group', items: [this.supportDefinition()] },
 		];
 	}
 
@@ -123,6 +124,21 @@ export class NcSettingTab extends PluginSettingTab {
 			render: (setting) => {
 				setting.descEl.appendText(' ');
 				setting.descEl.createEl('a', { text: t('settings.help.link'), href: settingsManualUrl(plugin.locale) });
+			},
+		};
+	}
+
+	/** Last row: a quiet link to Ko-fi. It opens only on click; the plugin itself never contacts Ko-fi. */
+	private supportDefinition(): SettingDefinition {
+		const { plugin } = this;
+		const t = plugin.t;
+		return {
+			name: t('settings.support.name'),
+			desc: t('settings.support.desc'),
+			aliases: ['donate', 'tip', 'ko-fi', 'kofi'],
+			render: (setting) => {
+				setting.descEl.appendText(' ');
+				setting.descEl.createEl('a', { text: t('settings.support.link'), href: FUNDING_URL });
 			},
 		};
 	}

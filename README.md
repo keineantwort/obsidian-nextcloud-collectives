@@ -4,7 +4,9 @@
 
 An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) of a Nextcloud server with your vault, in both directions. Each collective becomes a folder in your vault, each page a note. You edit in Obsidian, on desktop or on your phone, and your colleagues keep working in Collectives in the browser. When both sides change the same page, the plugin keeps both versions instead of overwriting one.
 
-**Status:** pre-release, version 0.3.3. Install it from Obsidian's community plugins (see [Installation](#installation)).
+Install it from Obsidian's community plugins (see [Installation](#installation)).
+
+<a href="https://ko-fi.com/keineantwort"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy Me a Coffee at ko-fi.com" /></a>
 
 > ⚠️ **Disclaimer**
 >
@@ -113,7 +115,11 @@ The plugin connects **only to the Nextcloud server you enter in the settings**. 
 - Version and account check: `/ocs/v2.php/cloud/capabilities` and `/ocs/v2.php/cloud/user`.
 - Collectives and pages: the Collectives and Circles interfaces (`/ocs/v2.php/apps/collectives/…`, `/ocs/v2.php/apps/circles/…`) and WebDAV (`/remote.php/dav/files/…`) for page contents and attachments.
 
-The plugin uses no other services: no telemetry, no analytics, no update checks. Links to this manual (for example in the settings) open GitHub in your browser only when you click them. The plugin reads and writes files only inside your vault. It writes to the clipboard only when you press **Copy log** in the log view, and it never reads the clipboard.
+The plugin uses no other services: no telemetry, no analytics, no update checks. Links to this manual and to Ko-fi (for example in the settings) open GitHub or Ko-fi in your browser only when you click them; the plugin itself never connects to Ko-fi. The plugin reads and writes files only inside your vault. It writes to the clipboard only when you press **Copy log** in the log view, and it never reads the clipboard.
+
+## Support
+
+The plugin is free and stays free. If it saves you time and you want to say thanks, you can leave a tip on [Ko-fi](https://ko-fi.com/keineantwort) (the button at the top of this page does the same). This is entirely voluntary and gets you nothing in return.
 
 ## Documentation
 
