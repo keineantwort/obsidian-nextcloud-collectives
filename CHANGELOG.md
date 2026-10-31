@@ -2,6 +2,12 @@
 
 The changes that matter to users, newest first. The section of a version becomes the description of its release on Forgejo and GitHub (`scripts/release-notes.mjs`); `npm run release:check` fails without it ([docs/release.md](docs/release.md)).
 
+## 0.3.4 – 2026-10-31
+
+### Added
+
+- At the end of the settings, a link to Ko-fi lets you leave a voluntary tip. It opens only when you click it; the plugin itself never connects to Ko-fi. The plugin stays free.
+
 ## 0.3.3 – 2026-10-25
 
 ### Added
