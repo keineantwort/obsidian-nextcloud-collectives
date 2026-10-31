@@ -4,7 +4,9 @@
 
 An Obsidian plugin that syncs all [Nextcloud Collectives](https://apps.nextcloud.com/apps/collectives) of a Nextcloud server with your vault, in both directions. Each collective becomes a folder in your vault, each page a note. You edit in Obsidian, on desktop or on your phone, and your colleagues keep working in Collectives in the browser. When both sides change the same page, the plugin keeps both versions instead of overwriting one.
 
-**Status:** pre-release, version 0.3.3. Install it from Obsidian's community plugins (see [Installation](#installation)).
+**Status:** released, version 0.3.3. Install it from Obsidian's community plugins (see [Installation](#installation)).
+
+<a href="https://ko-fi.com/keineantwort"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy Me a Coffee at ko-fi.com" /></a>
 
 > ⚠️ **Disclaimer**
 >
@@ -117,7 +119,7 @@ The plugin uses no other services: no telemetry, no analytics, no update checks.
 
 ## Support
 
-The plugin is free and stays free. If it saves you time and you want to say thanks, you can leave a tip on [Ko-fi](https://ko-fi.com/keineantwort). This is entirely voluntary and gets you nothing in return.
+The plugin is free and stays free. If it saves you time and you want to say thanks, you can leave a tip on [Ko-fi](https://ko-fi.com/keineantwort) (the button at the top of this page does the same). This is entirely voluntary and gets you nothing in return.
 
 ## Documentation
 
