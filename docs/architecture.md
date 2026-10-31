@@ -217,6 +217,7 @@ scripts/
   ci/affects-tests.sh     whether a change affects the integration tests (integration.yml, nightly.yml)
   check-release.mjs       release consistency check (versions, CHANGELOG.md section)
   release-notes.mjs       release description from CHANGELOG.md for release.yml
+  ci/wait-for-checks.mjs  release.yml waits for the checks of the commit
 docs/
   architecture.md         this document
   adr/                    architecture decision records
