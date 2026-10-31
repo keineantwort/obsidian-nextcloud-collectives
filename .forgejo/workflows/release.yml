@@ -80,6 +80,14 @@ jobs:
             exit 1
           fi
 
+      # A release is built from main only after the checks of the merge (CI, integration tests, mirror) are through; a red
+      # one stops it. "latest" and the mirror may be red. Gives up after 60 minutes (scripts/ci/wait-for-checks.mjs).
+      - name: Wait for the checks of this commit
+        env:
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: node scripts/ci/wait-for-checks.mjs "${GITHUB_SHA}"
+
       # Tag, name and description (the section of the version in CHANGELOG.md) for both release APIs; the tag is set on
       # the commit that was checked out and built.
       - name: Prepare the release description
@@ -103,6 +111,9 @@ jobs:
           FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
         run: |
+          # From here on, the rollback step removes what this run created (the existence check above guarantees that
+          # tag and release did not exist before).
+          echo "ROLLBACK_FORGEJO=1" >> "$GITHUB_ENV"
           # On an HTTP error, print status and server answer instead of failing silently.
           RESPONSE=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: token ${FORGEJO_TOKEN}" \
@@ -124,6 +135,7 @@ jobs:
           TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
           REPO: ${{ vars.MIRROR_GITHUB_REPO }}
         run: |
+          echo "ROLLBACK_GITHUB=1" >> "$GITHUB_ENV"
           AUTH=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$AUTH"
           # The tag was created on the server by the Forgejo release; the runner has it only after a fetch, so set it locally.
@@ -144,3 +156,34 @@ jobs:
               --data-binary "@${f}" \
               "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${f}"
           done
+
+      # All or nothing: if a step fails (or the run is cancelled) after the tag was set, remove tag and release again, so
+      # that the next run does not stop at the existence check. Failures here only warn; the message names what is left.
+      - name: Roll back tag and release
+        if: failure() || cancelled()
+        env:
+          FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          MIRROR_REPO: ${{ vars.MIRROR_GITHUB_REPO }}
+          MIRROR_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+        run: |
+          del() { # description, then the curl arguments; 204 and 404 count as removed
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "${@:2}")
+            case "$CODE" in
+              204|404) echo "Rolled back: $1 (HTTP ${CODE})" ;;
+              *) echo "::warning::Could not remove $1 (HTTP ${CODE}); delete it by hand before the next release run." ;;
+            esac
+          }
+          if [ "${ROLLBACK_FORGEJO:-}" = 1 ]; then
+            del "Forgejo release ${VERSION}" -H "Authorization: token ${FORGEJO_TOKEN}" "${API}/releases/tags/${VERSION}"
+            del "Forgejo tag ${VERSION}" -H "Authorization: token ${FORGEJO_TOKEN}" "${API}/tags/${VERSION}"
+          fi
+          if [ "${ROLLBACK_GITHUB:-}" = 1 ]; then
+            GH="https://api.github.com/repos/${MIRROR_REPO}"
+            RELEASE_ID=$(curl -sS -H "Authorization: Bearer ${MIRROR_TOKEN}" -H "Accept: application/vnd.github+json" "${GH}/releases/tags/${VERSION}" \
+              | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id ?? ""' 2>/dev/null || true)
+            if [ -n "$RELEASE_ID" ]; then
+              del "GitHub release ${VERSION}" -H "Authorization: Bearer ${MIRROR_TOKEN}" -H "Accept: application/vnd.github+json" "${GH}/releases/${RELEASE_ID}"
+            fi
+            del "GitHub tag ${VERSION}" -H "Authorization: Bearer ${MIRROR_TOKEN}" -H "Accept: application/vnd.github+json" "${GH}/git/refs/tags/${VERSION}"
+          fi
