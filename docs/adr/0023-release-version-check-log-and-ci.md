@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-18
-- Related: architecture §12, milestone M10, the open decision on store publication, issue ONC-11
+- Related: [0032](0032-release-workflow-sets-the-tag.md) (tag set by the workflow), architecture §12, milestone M10, the open decision on store publication, issue ONC-11
 
 ## Context
 
